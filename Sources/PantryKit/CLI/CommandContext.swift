@@ -10,7 +10,7 @@ public struct CommandContext: Sendable {
         self.outputFormat = runtimeOptions.outputFormat
     }
 
-    public func write(_ report: CommandReport) throws {
+    public func write<Value: ConsoleRenderable>(_ report: Value) throws {
         try ConsoleOutput.write(report, format: outputFormat) { value in
             value.humanDescription
         }

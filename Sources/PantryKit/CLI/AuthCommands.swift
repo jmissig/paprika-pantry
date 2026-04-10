@@ -1,4 +1,6 @@
 import ArgumentParser
+import Dispatch
+import Foundation
 
 public struct AuthCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -20,12 +22,46 @@ public struct AuthLoginCommand: PantryLeafCommand {
         abstract: "Log in to Paprika."
     )
 
+    @Option(name: .long, help: "Paprika account email. Falls back to PAPRIKA_EMAIL or an interactive prompt.")
+    public var email: String?
+
+    @Option(name: .long, help: "Paprika account password. Falls back to PAPRIKA_PASSWORD or an interactive prompt.")
+    public var password: String?
+
     public init() {}
+
     public mutating func run() throws {
-        try emitStub(
-            command: "auth login",
-            plannedPhase: "Phase 2",
-            message: "Simple account login is reserved for the first real sync slice."
+        let context = try makeContext()
+        let store = PantryAuthStore(paths: context.paths)
+        let config = try store.loadConfig()
+        let credentials = try resolvedCredentials(
+            config: config,
+            environment: ProcessInfo.processInfo.environment
+        )
+        let authenticator = SimpleAccountAuthenticator()
+        let session = try runAsync {
+            try await authenticator.login(
+                emailAddress: credentials.emailAddress,
+                password: credentials.password
+            )
+        }
+
+        try store.saveConfig(
+            PantryConfig(
+                authStrategy: authenticator.strategy,
+                lastEmailAddress: session.emailAddress,
+                updatedAt: session.createdAt
+            )
+        )
+        try store.saveSession(session)
+
+        try context.write(
+            AuthLoginReport(
+                authStrategy: session.authStrategy,
+                emailAddress: session.emailAddress,
+                sessionCreatedAt: session.createdAt,
+                paths: context.paths.report
+            )
         )
     }
 }
@@ -38,11 +74,10 @@ public struct AuthStatusCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "auth status",
-            plannedPhase: "Phase 2",
-            message: "Authentication status needs real session storage and has not been implemented yet."
-        )
+        let context = try makeContext()
+        let store = PantryAuthStore(paths: context.paths)
+        let state = try store.loadState()
+        try context.write(AuthStatusReport(state: state, paths: context.paths))
     }
 }
 
@@ -54,10 +89,118 @@ public struct AuthLogoutCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "auth logout",
-            plannedPhase: "Phase 2",
-            message: "Logout is reserved until session storage exists."
+        let context = try makeContext()
+        let store = PantryAuthStore(paths: context.paths)
+        let clearedSession = try store.clearSession()
+        try context.write(AuthLogoutReport(clearedSession: clearedSession, paths: context.paths.report))
+    }
+}
+
+private struct LoginCredentials {
+    let emailAddress: String
+    let password: String
+}
+
+private enum AuthLoginCommandError: Error, LocalizedError {
+    case missingEmail
+    case missingPassword
+
+    var errorDescription: String? {
+        switch self {
+        case .missingEmail:
+            return "Missing email. Pass --email, set PAPRIKA_EMAIL, or run `auth login` interactively."
+        case .missingPassword:
+            return "Missing password. Pass --password, set PAPRIKA_PASSWORD, or run `auth login` interactively."
+        }
+    }
+}
+
+private extension AuthLoginCommand {
+    func runAsync<Value: Sendable>(
+        _ operation: @escaping @Sendable () async throws -> Value
+    ) throws -> Value {
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = AsyncResultBox<Value>()
+
+        Task {
+            do {
+                box.result = .success(try await operation())
+            } catch {
+                box.result = .failure(error)
+            }
+
+            semaphore.signal()
+        }
+
+        semaphore.wait()
+        return try box.result!.get()
+    }
+
+    func resolvedCredentials(
+        config: PantryConfig?,
+        environment: [String: String]
+    ) throws -> LoginCredentials {
+        let interactive = ConsolePrompt.isInteractive()
+        let emailAddress = try resolvedEmailAddress(
+            config: config,
+            environment: environment,
+            interactive: interactive
         )
+        let password = try resolvedPassword(
+            environment: environment,
+            interactive: interactive
+        )
+
+        return LoginCredentials(emailAddress: emailAddress, password: password)
+    }
+
+    func resolvedEmailAddress(
+        config: PantryConfig?,
+        environment: [String: String],
+        interactive: Bool
+    ) throws -> String {
+        if let explicit = email?.trimmedNonEmpty {
+            return explicit
+        }
+
+        if let fromEnvironment = environment["PAPRIKA_EMAIL"]?.trimmedNonEmpty {
+            return fromEnvironment
+        }
+
+        guard interactive else {
+            throw AuthLoginCommandError.missingEmail
+        }
+
+        return try ConsolePrompt.prompt("Email", defaultValue: config?.lastEmailAddress)
+    }
+
+    func resolvedPassword(
+        environment: [String: String],
+        interactive: Bool
+    ) throws -> String {
+        if let explicit = password?.trimmedNonEmpty {
+            return explicit
+        }
+
+        if let fromEnvironment = environment["PAPRIKA_PASSWORD"]?.trimmedNonEmpty {
+            return fromEnvironment
+        }
+
+        guard interactive else {
+            throw AuthLoginCommandError.missingPassword
+        }
+
+        return try ConsolePrompt.promptPassword("Password")
+    }
+}
+
+private final class AsyncResultBox<Value>: @unchecked Sendable {
+    var result: Result<Value, Error>?
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

@@ -7,4 +7,5 @@ public enum AuthStrategy: String, Codable, Equatable, Sendable {
 
 public protocol PantryAuthenticator: Sendable {
     var strategy: AuthStrategy { get }
+    func login(emailAddress: String, password: String) async throws -> PantrySession
 }

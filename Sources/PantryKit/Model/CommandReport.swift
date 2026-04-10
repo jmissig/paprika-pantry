@@ -1,6 +1,6 @@
 import Foundation
 
-public struct CommandReport: Codable, Equatable, Sendable {
+public struct CommandReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let status: String
     public let plannedPhase: String

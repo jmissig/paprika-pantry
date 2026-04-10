@@ -28,9 +28,9 @@
 
 ## Phase 2 — First trustworthy recipe mirror slice
 
-- [ ] Implement `SimpleAccountAuth`
-- [ ] Implement local session/config storage
-- [ ] Implement small Paprika HTTP client directly in this repo
+- [x] Implement `SimpleAccountAuth`
+- [x] Implement local session/config storage
+- [x] Implement small Paprika HTTP client directly in this repo
 - [ ] Add first SQLite migration
 - [ ] Add recipe sync flow:
   - [ ] fetch stub list
@@ -39,9 +39,9 @@
   - [ ] tombstone missing recipes
   - [ ] record sync run results
 - [ ] Implement commands:
-  - [ ] `auth login`
-  - [ ] `auth status`
-  - [ ] `auth logout`
+  - [x] `auth login`
+  - [x] `auth status`
+  - [x] `auth logout`
   - [ ] `sync run`
   - [ ] `sync status`
   - [ ] `recipes list`
