@@ -1,5 +1,4 @@
 import ArgumentParser
-import Dispatch
 import Foundation
 
 public struct AuthCommand: ParsableCommand {
@@ -39,7 +38,7 @@ public struct AuthLoginCommand: PantryLeafCommand {
             environment: ProcessInfo.processInfo.environment
         )
         let authenticator = SimpleAccountAuthenticator()
-        let session = try runAsync {
+        let session = try BlockingAsync.run {
             try await authenticator.login(
                 emailAddress: credentials.emailAddress,
                 password: credentials.password
@@ -116,26 +115,6 @@ private enum AuthLoginCommandError: Error, LocalizedError {
 }
 
 private extension AuthLoginCommand {
-    func runAsync<Value: Sendable>(
-        _ operation: @escaping @Sendable () async throws -> Value
-    ) throws -> Value {
-        let semaphore = DispatchSemaphore(value: 0)
-        let box = AsyncResultBox<Value>()
-
-        Task {
-            do {
-                box.result = .success(try await operation())
-            } catch {
-                box.result = .failure(error)
-            }
-
-            semaphore.signal()
-        }
-
-        semaphore.wait()
-        return try box.result!.get()
-    }
-
     func resolvedCredentials(
         config: PantryConfig?,
         environment: [String: String]
@@ -192,10 +171,6 @@ private extension AuthLoginCommand {
 
         return try ConsolePrompt.promptPassword("Password")
     }
-}
-
-private final class AsyncResultBox<Value>: @unchecked Sendable {
-    var result: Result<Value, Error>?
 }
 
 private extension String {

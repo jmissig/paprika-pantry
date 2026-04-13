@@ -254,7 +254,7 @@ public struct PantryDatabaseStats: Codable, Equatable, Sendable {
     }
 }
 
-public struct PantryStore {
+public struct PantryStore: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
 
     public init(dbQueue: DatabaseQueue) {

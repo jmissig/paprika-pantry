@@ -15,6 +15,18 @@ public struct CommandContext: Sendable {
             value.humanDescription
         }
     }
+
+    public func makeAuthStore() -> PantryAuthStore {
+        PantryAuthStore(paths: paths)
+    }
+
+    public func makeDatabase() -> PantryDatabase {
+        PantryDatabase(path: paths.databaseFile)
+    }
+
+    public func makeStore() throws -> PantryStore {
+        PantryStore(dbQueue: try makeDatabase().openQueue())
+    }
 }
 
 public protocol PantryLeafCommand: ParsableCommand {}

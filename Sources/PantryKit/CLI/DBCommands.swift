@@ -20,10 +20,8 @@ public struct DBStatsCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "db stats",
-            plannedPhase: "Phase 2",
-            message: "Database stats need a migrated local store and are not implemented yet."
-        )
+        let context = try makeContext()
+        let store = try context.makeStore()
+        try context.write(DBStatsReport(stats: try store.stats(), paths: context.paths))
     }
 }

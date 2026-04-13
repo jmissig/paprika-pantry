@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -22,11 +23,9 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "recipes list",
-            plannedPhase: "Phase 2",
-            message: "Recipe listing requires a populated local mirror and is not implemented yet."
-        )
+        let context = try makeContext()
+        let store = try context.makeStore()
+        try context.write(RecipesListReport(recipes: try store.listRecipes()))
     }
 }
 
@@ -41,12 +40,10 @@ public struct RecipesShowCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "recipes show",
-            plannedPhase: "Phase 2",
-            message: "Recipe lookup requires a synced local database and is not implemented yet.",
-            details: ["selector": selector]
-        )
+        let context = try makeContext()
+        let store = try context.makeStore()
+        let recipe = try resolveRecipe(selector: selector, store: store)
+        try context.write(RecipeShowReport(recipe: recipe))
     }
 }
 
@@ -63,9 +60,40 @@ public struct RecipesSearchCommand: PantryLeafCommand {
     public mutating func run() throws {
         try emitStub(
             command: "recipes search",
-            plannedPhase: "Phase 2",
-            message: "Recipe search will land with the first local mirror slice.",
+            plannedPhase: "Later",
+            message: "Recipe search is intentionally deferred until after the first trustworthy local mirror slice.",
             details: ["query": query]
         )
     }
+}
+
+enum RecipesCommandError: Error, LocalizedError {
+    case recipeNotFound(String)
+    case ambiguousRecipeName(String, [String])
+
+    var errorDescription: String? {
+        switch self {
+        case .recipeNotFound(let selector):
+            return "No local recipe matched `\(selector)`. Run `paprika-pantry sync run` first if needed."
+        case .ambiguousRecipeName(let selector, let matchingUIDs):
+            return "Recipe name `\(selector)` matched multiple local recipes. Use a UID instead: \(matchingUIDs.joined(separator: ", "))"
+        }
+    }
+}
+
+func resolveRecipe(selector: String, store: PantryStore) throws -> MirroredRecipe {
+    if let recipe = try store.fetchRecipe(uid: selector) {
+        return recipe
+    }
+
+    let nameMatches = try store.fetchRecipes(namedExactlyCaseInsensitive: selector)
+    guard !nameMatches.isEmpty else {
+        throw RecipesCommandError.recipeNotFound(selector)
+    }
+
+    guard nameMatches.count == 1 else {
+        throw RecipesCommandError.ambiguousRecipeName(selector, nameMatches.map(\.uid))
+    }
+
+    return nameMatches[0]
 }
