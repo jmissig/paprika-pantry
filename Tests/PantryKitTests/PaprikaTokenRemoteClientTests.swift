@@ -34,8 +34,8 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
         XCTAssertEqual(
             stubs,
             [
-                RemoteRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1"),
-                RemoteRecipeStub(uid: "BBB", name: "Deleted", hash: "hash-2", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1"),
+                SourceRecipeStub(uid: "BBB", name: "Deleted", hash: "hash-2", isDeleted: true),
             ]
         )
     }
@@ -63,8 +63,8 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
         XCTAssertEqual(
             categories,
             [
-                RemoteRecipeCategory(uid: "CAT1", name: "Dinner"),
-                RemoteRecipeCategory(uid: "CAT2", name: "Archive", isDeleted: true),
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Archive", isDeleted: true),
             ]
         )
     }

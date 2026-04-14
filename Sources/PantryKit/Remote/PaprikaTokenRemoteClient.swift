@@ -23,7 +23,7 @@ public enum PaprikaRemoteClientError: Error, LocalizedError {
     }
 }
 
-public struct PaprikaTokenRemoteClient: PaprikaRemoteClient {
+public struct PaprikaTokenRemoteClient: PantrySource {
     public static let defaultBaseURL = URL(string: "https://www.paprikaapp.com")!
 
     private let token: String
@@ -43,19 +43,19 @@ public struct PaprikaTokenRemoteClient: PaprikaRemoteClient {
         self.userAgent = userAgent
     }
 
-    public func listRecipeStubs() async throws -> [RemoteRecipeStub] {
+    public func listRecipeStubs() async throws -> [SourceRecipeStub] {
         let data = try await get(path: "api/v1/sync/recipes/")
         let payload = try arrayPayload(from: data, expected: "recipe stub list")
         return try payload.map(decodeRecipeStub)
     }
 
-    public func listRecipeCategories() async throws -> [RemoteRecipeCategory] {
+    public func listRecipeCategories() async throws -> [SourceRecipeCategory] {
         let data = try await get(path: "api/v1/sync/categories/")
         let payload = try arrayPayload(from: data, expected: "category list")
         return try payload.map(decodeCategory)
     }
 
-    public func fetchRecipe(uid: String) async throws -> RemoteRecipe {
+    public func fetchRecipe(uid: String) async throws -> SourceRecipe {
         let data = try await get(path: "api/v1/sync/recipe/\(uid)/")
         let payload = try objectPayload(from: data, expected: "recipe detail")
         return try decodeRecipe(payload, rawJSON: rawJSONString(from: data))
@@ -130,10 +130,10 @@ public struct PaprikaTokenRemoteClient: PaprikaRemoteClient {
         return string
     }
 
-    private func decodeRecipeStub(_ object: [String: Any]) throws -> RemoteRecipeStub {
+    private func decodeRecipeStub(_ object: [String: Any]) throws -> SourceRecipeStub {
         let uid = try requiredString("uid", in: object, expected: "recipe stub")
         let name = stringValue(for: "name", in: object) ?? uid
-        return RemoteRecipeStub(
+        return SourceRecipeStub(
             uid: uid,
             name: name,
             hash: stringValue(for: "hash", in: object),
@@ -141,21 +141,21 @@ public struct PaprikaTokenRemoteClient: PaprikaRemoteClient {
         )
     }
 
-    private func decodeCategory(_ object: [String: Any]) throws -> RemoteRecipeCategory {
+    private func decodeCategory(_ object: [String: Any]) throws -> SourceRecipeCategory {
         let uid = try requiredString("uid", in: object, expected: "category")
         let name = stringValue(for: "name", in: object) ?? uid
-        return RemoteRecipeCategory(
+        return SourceRecipeCategory(
             uid: uid,
             name: name,
             isDeleted: boolValue(for: "deleted", in: object) ?? false
         )
     }
 
-    private func decodeRecipe(_ object: [String: Any], rawJSON: String) throws -> RemoteRecipe {
+    private func decodeRecipe(_ object: [String: Any], rawJSON: String) throws -> SourceRecipe {
         let uid = try requiredString("uid", in: object, expected: "recipe")
         let name = try requiredString("name", in: object, expected: "recipe")
 
-        return RemoteRecipe(
+        return SourceRecipe(
             uid: uid,
             name: name,
             categoryReferences: stringArrayValue(for: "categories", in: object),

@@ -14,15 +14,15 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
 
     func testInitialSyncInsertsRecipesAndCategories() async throws {
         let store = try makeStore()
-        let remoteClient = FakePaprikaRemoteClient(
+        let source = InMemoryPantrySource(
             stubs: [
-                RemoteRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1"),
+                SourceRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1"),
             ],
             categories: [
-                RemoteRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
             ],
             recipesByUID: [
-                "AAA": RemoteRecipe(
+                "AAA": SourceRecipe(
                     uid: "AAA",
                     name: "Soup",
                     categoryReferences: ["CAT1"],
@@ -44,7 +44,7 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
             ]
         )
         let engine = RecipeMirrorSyncEngine(
-            remoteClient: remoteClient,
+            source: source,
             store: store,
             now: makeClock(startingAt: 1_712_736_000)
         )
@@ -87,13 +87,13 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
             syncedAt: Date(timeIntervalSince1970: 1_712_736_000)
         )
 
-        let remoteClient = FakePaprikaRemoteClient(
-            stubs: [RemoteRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1")],
-            categories: [RemoteRecipeCategory(uid: "CAT1", name: "Dinner")],
+        let source = InMemoryPantrySource(
+            stubs: [SourceRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1")],
+            categories: [SourceRecipeCategory(uid: "CAT1", name: "Dinner")],
             recipesByUID: [:]
         )
         let engine = RecipeMirrorSyncEngine(
-            remoteClient: remoteClient,
+            source: source,
             store: store,
             now: makeClock(startingAt: 1_712_740_000)
         )
@@ -101,7 +101,7 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
         let summary = try await engine.run()
 
         XCTAssertEqual(summary.changedRecipeCount, 0)
-        XCTAssertTrue(remoteClient.fetchedRecipeUIDs.isEmpty)
+        XCTAssertTrue(source.fetchedRecipeUIDs.isEmpty)
     }
 
     func testChangedHashUpdatesRecipeAndMissingRecipeBecomesDeleted() async throws {
@@ -153,11 +153,11 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
             syncedAt: initialSyncAt
         )
 
-        let remoteClient = FakePaprikaRemoteClient(
-            stubs: [RemoteRecipeStub(uid: "AAA", name: "New Soup", hash: "new-hash")],
-            categories: [RemoteRecipeCategory(uid: "CAT1", name: "Comfort Food")],
+        let source = InMemoryPantrySource(
+            stubs: [SourceRecipeStub(uid: "AAA", name: "New Soup", hash: "new-hash")],
+            categories: [SourceRecipeCategory(uid: "CAT1", name: "Comfort Food")],
             recipesByUID: [
-                "AAA": RemoteRecipe(
+                "AAA": SourceRecipe(
                     uid: "AAA",
                     name: "New Soup",
                     categoryReferences: ["CAT1"],
@@ -179,7 +179,7 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
             ]
         )
         let engine = RecipeMirrorSyncEngine(
-            remoteClient: remoteClient,
+            source: source,
             store: store,
             now: makeClock(startingAt: 1_712_740_000)
         )
@@ -201,14 +201,14 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
 
     func testFailedHydrationMarksSyncRunFailedAndAvoidsPartialWrites() async throws {
         let store = try makeStore()
-        let remoteClient = FakePaprikaRemoteClient(
-            stubs: [RemoteRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1")],
+        let source = InMemoryPantrySource(
+            stubs: [SourceRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1")],
             categories: [],
             recipesByUID: [:],
             fetchErrorsByUID: ["AAA": PaprikaRemoteClientError.invalidPayload("Missing name in recipe.")]
         )
         let engine = RecipeMirrorSyncEngine(
-            remoteClient: remoteClient,
+            source: source,
             store: store,
             now: makeClock(startingAt: 1_712_736_000)
         )
@@ -238,19 +238,19 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
     }
 }
 
-private final class FakePaprikaRemoteClient: PaprikaRemoteClient, @unchecked Sendable {
-    private let stubs: [RemoteRecipeStub]
-    private let categories: [RemoteRecipeCategory]
-    private let recipesByUID: [String: RemoteRecipe]
+private final class InMemoryPantrySource: PantrySource, @unchecked Sendable {
+    private let stubs: [SourceRecipeStub]
+    private let categories: [SourceRecipeCategory]
+    private let recipesByUID: [String: SourceRecipe]
     private let fetchErrorsByUID: [String: Error]
 
     private let lock = NSLock()
     private(set) var fetchedRecipeUIDs = [String]()
 
     init(
-        stubs: [RemoteRecipeStub],
-        categories: [RemoteRecipeCategory],
-        recipesByUID: [String: RemoteRecipe],
+        stubs: [SourceRecipeStub],
+        categories: [SourceRecipeCategory],
+        recipesByUID: [String: SourceRecipe],
         fetchErrorsByUID: [String: Error] = [:]
     ) {
         self.stubs = stubs
@@ -259,15 +259,15 @@ private final class FakePaprikaRemoteClient: PaprikaRemoteClient, @unchecked Sen
         self.fetchErrorsByUID = fetchErrorsByUID
     }
 
-    func listRecipeStubs() async throws -> [RemoteRecipeStub] {
+    func listRecipeStubs() async throws -> [SourceRecipeStub] {
         stubs
     }
 
-    func listRecipeCategories() async throws -> [RemoteRecipeCategory] {
+    func listRecipeCategories() async throws -> [SourceRecipeCategory] {
         categories
     }
 
-    func fetchRecipe(uid: String) async throws -> RemoteRecipe {
+    func fetchRecipe(uid: String) async throws -> SourceRecipe {
         lock.withLock {
             fetchedRecipeUIDs.append(uid)
         }

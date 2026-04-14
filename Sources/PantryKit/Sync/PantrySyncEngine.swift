@@ -30,16 +30,16 @@ public protocol PantrySyncEngine: Sendable {
 }
 
 public struct RecipeMirrorSyncEngine: PantrySyncEngine {
-    private let remoteClient: any PaprikaRemoteClient
+    private let source: any PantrySource
     private let store: PantryStore
     private let now: @Sendable () -> Date
 
     public init(
-        remoteClient: any PaprikaRemoteClient,
+        source: any PantrySource,
         store: PantryStore,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
-        self.remoteClient = remoteClient
+        self.source = source
         self.store = store
         self.now = now
     }
@@ -52,13 +52,13 @@ public struct RecipeMirrorSyncEngine: PantrySyncEngine {
         var changedRecipeCount = 0
 
         do {
-            let remoteStubs = try await remoteClient.listRecipeStubs()
-            let activeStubs = remoteStubs.filter { !$0.isDeleted }
+            let sourceStubs = try await source.listRecipeStubs()
+            let activeStubs = sourceStubs.filter { !$0.isDeleted }
             recipesSeen = activeStubs.count
 
-            let remoteCategories = try await remoteClient.listRecipeCategories()
+            let sourceCategories = try await source.listRecipeCategories()
             let categoryNamesByUID = Dictionary(
-                uniqueKeysWithValues: remoteCategories
+                uniqueKeysWithValues: sourceCategories
                     .filter { !$0.isDeleted }
                     .map { ($0.uid, $0.name) }
             )
@@ -77,29 +77,29 @@ public struct RecipeMirrorSyncEngine: PantrySyncEngine {
             mirroredRecipes.reserveCapacity(changedStubs.count)
 
             for stub in changedStubs {
-                let remoteRecipe = try await remoteClient.fetchRecipe(uid: stub.uid)
+                let sourceRecipe = try await source.fetchRecipe(uid: stub.uid)
                 mirroredRecipes.append(
                     MirroredRecipeInput(
-                        uid: remoteRecipe.uid,
-                        name: remoteRecipe.name,
+                        uid: sourceRecipe.uid,
+                        name: sourceRecipe.name,
                         categories: resolvedCategories(
-                            remoteRecipe.categoryReferences,
+                            sourceRecipe.categoryReferences,
                             categoryNamesByUID: categoryNamesByUID
                         ),
-                        sourceName: remoteRecipe.sourceName,
-                        ingredients: remoteRecipe.ingredients,
-                        directions: remoteRecipe.directions,
-                        notes: remoteRecipe.notes,
-                        starRating: remoteRecipe.starRating,
-                        isFavorite: remoteRecipe.isFavorite,
-                        prepTime: remoteRecipe.prepTime,
-                        cookTime: remoteRecipe.cookTime,
-                        totalTime: remoteRecipe.totalTime,
-                        servings: remoteRecipe.servings,
-                        createdAt: remoteRecipe.createdAt,
-                        updatedAt: remoteRecipe.updatedAt,
-                        remoteHash: remoteRecipe.remoteHash ?? stub.hash,
-                        rawJSON: remoteRecipe.rawJSON
+                        sourceName: sourceRecipe.sourceName,
+                        ingredients: sourceRecipe.ingredients,
+                        directions: sourceRecipe.directions,
+                        notes: sourceRecipe.notes,
+                        starRating: sourceRecipe.starRating,
+                        isFavorite: sourceRecipe.isFavorite,
+                        prepTime: sourceRecipe.prepTime,
+                        cookTime: sourceRecipe.cookTime,
+                        totalTime: sourceRecipe.totalTime,
+                        servings: sourceRecipe.servings,
+                        createdAt: sourceRecipe.createdAt,
+                        updatedAt: sourceRecipe.updatedAt,
+                        remoteHash: sourceRecipe.remoteHash ?? stub.hash,
+                        rawJSON: sourceRecipe.rawJSON
                     )
                 )
             }

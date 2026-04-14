@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RemoteRecipeStub: Codable, Equatable, Sendable {
+public struct SourceRecipeStub: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
     public let hash: String?
@@ -14,7 +14,7 @@ public struct RemoteRecipeStub: Codable, Equatable, Sendable {
     }
 }
 
-public struct RemoteRecipeCategory: Codable, Equatable, Sendable {
+public struct SourceRecipeCategory: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
     public let isDeleted: Bool
@@ -26,7 +26,7 @@ public struct RemoteRecipeCategory: Codable, Equatable, Sendable {
     }
 }
 
-public struct RemoteRecipe: Codable, Equatable, Sendable {
+public struct SourceRecipe: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
     public let categoryReferences: [String]
@@ -84,8 +84,8 @@ public struct RemoteRecipe: Codable, Equatable, Sendable {
     }
 }
 
-public protocol PaprikaRemoteClient: Sendable {
-    func listRecipeStubs() async throws -> [RemoteRecipeStub]
-    func listRecipeCategories() async throws -> [RemoteRecipeCategory]
-    func fetchRecipe(uid: String) async throws -> RemoteRecipe
+public protocol PantrySource: Sendable {
+    func listRecipeStubs() async throws -> [SourceRecipeStub]
+    func listRecipeCategories() async throws -> [SourceRecipeCategory]
+    func fetchRecipe(uid: String) async throws -> SourceRecipe
 }

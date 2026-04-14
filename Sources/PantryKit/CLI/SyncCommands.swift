@@ -26,7 +26,7 @@ public struct SyncRunCommand: PantryLeafCommand {
         let session = try requireSession(context: context)
         let store = try context.makeStore()
         let syncEngine = RecipeMirrorSyncEngine(
-            remoteClient: PaprikaTokenRemoteClient(token: session.token),
+            source: PaprikaTokenRemoteClient(token: session.token),
             store: store
         )
         let summary = try BlockingAsync.run {
