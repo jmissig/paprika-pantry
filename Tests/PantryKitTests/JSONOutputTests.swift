@@ -12,7 +12,6 @@ final class JSONOutputTests: XCTestCase {
             paths: PantryPathReport(
                 home: "/tmp/pantry",
                 config: "/tmp/pantry/config.json",
-                session: "/tmp/pantry/session.json",
                 database: "/tmp/pantry/pantry.sqlite"
             )
         )
@@ -74,7 +73,6 @@ final class JSONOutputTests: XCTestCase {
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
                 configFile: URL(fileURLWithPath: "/tmp/pantry/config.json"),
-                sessionFile: URL(fileURLWithPath: "/tmp/pantry/session.json"),
                 databaseFile: URL(fileURLWithPath: "/tmp/pantry/pantry.sqlite")
             ),
             now: Date(timeIntervalSince1970: 1_712_736_120)

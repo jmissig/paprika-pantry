@@ -4,7 +4,7 @@ import Foundation
 public struct SyncCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sync",
-        abstract: "Inspect or refresh the local mirror.",
+        abstract: "Inspect or refresh the local mirror from a configured source.",
         subcommands: [
             SyncRunCommand.self,
             SyncStatusCommand.self,
@@ -17,16 +17,16 @@ public struct SyncCommand: ParsableCommand {
 public struct SyncRunCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "run",
-        abstract: "Run a sync against Paprika."
+        abstract: "Run a sync against the configured pantry source."
     )
 
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let session = try requireSession(context: context)
         let store = try context.makeStore()
+        let source = try context.makeSourceProvider().makeSource()
         let syncEngine = RecipeMirrorSyncEngine(
-            source: PaprikaTokenRemoteClient(token: session.token),
+            source: source,
             store: store
         )
         let summary = try BlockingAsync.run {
@@ -52,23 +52,4 @@ public struct SyncStatusCommand: PantryLeafCommand {
             SyncStatusReport(snapshot: snapshot, paths: context.paths, now: Date())
         )
     }
-}
-
-private enum SyncCommandError: Error, LocalizedError {
-    case notAuthenticated
-
-    var errorDescription: String? {
-        switch self {
-        case .notAuthenticated:
-            return "No local Paprika session is saved. Run `paprika-pantry auth login` first."
-        }
-    }
-}
-
-private func requireSession(context: CommandContext) throws -> PantrySession {
-    guard let session = try context.makeAuthStore().loadSession() else {
-        throw SyncCommandError.notAuthenticated
-    }
-
-    return session
 }

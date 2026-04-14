@@ -1,6 +1,6 @@
 import Foundation
 
-public enum PaprikaRemoteClientError: Error, LocalizedError {
+public enum PaprikaSourceError: Error, LocalizedError {
     case invalidResponse
     case unexpectedStatusCode(Int, String?)
     case invalidPayload(String)
@@ -23,7 +23,7 @@ public enum PaprikaRemoteClientError: Error, LocalizedError {
     }
 }
 
-public struct PaprikaTokenRemoteClient: PantrySource {
+public struct PaprikaTokenSource: PantrySource {
     public static let defaultBaseURL = URL(string: "https://www.paprikaapp.com")!
 
     private let token: String
@@ -71,21 +71,21 @@ public struct PaprikaTokenRemoteClient: PantrySource {
         do {
             let (data, response) = try await urlSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
-                throw PaprikaRemoteClientError.invalidResponse
+                throw PaprikaSourceError.invalidResponse
             }
 
             guard (200 ..< 300).contains(httpResponse.statusCode) else {
-                throw PaprikaRemoteClientError.unexpectedStatusCode(
+                throw PaprikaSourceError.unexpectedStatusCode(
                     httpResponse.statusCode,
                     String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             }
 
             return data
-        } catch let error as PaprikaRemoteClientError {
+        } catch let error as PaprikaSourceError {
             throw error
         } catch {
-            throw PaprikaRemoteClientError.transport(error.localizedDescription)
+            throw PaprikaSourceError.transport(error.localizedDescription)
         }
     }
 
@@ -100,7 +100,7 @@ public struct PaprikaTokenRemoteClient: PantrySource {
             return array
         }
 
-        throw PaprikaRemoteClientError.invalidPayload("Expected \(expected) array.")
+        throw PaprikaSourceError.invalidPayload("Expected \(expected) array.")
     }
 
     private func objectPayload(from data: Data, expected: String) throws -> [String: Any] {
@@ -112,20 +112,20 @@ public struct PaprikaTokenRemoteClient: PantrySource {
             return dictionary
         }
 
-        throw PaprikaRemoteClientError.invalidPayload("Expected \(expected) object.")
+        throw PaprikaSourceError.invalidPayload("Expected \(expected) object.")
     }
 
     private func jsonObject(from data: Data) throws -> Any {
         do {
             return try JSONSerialization.jsonObject(with: data, options: [])
         } catch {
-            throw PaprikaRemoteClientError.invalidPayload(error.localizedDescription)
+            throw PaprikaSourceError.invalidPayload(error.localizedDescription)
         }
     }
 
     private func rawJSONString(from data: Data) throws -> String {
         guard let string = String(data: data, encoding: .utf8) else {
-            throw PaprikaRemoteClientError.invalidPayload("Recipe payload was not valid UTF-8.")
+            throw PaprikaSourceError.invalidPayload("Recipe payload was not valid UTF-8.")
         }
         return string
     }
@@ -178,7 +178,7 @@ public struct PaprikaTokenRemoteClient: PantrySource {
 
     private func requiredString(_ key: String, in object: [String: Any], expected: String) throws -> String {
         guard let value = stringValue(for: key, in: object), !value.isEmpty else {
-            throw PaprikaRemoteClientError.invalidPayload("Missing \(key) in \(expected).")
+            throw PaprikaSourceError.invalidPayload("Missing \(key) in \(expected).")
         }
         return value
     }

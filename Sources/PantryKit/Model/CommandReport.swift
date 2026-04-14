@@ -57,7 +57,6 @@ extension CommandReport {
 
         lines.append("home: \(paths.home)")
         lines.append("config: \(paths.config)")
-        lines.append("session: \(paths.session)")
         lines.append("database: \(paths.database)")
         return lines.joined(separator: "\n")
     }

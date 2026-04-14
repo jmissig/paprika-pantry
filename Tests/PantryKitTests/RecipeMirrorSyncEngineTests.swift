@@ -205,7 +205,7 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
             stubs: [SourceRecipeStub(uid: "AAA", name: "Soup", hash: "hash-1")],
             categories: [],
             recipesByUID: [:],
-            fetchErrorsByUID: ["AAA": PaprikaRemoteClientError.invalidPayload("Missing name in recipe.")]
+            fetchErrorsByUID: ["AAA": InMemoryPantrySourceError.missingFixture("AAA")]
         )
         let engine = RecipeMirrorSyncEngine(
             source: source,
@@ -235,52 +235,6 @@ final class RecipeMirrorSyncEngineTests: XCTestCase {
         return {
             state.nextDate()
         }
-    }
-}
-
-private final class InMemoryPantrySource: PantrySource, @unchecked Sendable {
-    private let stubs: [SourceRecipeStub]
-    private let categories: [SourceRecipeCategory]
-    private let recipesByUID: [String: SourceRecipe]
-    private let fetchErrorsByUID: [String: Error]
-
-    private let lock = NSLock()
-    private(set) var fetchedRecipeUIDs = [String]()
-
-    init(
-        stubs: [SourceRecipeStub],
-        categories: [SourceRecipeCategory],
-        recipesByUID: [String: SourceRecipe],
-        fetchErrorsByUID: [String: Error] = [:]
-    ) {
-        self.stubs = stubs
-        self.categories = categories
-        self.recipesByUID = recipesByUID
-        self.fetchErrorsByUID = fetchErrorsByUID
-    }
-
-    func listRecipeStubs() async throws -> [SourceRecipeStub] {
-        stubs
-    }
-
-    func listRecipeCategories() async throws -> [SourceRecipeCategory] {
-        categories
-    }
-
-    func fetchRecipe(uid: String) async throws -> SourceRecipe {
-        lock.withLock {
-            fetchedRecipeUIDs.append(uid)
-        }
-
-        if let error = fetchErrorsByUID[uid] {
-            throw error
-        }
-
-        guard let recipe = recipesByUID[uid] else {
-            throw PaprikaRemoteClientError.invalidPayload("Missing fixture for \(uid).")
-        }
-
-        return recipe
     }
 }
 

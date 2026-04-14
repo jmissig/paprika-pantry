@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import PantryKit
 
-final class PaprikaTokenRemoteClientTests: XCTestCase {
+final class PaprikaTokenSourceTests: XCTestCase {
     override func tearDown() {
         MockPaprikaRemoteURLProtocol.requestHandler = nil
         super.tearDown()
@@ -30,7 +30,7 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
             return (response, data)
         }
 
-        let stubs = try await makeClient().listRecipeStubs()
+        let stubs = try await makeSource().listRecipeStubs()
         XCTAssertEqual(
             stubs,
             [
@@ -59,7 +59,7 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
             return (response, data)
         }
 
-        let categories = try await makeClient().listRecipeCategories()
+        let categories = try await makeSource().listRecipeCategories()
         XCTAssertEqual(
             categories,
             [
@@ -102,7 +102,7 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
             return (response, data)
         }
 
-        let recipe = try await makeClient().fetchRecipe(uid: "AAA")
+        let recipe = try await makeSource().fetchRecipe(uid: "AAA")
         XCTAssertEqual(recipe.uid, "AAA")
         XCTAssertEqual(recipe.name, "Weeknight Soup")
         XCTAssertEqual(recipe.categoryReferences, ["CAT1", "CAT2"])
@@ -118,11 +118,11 @@ final class PaprikaTokenRemoteClientTests: XCTestCase {
         XCTAssertTrue(recipe.rawJSON.contains("\"Weeknight Soup\""))
     }
 
-    private func makeClient() -> PaprikaTokenRemoteClient {
+    private func makeSource() -> PaprikaTokenSource {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockPaprikaRemoteURLProtocol.self]
         let session = URLSession(configuration: configuration)
-        return PaprikaTokenRemoteClient(token: "token-123", urlSession: session)
+        return PaprikaTokenSource(token: "token-123", urlSession: session)
     }
 }
 

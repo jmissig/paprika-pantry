@@ -16,8 +16,8 @@ public struct CommandContext: Sendable {
         }
     }
 
-    public func makeAuthStore() -> PantryAuthStore {
-        PantryAuthStore(paths: paths)
+    public func makeConfigStore() -> PantryConfigStore {
+        PantryConfigStore(paths: paths)
     }
 
     public func makeDatabase() -> PantryDatabase {
@@ -26,6 +26,12 @@ public struct CommandContext: Sendable {
 
     public func makeStore() throws -> PantryStore {
         PantryStore(dbQueue: try makeDatabase().openQueue())
+    }
+
+    public func makeSourceProvider(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> ConfiguredPantrySourceProvider {
+        ConfiguredPantrySourceProvider(paths: paths, environment: environment)
     }
 }
 

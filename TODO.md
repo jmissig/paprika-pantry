@@ -64,26 +64,26 @@ These landed, but are now on the chopping block rather than future foundation:
 
 ### Phase A — source seam
 
-- [ ] Introduce `PantrySource` and source model types
-- [ ] Reframe current remote abstraction around `PantrySource`
-- [ ] Rewrite `RecipeMirrorSyncEngine` to depend on `PantrySource`
-- [ ] Add fake/in-memory source for tests
-- [ ] Move sync-engine tests onto the source abstraction
+- [x] Introduce `PantrySource` and source model types
+- [x] Reframe current remote abstraction around `PantrySource`
+- [x] Rewrite `RecipeMirrorSyncEngine` to depend on `PantrySource`
+- [x] Add fake/in-memory source for tests
+- [x] Move sync-engine tests onto the source abstraction
 
 ### Phase B — source-oriented CLI plumbing
 
-- [ ] Rewrite `sync run` to use a source provider instead of session/token loading
-- [ ] Add `source doctor`
-- [ ] Update CLI help/discussion text to describe source-oriented architecture
-- [ ] Update path/config plumbing so it no longer assumes owned auth/session files
+- [x] Rewrite `sync run` to use a source provider instead of session/token loading
+- [x] Add `source doctor`
+- [x] Update CLI help/discussion text to describe source-oriented architecture
+- [x] Update path/config plumbing so it no longer assumes owned auth/session files
 
 ### Phase C — remove owned auth path
 
-- [ ] Delete auth commands
-- [ ] Delete auth/session/config model/store code
+- [x] Delete auth commands
+- [x] Delete auth/session/config model/store code
 - [ ] Delete direct Paprika HTTP clients
-- [ ] Delete auth/direct-HTTP tests
-- [ ] Remove stale references to direct auth from docs/help/tests
+- [x] Delete auth/direct-HTTP tests
+- [x] Remove stale references to direct auth from docs/help/tests
 
 ## Decision to make after the seam exists
 

@@ -191,7 +191,6 @@ final class RecipeMirrorReportsTests: XCTestCase {
         PantryPaths(
             homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
             configFile: URL(fileURLWithPath: "/tmp/pantry/config.json"),
-            sessionFile: URL(fileURLWithPath: "/tmp/pantry/session.json"),
             databaseFile: URL(fileURLWithPath: "/tmp/pantry/pantry.sqlite")
         )
     }

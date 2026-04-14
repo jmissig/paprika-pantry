@@ -1,13 +1,11 @@
 import Foundation
 
 public struct PantryConfig: Codable, Equatable, Sendable {
-    public let authStrategy: AuthStrategy
-    public let lastEmailAddress: String?
+    public let source: PantrySourceConfiguration?
     public let updatedAt: Date
 
-    public init(authStrategy: AuthStrategy, lastEmailAddress: String?, updatedAt: Date) {
-        self.authStrategy = authStrategy
-        self.lastEmailAddress = lastEmailAddress
+    public init(source: PantrySourceConfiguration?, updatedAt: Date) {
+        self.source = source
         self.updatedAt = updatedAt
     }
 }

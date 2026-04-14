@@ -258,22 +258,21 @@ public struct DBStatsReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
-private func renderedTimestamp(_ date: Date) -> String {
+func renderedTimestamp(_ date: Date) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
     return formatter.string(from: date)
 }
 
-private func renderedPaths(_ paths: PantryPathReport) -> String {
+func renderedPaths(_ paths: PantryPathReport) -> String {
     [
         "home: \(paths.home)",
         "config: \(paths.config)",
-        "session: \(paths.session)",
         "database: \(paths.database)",
     ].joined(separator: "\n")
 }
 
-private func renderedDuration(seconds: Int) -> String {
+func renderedDuration(seconds: Int) -> String {
     if seconds < 60 {
         return "\(seconds)s"
     }

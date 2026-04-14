@@ -38,7 +38,6 @@ extension RuntimeOptions {
         PantryPathOptions(
             homeDirectory: home.map(Self.fileURL(from:)),
             configFile: config.map(Self.fileURL(from:)),
-            sessionFile: nil,
             databaseFile: database.map(Self.fileURL(from:))
         )
     }

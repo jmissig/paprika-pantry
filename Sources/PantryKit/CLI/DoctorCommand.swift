@@ -11,7 +11,7 @@ public struct DoctorCommand: PantryLeafCommand {
         try emitStub(
             command: "doctor",
             plannedPhase: "Later",
-            message: "Doctor is intentionally deferred until sync and freshness signals exist."
+            message: "Local mirror doctor is still deferred; use `source doctor` for source readiness today."
         )
     }
 }
