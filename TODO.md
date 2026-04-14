@@ -1,6 +1,20 @@
-# TODO.md
+# TODO
 
-## Phase 1 — Package and CLI scaffold
+## Current direction
+
+`paprika-pantry` remains a local-first mirror and query CLI.
+
+What changed is the architectural reset:
+
+- the local mirror work was worth doing and should stay
+- the owned direct-auth / direct-Paprika-HTTP path is no longer the product direction
+- next step is to introduce a `PantrySource` seam
+- only after that seam exists should we decide the first real source backend
+- kappari is currently best treated as reference/protocol knowledge, not yet assumed to be the runtime backend
+
+## Already landed
+
+### Package / CLI scaffold
 
 - [x] Create Swift Package Manager package
 - [x] Add dependencies:
@@ -10,66 +24,88 @@
   - [x] `PantryKit`
   - [x] `paprika-pantry`
   - [x] `PantryKitTests`
-- [x] Create initial source layout:
-  - [x] `CLI/`
-  - [x] `Auth/`
-  - [x] `Remote/`
-  - [x] `Sync/`
-  - [x] `Store/`
-  - [x] `Model/`
-  - [x] `Support/`
+- [x] Create initial source layout
 - [x] Add root CLI and initial command tree
-- [x] Add config/path plumbing for managed config/session/database locations
+- [x] Add managed path plumbing
 - [x] Add shared JSON output support
-- [x] Stub commands that are intentionally later:
+- [x] Stub intentionally-later commands:
   - [x] `meals list`
   - [x] `groceries list`
   - [x] `doctor`
 
-## Phase 2 — First trustworthy recipe mirror slice
+### Local recipe mirror core
 
-- [x] Implement `SimpleAccountAuth`
-- [x] Implement local session/config storage
-- [x] Implement small Paprika HTTP client directly in this repo
-- [ ] Add first SQLite migration
-- [ ] Add recipe sync flow:
-  - [ ] fetch stub list
-  - [ ] diff by `uid` and remote hash
-  - [ ] hydrate changed/new recipes
-  - [ ] tombstone missing recipes
-  - [ ] record sync run results
-- [ ] Implement commands:
-  - [x] `auth login`
-  - [x] `auth status`
-  - [x] `auth logout`
-  - [ ] `sync run`
-  - [ ] `sync status`
-  - [ ] `recipes list`
-  - [ ] `recipes show`
-  - [ ] `recipes search`
-  - [ ] `db stats`
-- [ ] Definition of done:
-  - [ ] after one successful sync, recipe queries work locally with the network off
+- [x] Add first SQLite migration(s)
+- [x] Add recipe/category/sync-run store layer
+- [x] Add recipe sync engine behavior for:
+  - [x] stub listing
+  - [x] changed/new hydration
+  - [x] tombstoning missing recipes
+  - [x] sync-run recording
+- [x] Add local commands:
+  - [x] `sync run`
+  - [x] `sync status`
+  - [x] `recipes list`
+  - [x] `recipes show`
+  - [x] `db stats`
+- [x] Add tests for store, sync engine, reports, and command resolution
 
-## Phase 3 — Trust/reporting
+### Experimental path now considered non-strategic
 
-- [ ] Add stale/fresh reporting to sync status and recipe outputs
-- [ ] Implement `doctor`
-- [ ] Improve local diagnostics for missing DB/session/never-synced/stale state
-- [ ] Add fixture-driven sync reporting tests
+These landed, but are now on the chopping block rather than future foundation:
 
-## Phase 4 — Later
+- [x] direct auth/session/config flow
+- [x] direct Paprika HTTP clients
+- [x] `auth login`
+- [x] `auth status`
+- [x] `auth logout`
 
+## Next implementation slice
+
+### Phase A — source seam
+
+- [ ] Introduce `PantrySource` and source model types
+- [ ] Reframe current remote abstraction around `PantrySource`
+- [ ] Rewrite `RecipeMirrorSyncEngine` to depend on `PantrySource`
+- [ ] Add fake/in-memory source for tests
+- [ ] Move sync-engine tests onto the source abstraction
+
+### Phase B — source-oriented CLI plumbing
+
+- [ ] Rewrite `sync run` to use a source provider instead of session/token loading
+- [ ] Add `source doctor`
+- [ ] Update CLI help/discussion text to describe source-oriented architecture
+- [ ] Update path/config plumbing so it no longer assumes owned auth/session files
+
+### Phase C — remove owned auth path
+
+- [ ] Delete auth commands
+- [ ] Delete auth/session/config model/store code
+- [ ] Delete direct Paprika HTTP clients
+- [ ] Delete auth/direct-HTTP tests
+- [ ] Remove stale references to direct auth from docs/help/tests
+
+## Decision to make after the seam exists
+
+- [ ] Choose the first real source backend:
+  - [ ] thin kappari wrapper
+  - [ ] local source implementation informed by kappari
+
+Do not make this call before the source seam is in place.
+
+## Later
+
+- [ ] Add stale/fresh reporting improvements where still needed
+- [ ] Add `recipes search`
 - [ ] Add meals mirror and queries
 - [ ] Add groceries mirror and queries
-- [ ] Add categories support
-- [ ] Consider `LicensedClientAuth` if simple login proves fragile
+- [ ] Revisit category model/schema if source integration reveals needed changes
+- [ ] Consider photos/attachments only if they become important to real usage
 
 ## Explicitly not yet
 
 - [ ] No upstream writes
 - [ ] No background daemon/scheduler
 - [ ] No multi-account support
-- [ ] No attachments/photos
-- [ ] No generic SDK extraction
-- [ ] No broad search grammar beyond basic local FTS
+- [ ] No generic Paprika SDK extraction
+- [ ] No recommendation/ranking logic in the CLI
