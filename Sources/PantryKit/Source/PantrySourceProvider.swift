@@ -1,8 +1,22 @@
 import Foundation
 
 public enum PantrySourceKind: String, Codable, Equatable, Sendable {
+    case paprikaSQLite = "paprika-sqlite"
     case paprikaToken = "paprika-token"
     case kappari
+}
+
+public struct PaprikaSQLiteSourceConfiguration: Codable, Equatable, Sendable {
+    public let databasePath: String?
+    public let databasePathEnvironmentVariable: String?
+
+    public init(
+        databasePath: String? = nil,
+        databasePathEnvironmentVariable: String? = nil
+    ) {
+        self.databasePath = databasePath
+        self.databasePathEnvironmentVariable = databasePathEnvironmentVariable
+    }
 }
 
 public struct PaprikaTokenSourceConfiguration: Codable, Equatable, Sendable {
@@ -40,17 +54,20 @@ public struct KappariSourceConfiguration: Codable, Equatable, Sendable {
 public struct PantrySourceConfiguration: Codable, Equatable, Sendable {
     public let kind: PantrySourceKind
     public let displayName: String?
+    public let paprikaSQLite: PaprikaSQLiteSourceConfiguration?
     public let paprikaToken: PaprikaTokenSourceConfiguration?
     public let kappari: KappariSourceConfiguration?
 
     public init(
         kind: PantrySourceKind,
         displayName: String? = nil,
+        paprikaSQLite: PaprikaSQLiteSourceConfiguration? = nil,
         paprikaToken: PaprikaTokenSourceConfiguration? = nil,
         kappari: KappariSourceConfiguration? = nil
     ) {
         self.kind = kind
         self.displayName = displayName
+        self.paprikaSQLite = paprikaSQLite
         self.paprikaToken = paprikaToken
         self.kappari = kappari
     }
@@ -58,6 +75,9 @@ public struct PantrySourceConfiguration: Codable, Equatable, Sendable {
 
 public enum PantrySourceProviderError: Error, LocalizedError, Equatable {
     case notConfigured
+    case missingPaprikaSQLiteDatabase
+    case paprikaSQLiteDatabaseNotFound(String)
+    case invalidPaprikaSQLiteDatabase(String)
     case missingPaprikaToken
     case invalidBaseURL(String)
     case unsupportedSource(PantrySourceKind)
@@ -65,7 +85,13 @@ public enum PantrySourceProviderError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "No pantry source is configured. Set PAPRIKA_PANTRY_SOURCE_TOKEN or add a source block to config.json."
+            return "No pantry source is configured. Add a source block to config.json, set PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB, or set PAPRIKA_PANTRY_SOURCE_TOKEN."
+        case .missingPaprikaSQLiteDatabase:
+            return "The paprika-sqlite source needs a Paprika.sqlite path. Configure source.paprikaSQLite.databasePath, set PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB, or install Paprika in its default path."
+        case .paprikaSQLiteDatabaseNotFound(let rawValue):
+            return "The configured Paprika.sqlite database was not found: \(rawValue)"
+        case .invalidPaprikaSQLiteDatabase(let message):
+            return "The configured Paprika.sqlite database is not readable: \(message)"
         case .missingPaprikaToken:
             return "The paprika-token source needs a token. Set PAPRIKA_PANTRY_SOURCE_TOKEN or configure source.paprikaToken."
         case .invalidBaseURL(let rawValue):
@@ -90,6 +116,7 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
     public let displayName: String?
     public let implementation: String?
     public let credentialSource: String?
+    public let sourceLocation: String?
 
     public init(
         status: PantrySourceDoctorStatus,
@@ -97,7 +124,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         sourceKind: PantrySourceKind?,
         displayName: String?,
         implementation: String?,
-        credentialSource: String?
+        credentialSource: String?,
+        sourceLocation: String?
     ) {
         self.status = status
         self.message = message
@@ -105,6 +133,7 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         self.displayName = displayName
         self.implementation = implementation
         self.credentialSource = credentialSource
+        self.sourceLocation = sourceLocation
     }
 }
 
@@ -113,27 +142,37 @@ public protocol PantrySourceProvider: Sendable {
     func diagnose() throws -> PantrySourceDoctorSnapshot
 }
 
-public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
+public struct ConfiguredPantrySourceProvider: PantrySourceProvider, @unchecked Sendable {
+    public static let defaultPaprikaSQLiteEnvironmentVariable = "PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB"
     public static let defaultTokenEnvironmentVariable = "PAPRIKA_PANTRY_SOURCE_TOKEN"
 
     private let configStore: PantryConfigStore
     private let environment: [String: String]
+    private let fileManager: FileManager
 
     public init(
         paths: PantryPaths,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
     ) {
         self.configStore = PantryConfigStore(paths: paths)
         self.environment = environment
+        self.fileManager = fileManager
     }
 
     public func makeSource() throws -> any PantrySource {
         switch try resolvedSourceReference() {
+        case .paprikaSQLite(let databaseURL, _, _):
+            do {
+                return try PaprikaSQLiteSource(databaseURL: databaseURL, fileManager: fileManager)
+            } catch let error as PaprikaSQLiteSourceError {
+                throw PantrySourceProviderError.invalidPaprikaSQLiteDatabase(error.localizedDescription)
+            }
         case .paprikaToken(let token, let baseURL, _, _):
             return PaprikaTokenSource(token: token, baseURL: baseURL)
         case .kappari:
             throw PantrySourceProviderError.unsupportedSource(.kappari)
-        case .invalid(_, _, let error):
+        case .invalid(_, _, _, let error):
             throw error
         case .none:
             throw PantrySourceProviderError.notConfigured
@@ -142,6 +181,29 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
 
     public func diagnose() throws -> PantrySourceDoctorSnapshot {
         switch try resolvedSourceReference() {
+        case .paprikaSQLite(let databaseURL, let displayName, _):
+            do {
+                _ = try PaprikaSQLiteSource(databaseURL: databaseURL, fileManager: fileManager)
+                return PantrySourceDoctorSnapshot(
+                    status: .ready,
+                    message: "The configured pantry source is ready.",
+                    sourceKind: .paprikaSQLite,
+                    displayName: displayName,
+                    implementation: "direct Paprika SQLite source",
+                    credentialSource: nil,
+                    sourceLocation: databaseURL.path
+                )
+            } catch let error as PaprikaSQLiteSourceError {
+                return PantrySourceDoctorSnapshot(
+                    status: .invalid,
+                    message: PantrySourceProviderError.invalidPaprikaSQLiteDatabase(error.localizedDescription).localizedDescription,
+                    sourceKind: .paprikaSQLite,
+                    displayName: displayName,
+                    implementation: "direct Paprika SQLite source",
+                    credentialSource: nil,
+                    sourceLocation: databaseURL.path
+                )
+            }
         case .paprikaToken(_, _, let displayName, let credentialSource):
             return PantrySourceDoctorSnapshot(
                 status: .ready,
@@ -149,7 +211,8 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
                 sourceKind: .paprikaToken,
                 displayName: displayName,
                 implementation: "direct Paprika token source",
-                credentialSource: credentialSource
+                credentialSource: credentialSource,
+                sourceLocation: nil
             )
         case .kappari(let displayName):
             return PantrySourceDoctorSnapshot(
@@ -158,7 +221,8 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
                 sourceKind: .kappari,
                 displayName: displayName,
                 implementation: "planned kappari-backed source",
-                credentialSource: nil
+                credentialSource: nil,
+                sourceLocation: nil
             )
         case .none:
             return PantrySourceDoctorSnapshot(
@@ -167,21 +231,32 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
                 sourceKind: nil,
                 displayName: nil,
                 implementation: nil,
-                credentialSource: nil
+                credentialSource: nil,
+                sourceLocation: nil
             )
-        case .invalid(let kind, let displayName, let error):
+        case .invalid(let kind, let displayName, let sourceLocation, let error):
             return PantrySourceDoctorSnapshot(
                 status: kind == .kappari ? .unsupported : .invalid,
                 message: error.localizedDescription,
                 sourceKind: kind,
                 displayName: displayName,
-                implementation: kind == .kappari ? "planned kappari-backed source" : "direct Paprika token source",
-                credentialSource: nil
+                implementation: implementationDescription(for: kind),
+                credentialSource: nil,
+                sourceLocation: sourceLocation
             )
         }
     }
 
     private func resolvedSourceReference() throws -> ResolvedSourceReference {
+        if let databasePath = environment[Self.defaultPaprikaSQLiteEnvironmentVariable]?.trimmedNonEmpty {
+            let databaseURL = resolvedFileURL(rawPath: databasePath)
+            return validatedPaprikaSQLiteReference(
+                databaseURL: databaseURL,
+                displayName: "environment",
+                locationSource: "env:\(Self.defaultPaprikaSQLiteEnvironmentVariable)"
+            )
+        }
+
         if let token = environment[Self.defaultTokenEnvironmentVariable]?.trimmedNonEmpty {
             let baseURL = try resolvedBaseURL(rawValue: environment["PAPRIKA_PANTRY_SOURCE_BASE_URL"])
             return .paprikaToken(
@@ -193,10 +268,51 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
         }
 
         guard let source = try configStore.loadConfig()?.source else {
+            if let databaseURL = Self.defaultPaprikaSQLiteURL(fileManager: fileManager) {
+                return .paprikaSQLite(
+                    databaseURL: databaseURL,
+                    displayName: "default Paprika SQLite",
+                    locationSource: "default"
+                )
+            }
             return .none
         }
 
         switch source.kind {
+        case .paprikaSQLite:
+            let sourceConfig = source.paprikaSQLite ?? PaprikaSQLiteSourceConfiguration()
+            if let databasePath = sourceConfig.databasePath?.trimmedNonEmpty {
+                return validatedPaprikaSQLiteReference(
+                    databaseURL: resolvedFileURL(rawPath: databasePath),
+                    displayName: source.displayName,
+                    locationSource: "config:path"
+                )
+            }
+
+            let pathEnvironmentVariable = sourceConfig.databasePathEnvironmentVariable?.trimmedNonEmpty
+                ?? Self.defaultPaprikaSQLiteEnvironmentVariable
+            if let databasePath = environment[pathEnvironmentVariable]?.trimmedNonEmpty {
+                return validatedPaprikaSQLiteReference(
+                    databaseURL: resolvedFileURL(rawPath: databasePath),
+                    displayName: source.displayName,
+                    locationSource: "env:\(pathEnvironmentVariable)"
+                )
+            }
+
+            if let databaseURL = Self.defaultPaprikaSQLiteURL(fileManager: fileManager) {
+                return .paprikaSQLite(
+                    databaseURL: databaseURL,
+                    displayName: source.displayName,
+                    locationSource: "default"
+                )
+            }
+
+            return .invalid(
+                kind: .paprikaSQLite,
+                displayName: source.displayName,
+                sourceLocation: nil,
+                error: PantrySourceProviderError.missingPaprikaSQLiteDatabase
+            )
         case .paprikaToken:
             let sourceConfig = source.paprikaToken ?? PaprikaTokenSourceConfiguration()
             if let token = sourceConfig.token?.trimmedNonEmpty {
@@ -214,6 +330,7 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
                 return .invalid(
                     kind: .paprikaToken,
                     displayName: source.displayName,
+                    sourceLocation: nil,
                     error: PantrySourceProviderError.missingPaprikaToken
                 )
             }
@@ -229,6 +346,27 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
         }
     }
 
+    private func validatedPaprikaSQLiteReference(
+        databaseURL: URL,
+        displayName: String?,
+        locationSource: String
+    ) -> ResolvedSourceReference {
+        guard fileManager.fileExists(atPath: databaseURL.path) else {
+            return .invalid(
+                kind: .paprikaSQLite,
+                displayName: displayName,
+                sourceLocation: databaseURL.path,
+                error: PantrySourceProviderError.paprikaSQLiteDatabaseNotFound(databaseURL.path)
+            )
+        }
+
+        return .paprikaSQLite(
+            databaseURL: databaseURL,
+            displayName: displayName,
+            locationSource: locationSource
+        )
+    }
+
     private func resolvedBaseURL(rawValue: String?) throws -> URL {
         guard let rawValue = rawValue?.trimmedNonEmpty else {
             return PaprikaTokenSource.defaultBaseURL
@@ -240,12 +378,36 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider {
 
         return baseURL
     }
+
+    private func resolvedFileURL(rawPath: String) -> URL {
+        URL(fileURLWithPath: (rawPath as NSString).expandingTildeInPath).standardizedFileURL
+    }
+
+    private static func defaultPaprikaSQLiteURL(fileManager: FileManager) -> URL? {
+        let databaseURL = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite")
+            .standardizedFileURL
+
+        return fileManager.fileExists(atPath: databaseURL.path) ? databaseURL : nil
+    }
+
+    private func implementationDescription(for kind: PantrySourceKind) -> String {
+        switch kind {
+        case .paprikaSQLite:
+            return "direct Paprika SQLite source"
+        case .paprikaToken:
+            return "direct Paprika token source"
+        case .kappari:
+            return "planned kappari-backed source"
+        }
+    }
 }
 
 private enum ResolvedSourceReference {
+    case paprikaSQLite(databaseURL: URL, displayName: String?, locationSource: String)
     case paprikaToken(token: String, baseURL: URL, displayName: String?, credentialSource: String)
     case kappari(displayName: String?)
-    case invalid(kind: PantrySourceKind, displayName: String?, error: PantrySourceProviderError)
+    case invalid(kind: PantrySourceKind, displayName: String?, sourceLocation: String?, error: PantrySourceProviderError)
     case none
 }
 

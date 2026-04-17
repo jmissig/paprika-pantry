@@ -11,7 +11,8 @@ final class SourceDoctorReportTests: XCTestCase {
                 sourceKind: .paprikaToken,
                 displayName: "legacy token",
                 implementation: "direct Paprika token source",
-                credentialSource: "env:PAPRIKA_PANTRY_SOURCE_TOKEN"
+                credentialSource: "env:PAPRIKA_PANTRY_SOURCE_TOKEN",
+                sourceLocation: nil
             ),
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),

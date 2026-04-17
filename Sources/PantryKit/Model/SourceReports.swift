@@ -8,6 +8,7 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let displayName: String?
     public let implementation: String?
     public let credentialSource: String?
+    public let sourceLocation: String?
     public let paths: PantryPathReport
 
     public init(snapshot: PantrySourceDoctorSnapshot, paths: PantryPaths) {
@@ -18,6 +19,7 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.displayName = snapshot.displayName
         self.implementation = snapshot.implementation
         self.credentialSource = snapshot.credentialSource
+        self.sourceLocation = snapshot.sourceLocation
         self.paths = paths.report
     }
 
@@ -41,6 +43,10 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
 
         if let credentialSource, !credentialSource.isEmpty {
             lines.append("credential_source: \(credentialSource)")
+        }
+
+        if let sourceLocation, !sourceLocation.isEmpty {
+            lines.append("source_location: \(sourceLocation)")
         }
 
         lines.append(renderedPaths(paths))
