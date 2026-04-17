@@ -224,6 +224,81 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("ingredient_line_count: 2"))
     }
 
+    func testSourceCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {
+        let searchRun = PantryIndexRun(
+            id: 9,
+            startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+            finishedAt: Date(timeIntervalSince1970: 1_712_736_120),
+            status: .success,
+            indexName: "recipe-search",
+            recipeCount: 6,
+            errorMessage: nil
+        )
+        let report = SourceCookbooksReport(
+            aggregates: [
+                CookbookAggregateSummary(
+                    sourceName: "Serious Eats",
+                    isUnlabeled: false,
+                    recipeCount: 4,
+                    ratedRecipeCount: 3,
+                    unratedRecipeCount: 1,
+                    favoriteRecipeCount: 2,
+                    averageStarRating: 4.33,
+                    ratedRecipeShare: 0.75,
+                    favoriteRecipeShare: 0.5,
+                    ratingDistribution: CookbookRatingDistribution(
+                        oneStarCount: 0,
+                        twoStarCount: 0,
+                        threeStarCount: 1,
+                        fourStarCount: 0,
+                        fiveStarCount: 2
+                    )
+                ),
+                CookbookAggregateSummary(
+                    sourceName: nil,
+                    isUnlabeled: true,
+                    recipeCount: 2,
+                    ratedRecipeCount: 0,
+                    unratedRecipeCount: 2,
+                    favoriteRecipeCount: 1,
+                    averageStarRating: nil,
+                    ratedRecipeShare: 0,
+                    favoriteRecipeShare: 0.5,
+                    ratingDistribution: CookbookRatingDistribution(
+                        oneStarCount: 0,
+                        twoStarCount: 0,
+                        threeStarCount: 0,
+                        fourStarCount: 0,
+                        fiveStarCount: 0
+                    )
+                ),
+            ],
+            sort: .averageRating,
+            limit: 20,
+            minRecipeCount: 1,
+            minRatedRecipeCount: 0,
+            indexStats: PantryIndexStats(
+                recipeSearchDocumentCount: 6,
+                recipeFeatureCount: 6,
+                recipeFeaturesWithTotalTimeCount: 0,
+                recipeFeaturesWithIngredientLineCountCount: 0,
+                lastRecipeSearchRun: searchRun,
+                lastSuccessfulRecipeSearchRun: searchRun,
+                lastRecipeFeatureRun: nil,
+                lastSuccessfulRecipeFeatureRun: nil
+            ),
+            paths: makePaths(),
+            now: Date(timeIntervalSince1970: 1_712_736_180)
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("source cookbooks: 2 cookbook/source groups"))
+        XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
+        XCTAssertTrue(report.humanDescription.contains("sort: average-rating"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | avg_rating=4.33 | ratings=5:2,3:1"))
+        XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | recipes=2 | rated=0 | unrated=2 | favorites=1 | avg_rating=unrated | is_unlabeled=yes"))
+    }
+
     private func makePaths() -> PantryPaths {
         PantryPaths(
             homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),

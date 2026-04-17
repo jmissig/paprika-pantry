@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 import GRDB
 
@@ -71,6 +72,74 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
 
     public var recipeFeaturesReady: Bool {
         recipeFeatureCount > 0 && lastSuccessfulRecipeFeatureRun != nil
+    }
+}
+
+public enum CookbookAggregateSort: String, CaseIterable, Codable, Sendable, ExpressibleByArgument {
+    case averageRating = "average-rating"
+    case favoriteRate = "favorite-rate"
+    case favorites
+    case ratedRecipes = "rated-recipes"
+    case recipes
+    case name
+}
+
+public struct CookbookRatingDistribution: Codable, Equatable, Sendable {
+    public let oneStarCount: Int
+    public let twoStarCount: Int
+    public let threeStarCount: Int
+    public let fourStarCount: Int
+    public let fiveStarCount: Int
+
+    public init(
+        oneStarCount: Int,
+        twoStarCount: Int,
+        threeStarCount: Int,
+        fourStarCount: Int,
+        fiveStarCount: Int
+    ) {
+        self.oneStarCount = oneStarCount
+        self.twoStarCount = twoStarCount
+        self.threeStarCount = threeStarCount
+        self.fourStarCount = fourStarCount
+        self.fiveStarCount = fiveStarCount
+    }
+}
+
+public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
+    public let sourceName: String?
+    public let isUnlabeled: Bool
+    public let recipeCount: Int
+    public let ratedRecipeCount: Int
+    public let unratedRecipeCount: Int
+    public let favoriteRecipeCount: Int
+    public let averageStarRating: Double?
+    public let ratedRecipeShare: Double
+    public let favoriteRecipeShare: Double
+    public let ratingDistribution: CookbookRatingDistribution
+
+    public init(
+        sourceName: String?,
+        isUnlabeled: Bool,
+        recipeCount: Int,
+        ratedRecipeCount: Int,
+        unratedRecipeCount: Int,
+        favoriteRecipeCount: Int,
+        averageStarRating: Double?,
+        ratedRecipeShare: Double,
+        favoriteRecipeShare: Double,
+        ratingDistribution: CookbookRatingDistribution
+    ) {
+        self.sourceName = sourceName
+        self.isUnlabeled = isUnlabeled
+        self.recipeCount = recipeCount
+        self.ratedRecipeCount = ratedRecipeCount
+        self.unratedRecipeCount = unratedRecipeCount
+        self.favoriteRecipeCount = favoriteRecipeCount
+        self.averageStarRating = averageStarRating
+        self.ratedRecipeShare = ratedRecipeShare
+        self.favoriteRecipeShare = favoriteRecipeShare
+        self.ratingDistribution = ratingDistribution
     }
 }
 
@@ -321,6 +390,88 @@ public struct PantryStore: @unchecked Sendable {
                 .filter { derivedConstraints.matches(features: $0.derivedFeatures) }
                 .prefix(max(1, limit))
                 .map { $0 }
+        }
+    }
+
+    public func listCookbookAggregates(
+        sort: CookbookAggregateSort = .averageRating,
+        limit: Int = 20,
+        minRecipeCount: Int = 1,
+        minRatedRecipeCount: Int = 0
+    ) throws -> [CookbookAggregateSummary] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                WITH grouped AS (
+                    SELECT
+                        CASE
+                            WHEN TRIM(COALESCE(source_name, '')) = '' THEN NULL
+                            ELSE TRIM(source_name)
+                        END AS source_name,
+                        CASE
+                            WHEN TRIM(COALESCE(source_name, '')) = '' THEN 1
+                            ELSE 0
+                        END AS is_unlabeled,
+                        COUNT(*) AS recipe_count,
+                        COUNT(star_rating) AS rated_recipe_count,
+                        COUNT(*) - COUNT(star_rating) AS unrated_recipe_count,
+                        SUM(CASE WHEN is_favorite THEN 1 ELSE 0 END) AS favorite_recipe_count,
+                        AVG(CAST(star_rating AS REAL)) AS average_star_rating,
+                        SUM(CASE WHEN star_rating = 1 THEN 1 ELSE 0 END) AS one_star_count,
+                        SUM(CASE WHEN star_rating = 2 THEN 1 ELSE 0 END) AS two_star_count,
+                        SUM(CASE WHEN star_rating = 3 THEN 1 ELSE 0 END) AS three_star_count,
+                        SUM(CASE WHEN star_rating = 4 THEN 1 ELSE 0 END) AS four_star_count,
+                        SUM(CASE WHEN star_rating = 5 THEN 1 ELSE 0 END) AS five_star_count
+                    FROM recipe_search_documents
+                    GROUP BY CASE
+                        WHEN TRIM(COALESCE(source_name, '')) = '' THEN NULL
+                        ELSE TRIM(source_name)
+                    END
+                )
+                SELECT
+                    source_name,
+                    is_unlabeled,
+                    recipe_count,
+                    rated_recipe_count,
+                    unrated_recipe_count,
+                    favorite_recipe_count,
+                    average_star_rating,
+                    CAST(rated_recipe_count AS REAL) / recipe_count AS rated_recipe_share,
+                    CAST(favorite_recipe_count AS REAL) / recipe_count AS favorite_recipe_share,
+                    one_star_count,
+                    two_star_count,
+                    three_star_count,
+                    four_star_count,
+                    five_star_count
+                FROM grouped
+                WHERE recipe_count >= ? AND rated_recipe_count >= ?
+                ORDER BY \(Self.cookbookAggregateOrderClause(sort: sort))
+                LIMIT ?
+                """,
+                arguments: [max(1, minRecipeCount), max(0, minRatedRecipeCount), max(1, limit)]
+            )
+
+            return rows.map { row in
+                CookbookAggregateSummary(
+                    sourceName: row["source_name"],
+                    isUnlabeled: row["is_unlabeled"],
+                    recipeCount: row["recipe_count"],
+                    ratedRecipeCount: row["rated_recipe_count"],
+                    unratedRecipeCount: row["unrated_recipe_count"],
+                    favoriteRecipeCount: row["favorite_recipe_count"],
+                    averageStarRating: row["average_star_rating"],
+                    ratedRecipeShare: row["rated_recipe_share"],
+                    favoriteRecipeShare: row["favorite_recipe_share"],
+                    ratingDistribution: CookbookRatingDistribution(
+                        oneStarCount: row["one_star_count"],
+                        twoStarCount: row["two_star_count"],
+                        threeStarCount: row["three_star_count"],
+                        fourStarCount: row["four_star_count"],
+                        fiveStarCount: row["five_star_count"]
+                    )
+                )
+            }
         }
     }
 
@@ -751,6 +902,66 @@ public struct PantryStore: @unchecked Sendable {
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
             recipe_search_documents.uid ASC
+            """
+        }
+    }
+
+    private static func cookbookAggregateOrderClause(sort: CookbookAggregateSort) -> String {
+        switch sort {
+        case .averageRating:
+            return """
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            rated_recipe_count DESC,
+            favorite_recipe_count DESC,
+            recipe_count DESC,
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
+            """
+        case .favoriteRate:
+            return """
+            favorite_recipe_share DESC,
+            favorite_recipe_count DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            recipe_count DESC,
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
+            """
+        case .favorites:
+            return """
+            favorite_recipe_count DESC,
+            favorite_recipe_share DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            recipe_count DESC,
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
+            """
+        case .ratedRecipes:
+            return """
+            rated_recipe_count DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            favorite_recipe_count DESC,
+            recipe_count DESC,
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
+            """
+        case .recipes:
+            return """
+            recipe_count DESC,
+            rated_recipe_count DESC,
+            favorite_recipe_count DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
+            """
+        case .name:
+            return """
+            is_unlabeled ASC,
+            source_name COLLATE NOCASE ASC
             """
         }
     }

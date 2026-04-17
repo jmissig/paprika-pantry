@@ -315,6 +315,91 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(exactRatingResults.map(\.uid), ["AAA", "BBB"])
     }
 
+    func testListCookbookAggregatesGroupsTrimmedSourceNamesAndUnlabeledRows() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Soup A", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Soup B", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Soup C", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Soup D", hash: "hash-ddd"),
+                SourceRecipeStub(uid: "EEE", name: "Soup E", hash: "hash-eee"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForAggregate(uid: "AAA", sourceName: " Serious Eats ", starRating: 5, isFavorite: true),
+                "BBB": makeRecipeForAggregate(uid: "BBB", sourceName: "Serious Eats", starRating: 4, isFavorite: false),
+                "CCC": makeRecipeForAggregate(uid: "CCC", sourceName: nil, starRating: nil, isFavorite: true),
+                "DDD": makeRecipeForAggregate(uid: "DDD", sourceName: "   ", starRating: 3, isFavorite: false),
+                "EEE": makeRecipeForAggregate(uid: "EEE", sourceName: "Smitten Kitchen", starRating: 5, isFavorite: true),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let aggregates = try store.listCookbookAggregates(sort: .name, limit: 20)
+
+        XCTAssertEqual(aggregates.count, 3)
+        XCTAssertEqual(aggregates[0].sourceName, "Serious Eats")
+        XCTAssertFalse(aggregates[0].isUnlabeled)
+        XCTAssertEqual(aggregates[0].recipeCount, 2)
+        XCTAssertEqual(aggregates[0].ratedRecipeCount, 2)
+        XCTAssertEqual(aggregates[0].favoriteRecipeCount, 1)
+        XCTAssertEqual(try XCTUnwrap(aggregates[0].averageStarRating), 4.5, accuracy: 0.001)
+        XCTAssertEqual(aggregates[0].ratingDistribution.fiveStarCount, 1)
+        XCTAssertEqual(aggregates[0].ratingDistribution.fourStarCount, 1)
+
+        XCTAssertEqual(aggregates[1].sourceName, "Smitten Kitchen")
+        XCTAssertEqual(aggregates[1].recipeCount, 1)
+        XCTAssertEqual(aggregates[1].ratedRecipeCount, 1)
+        XCTAssertEqual(aggregates[1].favoriteRecipeCount, 1)
+
+        XCTAssertNil(aggregates[2].sourceName)
+        XCTAssertTrue(aggregates[2].isUnlabeled)
+        XCTAssertEqual(aggregates[2].recipeCount, 2)
+        XCTAssertEqual(aggregates[2].ratedRecipeCount, 1)
+        XCTAssertEqual(aggregates[2].unratedRecipeCount, 1)
+        XCTAssertEqual(aggregates[2].favoriteRecipeCount, 1)
+        XCTAssertEqual(try XCTUnwrap(aggregates[2].averageStarRating), 3.0, accuracy: 0.001)
+        XCTAssertEqual(aggregates[2].ratingDistribution.threeStarCount, 1)
+    }
+
+    func testListCookbookAggregatesSupportsMinimumRatedRecipesAndAverageRatingSort() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "A", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "B", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "C", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "D", hash: "hash-ddd"),
+                SourceRecipeStub(uid: "EEE", name: "E", hash: "hash-eee"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForAggregate(uid: "AAA", sourceName: "Alpha", starRating: 5, isFavorite: true),
+                "BBB": makeRecipeForAggregate(uid: "BBB", sourceName: "Alpha", starRating: 4, isFavorite: false),
+                "CCC": makeRecipeForAggregate(uid: "CCC", sourceName: "Beta", starRating: 5, isFavorite: true),
+                "DDD": makeRecipeForAggregate(uid: "DDD", sourceName: "Gamma", starRating: nil, isFavorite: false),
+                "EEE": makeRecipeForAggregate(uid: "EEE", sourceName: "Gamma", starRating: nil, isFavorite: true),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let aggregates = try store.listCookbookAggregates(
+            sort: .averageRating,
+            limit: 20,
+            minRecipeCount: 1,
+            minRatedRecipeCount: 1
+        )
+
+        XCTAssertEqual(aggregates.map(\.sourceName), ["Beta", "Alpha"])
+        XCTAssertEqual(aggregates[0].ratedRecipeCount, 1)
+        XCTAssertEqual(try XCTUnwrap(aggregates[0].averageStarRating), 5.0, accuracy: 0.001)
+        XCTAssertEqual(aggregates[1].ratedRecipeCount, 2)
+        XCTAssertEqual(try XCTUnwrap(aggregates[1].averageStarRating), 4.5, accuracy: 0.001)
+    }
+
     func testSearchRecipesAppliesCanonicalCategoryFiltersAfterFTSMatch() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(
@@ -547,5 +632,32 @@ final class PantryStoreTests: XCTestCase {
     private func makeStore() throws -> PantryStore {
         let database = try makeDatabase()
         return PantryStore(dbQueue: try database.openQueue())
+    }
+
+    private func makeRecipeForAggregate(
+        uid: String,
+        sourceName: String?,
+        starRating: Int?,
+        isFavorite: Bool
+    ) -> SourceRecipe {
+        SourceRecipe(
+            uid: uid,
+            name: uid,
+            categoryReferences: [],
+            sourceName: sourceName,
+            ingredients: nil,
+            directions: nil,
+            notes: nil,
+            starRating: starRating,
+            isFavorite: isFavorite,
+            prepTime: nil,
+            cookTime: nil,
+            totalTime: nil,
+            servings: nil,
+            createdAt: nil,
+            updatedAt: nil,
+            remoteHash: "hash-\(uid)",
+            rawJSON: "{}"
+        )
     }
 }

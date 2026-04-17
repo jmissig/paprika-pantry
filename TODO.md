@@ -112,10 +112,10 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase F — source/cookbook aggregates
 
-- [ ] Add rollups by source/cookbook
-- [ ] Add rating/favorite summaries by source
+- [x] Add rollups by source/cookbook
+- [x] Add rating/favorite summaries by source
 - [ ] Add usage/frequency summaries where evidence exists
-- [ ] Support questions like "which cookbook have we consistently liked best?"
+- [x] Support questions like "which cookbook have we consistently liked best?"
 
 ### Phase G — ingredient normalization/indexing
 

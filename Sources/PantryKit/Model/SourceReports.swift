@@ -146,6 +146,101 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
+public struct SourceCookbooksReport: ConsoleRenderable, Equatable, Sendable {
+    public let command: String
+    public let readPath: String
+    public let resultCount: Int
+    public let sort: CookbookAggregateSort
+    public let limit: Int
+    public let minRecipeCount: Int
+    public let minRatedRecipeCount: Int
+    public let recipeSearchLastSuccessAt: Date?
+    public let recipeSearchFreshnessSeconds: Int?
+    public let aggregates: [CookbookAggregateSummary]
+    public let paths: PantryPathReport
+
+    public init(
+        aggregates: [CookbookAggregateSummary],
+        sort: CookbookAggregateSort,
+        limit: Int,
+        minRecipeCount: Int,
+        minRatedRecipeCount: Int,
+        indexStats: PantryIndexStats,
+        paths: PantryPaths,
+        now: Date,
+        readPath: String = "sidecar-search-index"
+    ) {
+        self.command = "source cookbooks"
+        self.readPath = readPath
+        self.resultCount = aggregates.count
+        self.sort = sort
+        self.limit = limit
+        self.minRecipeCount = minRecipeCount
+        self.minRatedRecipeCount = minRatedRecipeCount
+        self.recipeSearchLastSuccessAt = indexStats.lastSuccessfulRecipeSearchRun?.finishedAt ?? indexStats.lastSuccessfulRecipeSearchRun?.startedAt
+        self.recipeSearchFreshnessSeconds = recipeSearchLastSuccessAt.map {
+            max(0, Int(now.timeIntervalSince($0)))
+        }
+        self.aggregates = aggregates
+        self.paths = paths.report
+    }
+
+    public var humanDescription: String {
+        var lines = [
+            "\(command): \(resultCount) cookbook/source groups",
+            "read_path: \(readPath)",
+            "sort: \(sort.rawValue)",
+            "min_recipes: \(minRecipeCount)",
+            "min_rated_recipes: \(minRatedRecipeCount)",
+            "limit: \(limit)",
+        ]
+
+        if let recipeSearchLastSuccessAt {
+            lines.append("recipe_search_last_success_at: \(renderedTimestamp(recipeSearchLastSuccessAt))")
+        }
+
+        if let recipeSearchFreshnessSeconds {
+            lines.append("recipe_search_freshness: \(renderedDuration(seconds: recipeSearchFreshnessSeconds)) old")
+        } else {
+            lines.append("recipe_search_freshness: never-built")
+        }
+
+        if aggregates.isEmpty {
+            lines.append("No cookbook/source groups matched.")
+            lines.append(renderedPaths(paths))
+            return lines.joined(separator: "\n")
+        }
+
+        for aggregate in aggregates {
+            var parts = [renderedCookbookName(aggregate)]
+            parts.append("recipes=\(aggregate.recipeCount)")
+            parts.append("rated=\(aggregate.ratedRecipeCount)")
+            parts.append("unrated=\(aggregate.unratedRecipeCount)")
+            parts.append("favorites=\(aggregate.favoriteRecipeCount)")
+
+            if let averageStarRating = aggregate.averageStarRating {
+                parts.append("avg_rating=\(renderedDecimal(averageStarRating))")
+            } else {
+                parts.append("avg_rating=unrated")
+            }
+
+            let ratings = renderedRatingDistribution(aggregate.ratingDistribution)
+            if !ratings.isEmpty {
+                parts.append("ratings=\(ratings)")
+            }
+
+            if aggregate.isUnlabeled {
+                parts.append("is_unlabeled=yes")
+            }
+
+            lines.append(parts.joined(separator: " | "))
+        }
+
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
+    }
+}
+
 public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let status: String
@@ -250,4 +345,30 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
+}
+
+private func renderedCookbookName(_ aggregate: CookbookAggregateSummary) -> String {
+    if let sourceName = aggregate.sourceName, !sourceName.isEmpty {
+        return sourceName
+    }
+
+    return "(unlabeled source/cookbook)"
+}
+
+private func renderedRatingDistribution(_ distribution: CookbookRatingDistribution) -> String {
+    let parts = [
+        (5, distribution.fiveStarCount),
+        (4, distribution.fourStarCount),
+        (3, distribution.threeStarCount),
+        (2, distribution.twoStarCount),
+        (1, distribution.oneStarCount),
+    ]
+        .filter { $0.1 > 0 }
+        .map { "\($0.0):\($0.1)" }
+
+    return parts.joined(separator: ",")
+}
+
+private func renderedDecimal(_ value: Double) -> String {
+    String(format: "%.2f", value)
 }
