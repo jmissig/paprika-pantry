@@ -19,7 +19,7 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List recipes from the configured pantry source with canonical category, rating, and favorite filters."
+        abstract: "List recipes from the configured pantry source with canonical filters and optional sidecar-derived time/ingredient constraints."
     )
 
     @Flag(name: .long, help: "Only include recipes marked favorite in Paprika.")
@@ -34,6 +34,18 @@ public struct RecipesListCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
 
+    @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
+    public var minTotalTimeMinutes: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived total time is at most this many minutes.")
+    public var maxTotalTimeMinutes: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at least this many lines.")
+    public var minIngredientLines: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at most this many lines.")
+    public var maxIngredientLines: Int?
+
     @Option(name: .long, help: "Sort order for returned recipes: \(RecipeListSort.allCases.map(\.rawValue).joined(separator: ", ")).")
     public var sort: RecipeListSort = .name
 
@@ -41,22 +53,64 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
+        try validateRecipeDerivedQueryOptions(
+            minTotalTimeMinutes: minTotalTimeMinutes,
+            maxTotalTimeMinutes: maxTotalTimeMinutes,
+            minIngredientLines: minIngredientLines,
+            maxIngredientLines: maxIngredientLines
+        )
     }
 
     public mutating func run() throws {
         let context = try makeContext()
         let recipeReadService = try context.makeRecipeReadService()
         let sort = self.sort
-        let filters = RecipeQueryFilters(
+        let canonicalFilters = RecipeQueryFilters(
             favoritesOnly: favorite,
             minRating: minRating,
             maxRating: maxRating,
             categoryNames: category
         )
-        let recipes = try BlockingAsync.run {
-            try await recipeReadService.listRecipes(filters: filters, sort: sort)
+        let derivedConstraints = RecipeDerivedConstraints(
+            minTotalTimeMinutes: minTotalTimeMinutes,
+            maxTotalTimeMinutes: maxTotalTimeMinutes,
+            minIngredientLineCount: minIngredientLines,
+            maxIngredientLineCount: maxIngredientLines
+        )
+        let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
+        let store = try context.makeStore()
+        let derivedFeaturesByUID: [String: RecipeDerivedFeatures]
+        let derivedReadPath: String?
+
+        if requiresDerivedFeatures {
+            guard try store.indexStats().recipeFeaturesReady else {
+                throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
+            }
+
+            derivedFeaturesByUID = try store.fetchAllRecipeFeatures()
+            derivedReadPath = "sidecar-derived"
+        } else {
+            derivedFeaturesByUID = [:]
+            derivedReadPath = nil
         }
-        try context.write(RecipesListReport(recipes: recipes, filters: filters, sort: sort))
+
+        let recipes = try BlockingAsync.run {
+            try await recipeReadService.listRecipes(
+                filters: canonicalFilters,
+                derivedConstraints: derivedConstraints,
+                sort: sort,
+                derivedFeaturesByUID: derivedFeaturesByUID
+            )
+        }
+        try context.write(
+            RecipesListReport(
+                recipes: recipes,
+                canonicalFilters: canonicalFilters,
+                derivedConstraints: derivedConstraints,
+                sort: sort,
+                derivedReadPath: derivedReadPath
+            )
+        )
     }
 }
 
@@ -85,7 +139,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search recipes through the owned sidecar index with canonical category, rating, and favorite filters."
+        abstract: "Search recipes through the owned sidecar index with canonical filters and optional derived time/ingredient constraints."
     )
 
     @Argument(help: "Search query.")
@@ -103,6 +157,18 @@ public struct RecipesSearchCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
 
+    @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
+    public var minTotalTimeMinutes: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived total time is at most this many minutes.")
+    public var maxTotalTimeMinutes: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at least this many lines.")
+    public var minIngredientLines: Int?
+
+    @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at most this many lines.")
+    public var maxIngredientLines: Int?
+
     @Option(name: .long, help: "Sort order for returned recipes: \(RecipeSearchSort.allCases.map(\.rawValue).joined(separator: ", ")).")
     public var sort: RecipeSearchSort = .relevance
 
@@ -113,6 +179,12 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
+        try validateRecipeDerivedQueryOptions(
+            minTotalTimeMinutes: minTotalTimeMinutes,
+            maxTotalTimeMinutes: maxTotalTimeMinutes,
+            minIngredientLines: minIngredientLines,
+            maxIngredientLines: maxIngredientLines
+        )
     }
 
     public mutating func run() throws {
@@ -131,20 +203,41 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             throw ValidationError("Recipe search index is not ready. Run `paprika-pantry index rebuild` first.")
         }
 
-        let filters = RecipeQueryFilters(
+        let canonicalFilters = RecipeQueryFilters(
             favoritesOnly: favorite,
             minRating: minRating,
             maxRating: maxRating,
             categoryNames: category
         )
-        let results = try store.searchRecipes(query: query, filters: filters, sort: sort, limit: limit)
+        let derivedConstraints = RecipeDerivedConstraints(
+            minTotalTimeMinutes: minTotalTimeMinutes,
+            maxTotalTimeMinutes: maxTotalTimeMinutes,
+            minIngredientLineCount: minIngredientLines,
+            maxIngredientLineCount: maxIngredientLines
+        )
+        let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
+        let indexStats = try store.indexStats()
+
+        if requiresDerivedFeatures && !indexStats.recipeFeaturesReady {
+            throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let results = try store.searchRecipes(
+            query: query,
+            filters: canonicalFilters,
+            derivedConstraints: derivedConstraints,
+            sort: sort,
+            limit: limit
+        )
         try context.write(
             RecipesSearchReport(
                 query: query,
-                filters: filters,
+                canonicalFilters: canonicalFilters,
+                derivedConstraints: derivedConstraints,
                 sort: sort,
                 results: results,
-                paths: context.paths
+                paths: context.paths,
+                derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil
             )
         )
     }
@@ -196,5 +289,36 @@ private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, catego
 
     if categories.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
         throw ValidationError("--category must not be empty.")
+    }
+}
+
+private func validateRecipeDerivedQueryOptions(
+    minTotalTimeMinutes: Int?,
+    maxTotalTimeMinutes: Int?,
+    minIngredientLines: Int?,
+    maxIngredientLines: Int?
+) throws {
+    if let minTotalTimeMinutes, minTotalTimeMinutes < 1 {
+        throw ValidationError("--min-total-time-minutes must be greater than zero.")
+    }
+
+    if let maxTotalTimeMinutes, maxTotalTimeMinutes < 1 {
+        throw ValidationError("--max-total-time-minutes must be greater than zero.")
+    }
+
+    if let minTotalTimeMinutes, let maxTotalTimeMinutes, minTotalTimeMinutes > maxTotalTimeMinutes {
+        throw ValidationError("--min-total-time-minutes must be less than or equal to --max-total-time-minutes.")
+    }
+
+    if let minIngredientLines, minIngredientLines < 1 {
+        throw ValidationError("--min-ingredient-lines must be greater than zero.")
+    }
+
+    if let maxIngredientLines, maxIngredientLines < 1 {
+        throw ValidationError("--max-ingredient-lines must be greater than zero.")
+    }
+
+    if let minIngredientLines, let maxIngredientLines, minIngredientLines > maxIngredientLines {
+        throw ValidationError("--min-ingredient-lines must be less than or equal to --max-ingredient-lines.")
     }
 }

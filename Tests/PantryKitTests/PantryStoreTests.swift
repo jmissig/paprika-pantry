@@ -448,6 +448,96 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(features.ingredientLineCount, 2)
     }
 
+    func testSearchRecipesAppliesDerivedConstraintsAndFewestIngredientSort() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Quick Bean Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Quick Tomato Soup", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Slow Tomato Soup", hash: "hash-ccc"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Soup"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Quick Bean Soup",
+                    categoryReferences: ["CAT1", "CAT2"],
+                    sourceName: nil,
+                    ingredients: "Beans\nBroth\nLemon",
+                    directions: nil,
+                    notes: "Weeknight fast.",
+                    starRating: 4,
+                    isFavorite: true,
+                    prepTime: "10 min",
+                    cookTime: "15 min",
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+                "BBB": SourceRecipe(
+                    uid: "BBB",
+                    name: "Quick Tomato Soup",
+                    categoryReferences: ["CAT1", "CAT2"],
+                    sourceName: nil,
+                    ingredients: "Tomato\nBroth",
+                    directions: nil,
+                    notes: "Weeknight easy.",
+                    starRating: 5,
+                    isFavorite: false,
+                    prepTime: "5 min",
+                    cookTime: "15 min",
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-bbb",
+                    rawJSON: "{}"
+                ),
+                "CCC": SourceRecipe(
+                    uid: "CCC",
+                    name: "Slow Tomato Soup",
+                    categoryReferences: ["CAT1", "CAT2"],
+                    sourceName: nil,
+                    ingredients: "Tomato\nBroth\nCream",
+                    directions: nil,
+                    notes: "Still weeknight, but slower.",
+                    starRating: 5,
+                    isFavorite: true,
+                    prepTime: "20 min",
+                    cookTime: "25 min",
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-ccc",
+                    rawJSON: "{}"
+                ),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let results = try store.searchRecipes(
+            query: "weeknight soup",
+            filters: RecipeQueryFilters(categoryNames: ["soup"]),
+            derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
+            sort: .fewestIngredients,
+            limit: 20
+        )
+
+        XCTAssertEqual(results.map(\.uid), ["BBB", "AAA"])
+        XCTAssertEqual(results[0].derivedFeatures?.ingredientLineCount, 2)
+        XCTAssertEqual(results[0].derivedFeatures?.totalTimeMinutes, 20)
+        XCTAssertEqual(results[1].derivedFeatures?.ingredientLineCount, 3)
+        XCTAssertEqual(results[1].derivedFeatures?.totalTimeMinutes, 25)
+    }
+
     private func makeDatabase() throws -> PantryDatabase {
         let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         temporaryDirectoryURL = directoryURL

@@ -36,28 +36,47 @@ final class JSONOutputTests: XCTestCase {
                     sourceName: "Serious Eats",
                     starRating: 5,
                     isFavorite: true,
-                    updatedAt: "2026-04-02 10:00:00"
+                    updatedAt: "2026-04-02 10:00:00",
+                    derivedFeatures: RecipeDerivedFeatures(
+                        uid: "AAA",
+                        sourceRemoteHash: "hash-aaa",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 10,
+                        cookTimeMinutes: 20,
+                        totalTimeMinutes: 30,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 5,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    )
                 ),
             ],
-            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Dinner"]),
-            sort: .rating
+            canonicalFilters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Dinner"]),
+            derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
+            sort: .fewestIngredients,
+            derivedReadPath: "sidecar-derived"
         )
 
         let recipesRendered = try JSONOutput.render(recipesReport)
         XCTAssertTrue(recipesRendered.contains("\"readPath\""))
         XCTAssertTrue(recipesRendered.contains("\"direct-source\""))
-        XCTAssertTrue(recipesRendered.contains("\"filters\""))
+        XCTAssertTrue(recipesRendered.contains("\"derivedReadPath\""))
+        XCTAssertTrue(recipesRendered.contains("\"sidecar-derived\""))
+        XCTAssertTrue(recipesRendered.contains("\"canonicalFilters\""))
+        XCTAssertTrue(recipesRendered.contains("\"derivedConstraints\""))
         XCTAssertTrue(recipesRendered.contains("\"favoritesOnly\" : true"))
         XCTAssertTrue(recipesRendered.contains("\"minRating\" : 4"))
         XCTAssertTrue(recipesRendered.contains("\"categoryNames\""))
+        XCTAssertTrue(recipesRendered.contains("\"maxTotalTimeMinutes\" : 30"))
         XCTAssertTrue(recipesRendered.contains("\"sort\""))
-        XCTAssertTrue(recipesRendered.contains("\"rating\""))
+        XCTAssertTrue(recipesRendered.contains("\"fewest-ingredients\""))
         XCTAssertTrue(recipesRendered.contains("\"categories\""))
         XCTAssertTrue(recipesRendered.contains("\"Dinner\""))
         XCTAssertTrue(recipesRendered.contains("\"sourceName\""))
         XCTAssertTrue(recipesRendered.contains("\"Serious Eats\""))
         XCTAssertTrue(recipesRendered.contains("\"starRating\""))
         XCTAssertTrue(recipesRendered.contains("\"isFavorite\" : true"))
+        XCTAssertTrue(recipesRendered.contains("\"derivedFeatures\""))
+        XCTAssertTrue(recipesRendered.contains("\"totalTimeMinutes\" : 30"))
     }
 
     func testRenderDoctorReportIncludesStatusAndIndexFields() throws {

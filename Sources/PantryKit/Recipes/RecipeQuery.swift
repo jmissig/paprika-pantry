@@ -80,13 +80,89 @@ public struct RecipeQueryFilters: Codable, Equatable, Sendable {
     }
 }
 
+public struct RecipeDerivedConstraints: Codable, Equatable, Sendable {
+    public let minTotalTimeMinutes: Int?
+    public let maxTotalTimeMinutes: Int?
+    public let minIngredientLineCount: Int?
+    public let maxIngredientLineCount: Int?
+
+    public init(
+        minTotalTimeMinutes: Int? = nil,
+        maxTotalTimeMinutes: Int? = nil,
+        minIngredientLineCount: Int? = nil,
+        maxIngredientLineCount: Int? = nil
+    ) {
+        self.minTotalTimeMinutes = minTotalTimeMinutes
+        self.maxTotalTimeMinutes = maxTotalTimeMinutes
+        self.minIngredientLineCount = minIngredientLineCount
+        self.maxIngredientLineCount = maxIngredientLineCount
+    }
+
+    public var isDefault: Bool {
+        minTotalTimeMinutes == nil &&
+            maxTotalTimeMinutes == nil &&
+            minIngredientLineCount == nil &&
+            maxIngredientLineCount == nil
+    }
+
+    public func matches(features: RecipeDerivedFeatures?) -> Bool {
+        if let minTotalTimeMinutes {
+            guard let totalTimeMinutes = features?.totalTimeMinutes, totalTimeMinutes >= minTotalTimeMinutes else {
+                return false
+            }
+        }
+
+        if let maxTotalTimeMinutes {
+            guard let totalTimeMinutes = features?.totalTimeMinutes, totalTimeMinutes <= maxTotalTimeMinutes else {
+                return false
+            }
+        }
+
+        if let minIngredientLineCount {
+            guard let ingredientLineCount = features?.ingredientLineCount, ingredientLineCount >= minIngredientLineCount else {
+                return false
+            }
+        }
+
+        if let maxIngredientLineCount {
+            guard let ingredientLineCount = features?.ingredientLineCount, ingredientLineCount <= maxIngredientLineCount else {
+                return false
+            }
+        }
+
+        return true
+    }
+}
+
 public enum RecipeListSort: String, Codable, CaseIterable, ExpressibleByArgument, Sendable {
     case name
     case rating
+    case totalTime = "total-time"
+    case fewestIngredients = "fewest-ingredients"
+
+    public var requiresDerivedFeatures: Bool {
+        switch self {
+        case .name, .rating:
+            return false
+        case .totalTime, .fewestIngredients:
+            return true
+        }
+    }
 }
 
 public enum RecipeSearchSort: String, Codable, CaseIterable, ExpressibleByArgument, Sendable {
     case relevance
     case name
     case rating
+    case totalTime = "total-time"
+    case fewestIngredients = "fewest-ingredients"
+
+    public var requiresDerivedFeatures: Bool {
+        switch self {
+        case .relevance, .name, .rating:
+            return false
+        case .totalTime, .fewestIngredients:
+            return true
+        }
+    }
 }

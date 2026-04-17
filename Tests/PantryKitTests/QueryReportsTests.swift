@@ -13,22 +13,39 @@ final class QueryReportsTests: XCTestCase {
                     sourceName: "Serious Eats",
                     starRating: 4,
                     isFavorite: true,
-                    updatedAt: "2026-04-02 10:00:00"
+                    updatedAt: "2026-04-02 10:00:00",
+                    derivedFeatures: RecipeDerivedFeatures(
+                        uid: "AAA",
+                        sourceRemoteHash: "hash-aaa",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 10,
+                        cookTimeMinutes: 20,
+                        totalTimeMinutes: 30,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 5,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    )
                 ),
             ],
-            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Side"]),
-            sort: .rating
+            canonicalFilters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Side"]),
+            derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
+            sort: .fewestIngredients,
+            derivedReadPath: "sidecar-derived"
         )
 
         XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
-        XCTAssertTrue(report.humanDescription.contains("favorite_only: yes"))
-        XCTAssertTrue(report.humanDescription.contains("min_rating: 4"))
-        XCTAssertTrue(report.humanDescription.contains("categories_all: Side"))
-        XCTAssertTrue(report.humanDescription.contains("sort: rating"))
+        XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.min_rating: 4"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Side"))
+        XCTAssertTrue(report.humanDescription.contains("derived.max_total_time_minutes: 30"))
+        XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
         XCTAssertTrue(report.humanDescription.contains("source=Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("rating=4"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
+        XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes=30"))
+        XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
     }
 
     func testRecipeShowReportIncludesRecipeMetadata() {
@@ -122,8 +139,9 @@ final class QueryReportsTests: XCTestCase {
     func testRecipesSearchReportIncludesMatches() {
         let report = RecipesSearchReport(
             query: "lemon",
-            filters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4, categoryNames: ["Soup"]),
-            sort: .rating,
+            canonicalFilters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4, categoryNames: ["Soup"]),
+            derivedConstraints: RecipeDerivedConstraints(maxIngredientLineCount: 6),
+            sort: .fewestIngredients,
             results: [
                 IndexedRecipeSearchResult(
                     uid: "AAA",
@@ -131,21 +149,37 @@ final class QueryReportsTests: XCTestCase {
                     categories: ["Dinner", "Soup"],
                     sourceName: "Serious Eats",
                     isFavorite: true,
-                    starRating: 4
+                    starRating: 4,
+                    derivedFeatures: RecipeDerivedFeatures(
+                        uid: "AAA",
+                        sourceRemoteHash: "hash-aaa",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 10,
+                        cookTimeMinutes: 20,
+                        totalTimeMinutes: 30,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 5,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    )
                 )
             ],
-            paths: makePaths()
+            paths: makePaths(),
+            derivedReadPath: "sidecar-derived"
         )
 
         XCTAssertTrue(report.humanDescription.contains("recipes search: 1 matches"))
+        XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
         XCTAssertTrue(report.humanDescription.contains("query: lemon"))
-        XCTAssertTrue(report.humanDescription.contains("favorite_only: yes"))
-        XCTAssertTrue(report.humanDescription.contains("max_rating: 4"))
-        XCTAssertTrue(report.humanDescription.contains("categories_all: Soup"))
-        XCTAssertTrue(report.humanDescription.contains("sort: rating"))
+        XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.max_rating: 4"))
+        XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Soup"))
+        XCTAssertTrue(report.humanDescription.contains("derived.max_ingredient_line_count: 6"))
+        XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("AAA  Weeknight Soup"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
+        XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
     }
 
     func testRecipeFeaturesReportIncludesSourceEvidenceAndDerivedMetrics() {

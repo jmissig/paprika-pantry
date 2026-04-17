@@ -3,28 +3,38 @@ import Foundation
 public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
+    public let derivedReadPath: String?
     public let recipeCount: Int
-    public let filters: RecipeQueryFilters
+    public let canonicalFilters: RecipeQueryFilters
+    public let derivedConstraints: RecipeDerivedConstraints
     public let sort: RecipeListSort
     public let recipes: [RecipeSummary]
 
     public init(
         recipes: [RecipeSummary],
-        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
+        derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeListSort = .name,
-        readPath: String = "direct-source"
+        readPath: String = "direct-source",
+        derivedReadPath: String? = nil
     ) {
         self.command = "recipes list"
         self.readPath = readPath
+        self.derivedReadPath = derivedReadPath
         self.recipeCount = recipes.count
-        self.filters = filters
+        self.canonicalFilters = canonicalFilters
+        self.derivedConstraints = derivedConstraints
         self.sort = sort
         self.recipes = recipes
     }
 
     public var humanDescription: String {
         var lines = ["\(command): \(recipeCount) recipes", "read_path: \(readPath)"]
-        lines.append(contentsOf: renderedRecipeQueryFilters(filters))
+        if let derivedReadPath {
+            lines.append("derived_read_path: \(derivedReadPath)")
+        }
+        lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
+        lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
         lines.append("sort: \(sort.rawValue)")
 
         if recipes.isEmpty {
@@ -51,6 +61,7 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
                 parts.append("favorite=yes")
             }
 
+            parts.append(contentsOf: renderedRecipeDerivedEvidence(recipe.derivedFeatures))
             lines.append(parts.joined(separator: " | "))
         }
 
@@ -267,24 +278,33 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
 
 public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
+    public let readPath: String
+    public let derivedReadPath: String?
     public let query: String
     public let resultCount: Int
-    public let filters: RecipeQueryFilters
+    public let canonicalFilters: RecipeQueryFilters
+    public let derivedConstraints: RecipeDerivedConstraints
     public let sort: RecipeSearchSort
     public let results: [IndexedRecipeSearchResult]
     public let paths: PantryPathReport
 
     public init(
         query: String,
-        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
+        derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeSearchSort = .relevance,
         results: [IndexedRecipeSearchResult],
-        paths: PantryPaths
+        paths: PantryPaths,
+        readPath: String = "sidecar-search-index",
+        derivedReadPath: String? = nil
     ) {
         self.command = "recipes search"
+        self.readPath = readPath
+        self.derivedReadPath = derivedReadPath
         self.query = query
         self.resultCount = results.count
-        self.filters = filters
+        self.canonicalFilters = canonicalFilters
+        self.derivedConstraints = derivedConstraints
         self.sort = sort
         self.results = results
         self.paths = paths.report
@@ -293,9 +313,14 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public var humanDescription: String {
         var lines = [
             "\(command): \(resultCount) matches",
+            "read_path: \(readPath)",
             "query: \(query)",
         ]
-        lines.append(contentsOf: renderedRecipeQueryFilters(filters))
+        if let derivedReadPath {
+            lines.append("derived_read_path: \(derivedReadPath)")
+        }
+        lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
+        lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
         lines.append("sort: \(sort.rawValue)")
 
         if results.isEmpty {
@@ -323,6 +348,7 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
                 parts.append("favorite=yes")
             }
 
+            parts.append(contentsOf: renderedRecipeDerivedEvidence(recipe.derivedFeatures))
             lines.append(parts.joined(separator: " | "))
         }
 
@@ -457,24 +483,72 @@ func renderedDuration(seconds: Int) -> String {
     return remainingHours == 0 ? "\(days)d" : "\(days)d \(remainingHours)h"
 }
 
-func renderedRecipeQueryFilters(_ filters: RecipeQueryFilters) -> [String] {
+func renderedCanonicalRecipeFilters(_ filters: RecipeQueryFilters) -> [String] {
     var lines = [String]()
 
     if filters.favoritesOnly {
-        lines.append("favorite_only: yes")
+        lines.append("canonical.favorite_only: yes")
     }
 
     if let minRating = filters.minRating {
-        lines.append("min_rating: \(minRating)")
+        lines.append("canonical.min_rating: \(minRating)")
     }
 
     if let maxRating = filters.maxRating {
-        lines.append("max_rating: \(maxRating)")
+        lines.append("canonical.max_rating: \(maxRating)")
     }
 
     if !filters.categoryNames.isEmpty {
-        lines.append("categories_all: \(filters.categoryNames.joined(separator: ", "))")
+        lines.append("canonical.categories_all: \(filters.categoryNames.joined(separator: ", "))")
     }
 
     return lines
+}
+
+func renderedRecipeDerivedConstraints(_ constraints: RecipeDerivedConstraints) -> [String] {
+    var lines = [String]()
+
+    if let minTotalTimeMinutes = constraints.minTotalTimeMinutes {
+        lines.append("derived.min_total_time_minutes: \(minTotalTimeMinutes)")
+    }
+
+    if let maxTotalTimeMinutes = constraints.maxTotalTimeMinutes {
+        lines.append("derived.max_total_time_minutes: \(maxTotalTimeMinutes)")
+    }
+
+    if let minIngredientLineCount = constraints.minIngredientLineCount {
+        lines.append("derived.min_ingredient_line_count: \(minIngredientLineCount)")
+    }
+
+    if let maxIngredientLineCount = constraints.maxIngredientLineCount {
+        lines.append("derived.max_ingredient_line_count: \(maxIngredientLineCount)")
+    }
+
+    return lines
+}
+
+func renderedRecipeDerivedEvidence(_ features: RecipeDerivedFeatures?) -> [String] {
+    guard let features else {
+        return []
+    }
+
+    var parts = [String]()
+
+    if let totalTimeMinutes = features.totalTimeMinutes {
+        parts.append("derived_total_time_minutes=\(totalTimeMinutes)")
+    }
+
+    if let totalTimeBasis = features.totalTimeBasis {
+        parts.append("derived_total_time_basis=\(totalTimeBasis.rawValue)")
+    }
+
+    if let ingredientLineCount = features.ingredientLineCount {
+        parts.append("derived_ingredient_line_count=\(ingredientLineCount)")
+    }
+
+    if let ingredientLineCountBasis = features.ingredientLineCountBasis {
+        parts.append("derived_ingredient_line_count_basis=\(ingredientLineCountBasis.rawValue)")
+    }
+
+    return parts
 }

@@ -81,6 +81,7 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
     public let sourceName: String?
     public let isFavorite: Bool
     public let starRating: Int?
+    public let derivedFeatures: RecipeDerivedFeatures?
 
     public init(
         uid: String,
@@ -88,7 +89,8 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
         categories: [String],
         sourceName: String?,
         isFavorite: Bool,
-        starRating: Int?
+        starRating: Int?,
+        derivedFeatures: RecipeDerivedFeatures? = nil
     ) {
         self.uid = uid
         self.name = name
@@ -96,6 +98,7 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
         self.sourceName = sourceName
         self.isFavorite = isFavorite
         self.starRating = starRating
+        self.derivedFeatures = derivedFeatures
     }
 }
 
@@ -206,6 +209,7 @@ public struct PantryStore: @unchecked Sendable {
     public func searchRecipes(
         query: String,
         filters: RecipeQueryFilters = RecipeQueryFilters(),
+        derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeSearchSort = .relevance,
         limit: Int = 20
     ) throws -> [IndexedRecipeSearchResult] {
@@ -235,6 +239,30 @@ public struct PantryStore: @unchecked Sendable {
                 arguments += [maxRating]
             }
 
+            if let minTotalTimeMinutes = derivedConstraints.minTotalTimeMinutes {
+                conditions.append("recipe_features.total_time_minutes IS NOT NULL")
+                conditions.append("recipe_features.total_time_minutes >= ?")
+                arguments += [minTotalTimeMinutes]
+            }
+
+            if let maxTotalTimeMinutes = derivedConstraints.maxTotalTimeMinutes {
+                conditions.append("recipe_features.total_time_minutes IS NOT NULL")
+                conditions.append("recipe_features.total_time_minutes <= ?")
+                arguments += [maxTotalTimeMinutes]
+            }
+
+            if let minIngredientLineCount = derivedConstraints.minIngredientLineCount {
+                conditions.append("recipe_features.ingredient_line_count IS NOT NULL")
+                conditions.append("recipe_features.ingredient_line_count >= ?")
+                arguments += [minIngredientLineCount]
+            }
+
+            if let maxIngredientLineCount = derivedConstraints.maxIngredientLineCount {
+                conditions.append("recipe_features.ingredient_line_count IS NOT NULL")
+                conditions.append("recipe_features.ingredient_line_count <= ?")
+                arguments += [maxIngredientLineCount]
+            }
+
             let limitClause = applyCategoryFilterAfterRead ? "" : "LIMIT ?"
             if !applyCategoryFilterAfterRead {
                 arguments += [max(1, limit)]
@@ -248,10 +276,21 @@ public struct PantryStore: @unchecked Sendable {
                     recipe_search_documents.categories,
                     recipe_search_documents.source_name,
                     recipe_search_documents.is_favorite,
-                    recipe_search_documents.star_rating
+                    recipe_search_documents.star_rating,
+                    recipe_features.uid AS feature_uid,
+                    recipe_features.source_remote_hash,
+                    recipe_features.derived_at,
+                    recipe_features.prep_time_minutes,
+                    recipe_features.cook_time_minutes,
+                    recipe_features.total_time_minutes,
+                    recipe_features.total_time_basis,
+                    recipe_features.ingredient_line_count,
+                    recipe_features.ingredient_line_count_basis
                 FROM recipe_search_fts
                 INNER JOIN recipe_search_documents
                     ON recipe_search_documents.uid = recipe_search_fts.uid
+                LEFT JOIN recipe_features
+                    ON recipe_features.uid = recipe_search_documents.uid
                 WHERE \(conditions.joined(separator: " AND "))
                 ORDER BY \(Self.recipeSearchOrderClause(sort: sort))
                 \(limitClause)
@@ -266,7 +305,8 @@ public struct PantryStore: @unchecked Sendable {
                     categories: Self.decodeCategories(row["categories"]),
                     sourceName: row["source_name"],
                     isFavorite: row["is_favorite"],
-                    starRating: row["star_rating"]
+                    starRating: row["star_rating"],
+                    derivedFeatures: Self.decodeRecipeDerivedFeatures(row: row)
                 )
             }
 
@@ -278,6 +318,7 @@ public struct PantryStore: @unchecked Sendable {
                         categories: $0.categories
                     )
                 }
+                .filter { derivedConstraints.matches(features: $0.derivedFeatures) }
                 .prefix(max(1, limit))
                 .map { $0 }
         }
@@ -309,19 +350,37 @@ public struct PantryStore: @unchecked Sendable {
                 return nil
             }
 
-            let totalTimeBasisRaw: String? = row["total_time_basis"]
-            let ingredientLineCountBasisRaw: String? = row["ingredient_line_count_basis"]
+            return Self.decodeRecipeDerivedFeatures(row: row)
+        }
+    }
 
-            return RecipeDerivedFeatures(
-                uid: row["uid"],
-                sourceRemoteHash: row["source_remote_hash"],
-                derivedAt: DatabaseTimestamp.decodeRequired(row["derived_at"]),
-                prepTimeMinutes: row["prep_time_minutes"],
-                cookTimeMinutes: row["cook_time_minutes"],
-                totalTimeMinutes: row["total_time_minutes"],
-                totalTimeBasis: totalTimeBasisRaw.flatMap(RecipeTotalTimeBasis.init(rawValue:)),
-                ingredientLineCount: row["ingredient_line_count"],
-                ingredientLineCountBasis: ingredientLineCountBasisRaw.flatMap(RecipeIngredientLineCountBasis.init(rawValue:))
+    public func fetchAllRecipeFeatures() throws -> [String: RecipeDerivedFeatures] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT
+                    uid,
+                    source_remote_hash,
+                    derived_at,
+                    prep_time_minutes,
+                    cook_time_minutes,
+                    total_time_minutes,
+                    total_time_basis,
+                    ingredient_line_count,
+                    ingredient_line_count_basis
+                FROM recipe_features
+                """
+            )
+
+            return Dictionary(
+                uniqueKeysWithValues: rows.compactMap { row in
+                    guard let features = Self.decodeRecipeDerivedFeatures(row: row) else {
+                        return nil
+                    }
+
+                    return (features.uid, features)
+                }
             )
         }
     }
@@ -671,7 +730,51 @@ public struct PantryStore: @unchecked Sendable {
             recipe_search_documents.name COLLATE NOCASE ASC,
             recipe_search_documents.uid ASC
             """
+        case .totalTime:
+            return """
+            CASE WHEN recipe_features.total_time_minutes IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_features.total_time_minutes ASC,
+            CASE WHEN recipe_features.ingredient_line_count IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_features.ingredient_line_count ASC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .fewestIngredients:
+            return """
+            CASE WHEN recipe_features.ingredient_line_count IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_features.ingredient_line_count ASC,
+            CASE WHEN recipe_features.total_time_minutes IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_features.total_time_minutes ASC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
         }
+    }
+
+    private static func decodeRecipeDerivedFeatures(row: Row) -> RecipeDerivedFeatures? {
+        let derivedAtValue: String? = row["derived_at"]
+        guard let derivedAtValue else {
+            return nil
+        }
+
+        let totalTimeBasisRaw: String? = row["total_time_basis"]
+        let ingredientLineCountBasisRaw: String? = row["ingredient_line_count_basis"]
+
+        return RecipeDerivedFeatures(
+            uid: row["feature_uid"] ?? row["uid"],
+            sourceRemoteHash: row["source_remote_hash"],
+            derivedAt: DatabaseTimestamp.decodeRequired(derivedAtValue),
+            prepTimeMinutes: row["prep_time_minutes"],
+            cookTimeMinutes: row["cook_time_minutes"],
+            totalTimeMinutes: row["total_time_minutes"],
+            totalTimeBasis: totalTimeBasisRaw.flatMap(RecipeTotalTimeBasis.init(rawValue:)),
+            ingredientLineCount: row["ingredient_line_count"],
+            ingredientLineCountBasis: ingredientLineCountBasisRaw.flatMap(RecipeIngredientLineCountBasis.init(rawValue:))
+        )
     }
 
     private static func normalizedSearchQuery(_ query: String) -> String {

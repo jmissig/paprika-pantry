@@ -100,13 +100,15 @@ These are now legacy direction and should be removed or reshaped around the new 
   - [x] ingredient counts
   - [ ] likely meal role or course hints such as main/side
 - [x] Add query/report surfaces that use those features without pretending they are canonical truth
-- [ ] Support questions like "which main can I make in 30 minutes with the fewest ingredients?"
+- [x] Let `recipes list` / `recipes search` combine canonical filters with derived time and ingredient-line constraints plus derived-aware sort modes
+- [ ] Support questions like "which main can I make in 30 minutes with the fewest ingredients?" when meal-role hints exist beyond canonical category names
 
 ### Phase E — ratings-aware querying
 
-- [ ] Add query surfaces for canonical rating/favorite filters
-- [ ] Support questions like "what are our favorite risottos?" by letting the LLM interpret the noun phrase while the CLI enforces thresholds like star rating and favorite status
-- [ ] Keep outputs inspectable so the LLM can cite the concrete rating/favorite evidence it used
+- [x] Add query surfaces for canonical rating/favorite filters
+- [x] Add canonical category-backed filters to the same query surface
+- [x] Support questions like "what are our favorite risottos?" by letting the LLM interpret the noun phrase while the CLI enforces thresholds like star rating and favorite status
+- [x] Keep outputs inspectable so the LLM can cite the concrete rating/favorite evidence it used
 
 ### Phase F — source/cookbook aggregates
 

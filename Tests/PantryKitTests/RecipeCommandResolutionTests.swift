@@ -199,6 +199,65 @@ final class RecipeCommandResolutionTests: XCTestCase {
         XCTAssertEqual(listed.map(\.uid), ["BBB", "AAA", "CCC"])
     }
 
+    func testListRecipesAppliesDerivedConstraintsAndFewestIngredientSort() throws {
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Longer", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Shorter", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Too Slow", hash: "hash-ccc"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Longer"),
+                "BBB": makeSourceRecipe(uid: "BBB", name: "Shorter"),
+                "CCC": makeSourceRecipe(uid: "CCC", name: "Too Slow"),
+            ]
+        )
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes(
+                derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
+                sort: .fewestIngredients,
+                derivedFeaturesByUID: [
+                    "AAA": RecipeDerivedFeatures(
+                        uid: "AAA",
+                        sourceRemoteHash: "hash-aaa",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 10,
+                        cookTimeMinutes: 20,
+                        totalTimeMinutes: 30,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 5,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                    "BBB": RecipeDerivedFeatures(
+                        uid: "BBB",
+                        sourceRemoteHash: "hash-bbb",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 5,
+                        cookTimeMinutes: 15,
+                        totalTimeMinutes: 20,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 3,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                    "CCC": RecipeDerivedFeatures(
+                        uid: "CCC",
+                        sourceRemoteHash: "hash-ccc",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        prepTimeMinutes: 15,
+                        cookTimeMinutes: 30,
+                        totalTimeMinutes: 45,
+                        totalTimeBasis: .summedPrepAndCook,
+                        ingredientLineCount: 2,
+                        ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                ]
+            )
+        }
+
+        XCTAssertEqual(listed.map(\.uid), ["BBB", "AAA"])
+    }
+
     func testRecipeQueryCommandValidationRejectsInvalidRatingRanges() {
         XCTAssertThrowsError(
             try RecipesListCommand.parseAsRoot(["--min-rating", "0"])
@@ -210,6 +269,14 @@ final class RecipeCommandResolutionTests: XCTestCase {
 
         XCTAssertThrowsError(
             try RecipesListCommand.parseAsRoot(["--category", "  "])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesListCommand.parseAsRoot(["--min-total-time-minutes", "40", "--max-total-time-minutes", "30"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesSearchCommand.parseAsRoot(["risotto", "--max-ingredient-lines", "0"])
         )
     }
 

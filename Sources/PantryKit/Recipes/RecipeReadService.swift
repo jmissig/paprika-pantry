@@ -8,6 +8,7 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
     public let starRating: Int?
     public let isFavorite: Bool
     public let updatedAt: String?
+    public let derivedFeatures: RecipeDerivedFeatures?
 
     public init(
         uid: String,
@@ -16,7 +17,8 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
         sourceName: String?,
         starRating: Int?,
         isFavorite: Bool,
-        updatedAt: String?
+        updatedAt: String?,
+        derivedFeatures: RecipeDerivedFeatures? = nil
     ) {
         self.uid = uid
         self.name = name
@@ -25,6 +27,7 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
         self.starRating = starRating
         self.isFavorite = isFavorite
         self.updatedAt = updatedAt
+        self.derivedFeatures = derivedFeatures
     }
 }
 
@@ -109,7 +112,9 @@ public struct RecipeReadService: Sendable {
 
     public func listRecipes(
         filters: RecipeQueryFilters = RecipeQueryFilters(),
-        sort: RecipeListSort = .name
+        derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
+        sort: RecipeListSort = .name,
+        derivedFeaturesByUID: [String: RecipeDerivedFeatures] = [:]
     ) async throws -> [RecipeSummary] {
         let categoryNamesByUID = try await loadCategoryNamesByUID()
         let stubs = try await source.listRecipeStubs()
@@ -131,7 +136,8 @@ public struct RecipeReadService: Sendable {
                     sourceName: recipe.sourceName,
                     starRating: recipe.starRating,
                     isFavorite: recipe.isFavorite,
-                    updatedAt: recipe.updatedAt
+                    updatedAt: recipe.updatedAt,
+                    derivedFeatures: derivedFeaturesByUID[recipe.uid]
                 )
             )
         }
@@ -144,6 +150,7 @@ public struct RecipeReadService: Sendable {
                     categories: $0.categories
                 )
             }
+            .filter { derivedConstraints.matches(features: $0.derivedFeatures) }
             .sorted { Self.sortRecipes(lhs: $0, rhs: $1, by: sort) }
     }
 
@@ -224,6 +231,10 @@ public struct RecipeReadService: Sendable {
             return compareByName(lhs: lhs, rhs: rhs)
         case .rating:
             return compareByRating(lhs: lhs, rhs: rhs)
+        case .totalTime:
+            return compareByTotalTime(lhs: lhs, rhs: rhs)
+        case .fewestIngredients:
+            return compareByFewestIngredients(lhs: lhs, rhs: rhs)
         }
     }
 
@@ -236,6 +247,58 @@ public struct RecipeReadService: Sendable {
     }
 
     private static func compareByRating(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let ratingDecision = compareByRatingThenFavorite(lhs: lhs, rhs: rhs) {
+            return ratingDecision
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByTotalTime(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let totalTimeDecision = compareOptionalAscending(
+            lhs.derivedFeatures?.totalTimeMinutes,
+            rhs.derivedFeatures?.totalTimeMinutes
+        ) {
+            return totalTimeDecision
+        }
+
+        if let ingredientDecision = compareOptionalAscending(
+            lhs.derivedFeatures?.ingredientLineCount,
+            rhs.derivedFeatures?.ingredientLineCount
+        ) {
+            return ingredientDecision
+        }
+
+        if let ratingDecision = compareByRatingThenFavorite(lhs: lhs, rhs: rhs) {
+            return ratingDecision
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByFewestIngredients(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let ingredientDecision = compareOptionalAscending(
+            lhs.derivedFeatures?.ingredientLineCount,
+            rhs.derivedFeatures?.ingredientLineCount
+        ) {
+            return ingredientDecision
+        }
+
+        if let totalTimeDecision = compareOptionalAscending(
+            lhs.derivedFeatures?.totalTimeMinutes,
+            rhs.derivedFeatures?.totalTimeMinutes
+        ) {
+            return totalTimeDecision
+        }
+
+        if let ratingDecision = compareByRatingThenFavorite(lhs: lhs, rhs: rhs) {
+            return ratingDecision
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByRatingThenFavorite(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool? {
         let lhsRating = lhs.starRating ?? Int.min
         let rhsRating = rhs.starRating ?? Int.min
         if lhsRating != rhsRating {
@@ -246,6 +309,19 @@ public struct RecipeReadService: Sendable {
             return lhs.isFavorite && !rhs.isFavorite
         }
 
-        return compareByName(lhs: lhs, rhs: rhs)
+        return nil
+    }
+
+    private static func compareOptionalAscending(_ lhs: Int?, _ rhs: Int?) -> Bool? {
+        switch (lhs, rhs) {
+        case let (lhsValue?, rhsValue?) where lhsValue != rhsValue:
+            return lhsValue < rhsValue
+        case (nil, .some):
+            return false
+        case (.some, nil):
+            return true
+        default:
+            return nil
+        }
     }
 }
