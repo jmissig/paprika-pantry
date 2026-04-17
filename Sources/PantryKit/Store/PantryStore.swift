@@ -203,27 +203,56 @@ public struct PantryStore: @unchecked Sendable {
         }
     }
 
-    public func searchRecipes(query: String, limit: Int = 20) throws -> [IndexedRecipeSearchResult] {
+    public func searchRecipes(
+        query: String,
+        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        sort: RecipeSearchSort = .relevance,
+        limit: Int = 20
+    ) throws -> [IndexedRecipeSearchResult] {
         let normalizedQuery = Self.normalizedSearchQuery(query)
         guard !normalizedQuery.isEmpty else {
             return []
         }
 
         return try dbQueue.read { db in
+            var arguments: StatementArguments = [normalizedQuery]
+            var conditions = ["recipe_search_fts MATCH ?"]
+
+            if filters.favoritesOnly {
+                conditions.append("recipe_search_documents.is_favorite = 1")
+            }
+
+            if let minRating = filters.minRating {
+                conditions.append("recipe_search_documents.star_rating IS NOT NULL")
+                conditions.append("recipe_search_documents.star_rating >= ?")
+                arguments += [minRating]
+            }
+
+            if let maxRating = filters.maxRating {
+                conditions.append("recipe_search_documents.star_rating IS NOT NULL")
+                conditions.append("recipe_search_documents.star_rating <= ?")
+                arguments += [maxRating]
+            }
+
+            arguments += [max(1, limit)]
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT uid, name, categories, source_name, is_favorite, star_rating
-                FROM recipe_search_documents
-                WHERE uid IN (
-                    SELECT uid
-                    FROM recipe_search_fts
-                    WHERE recipe_search_fts MATCH ?
-                )
-                ORDER BY name COLLATE NOCASE ASC, uid ASC
+                SELECT
+                    recipe_search_documents.uid,
+                    recipe_search_documents.name,
+                    recipe_search_documents.categories,
+                    recipe_search_documents.source_name,
+                    recipe_search_documents.is_favorite,
+                    recipe_search_documents.star_rating
+                FROM recipe_search_fts
+                INNER JOIN recipe_search_documents
+                    ON recipe_search_documents.uid = recipe_search_fts.uid
+                WHERE \(conditions.joined(separator: " AND "))
+                ORDER BY \(Self.recipeSearchOrderClause(sort: sort))
                 LIMIT ?
                 """,
-                arguments: [normalizedQuery, max(1, limit)]
+                arguments: arguments
             )
 
             return rows.map { row in
@@ -603,6 +632,31 @@ public struct PantryStore: @unchecked Sendable {
         }
 
         return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+
+    private static func recipeSearchOrderClause(sort: RecipeSearchSort) -> String {
+        switch sort {
+        case .relevance:
+            return """
+            bm25(recipe_search_fts) ASC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .name:
+            return """
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .rating:
+            return """
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        }
     }
 
     private static func normalizedSearchQuery(_ query: String) -> String {

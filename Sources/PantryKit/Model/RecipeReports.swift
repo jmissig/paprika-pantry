@@ -4,17 +4,28 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let recipeCount: Int
+    public let filters: RecipeQueryFilters
+    public let sort: RecipeListSort
     public let recipes: [RecipeSummary]
 
-    public init(recipes: [RecipeSummary], readPath: String = "direct-source") {
+    public init(
+        recipes: [RecipeSummary],
+        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        sort: RecipeListSort = .name,
+        readPath: String = "direct-source"
+    ) {
         self.command = "recipes list"
         self.readPath = readPath
         self.recipeCount = recipes.count
+        self.filters = filters
+        self.sort = sort
         self.recipes = recipes
     }
 
     public var humanDescription: String {
         var lines = ["\(command): \(recipeCount) recipes", "read_path: \(readPath)"]
+        lines.append(contentsOf: renderedRecipeQueryFilters(filters))
+        lines.append("sort: \(sort.rawValue)")
 
         if recipes.isEmpty {
             lines.append("No source recipes found.")
@@ -258,13 +269,23 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let query: String
     public let resultCount: Int
+    public let filters: RecipeQueryFilters
+    public let sort: RecipeSearchSort
     public let results: [IndexedRecipeSearchResult]
     public let paths: PantryPathReport
 
-    public init(query: String, results: [IndexedRecipeSearchResult], paths: PantryPaths) {
+    public init(
+        query: String,
+        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        sort: RecipeSearchSort = .relevance,
+        results: [IndexedRecipeSearchResult],
+        paths: PantryPaths
+    ) {
         self.command = "recipes search"
         self.query = query
         self.resultCount = results.count
+        self.filters = filters
+        self.sort = sort
         self.results = results
         self.paths = paths.report
     }
@@ -274,6 +295,8 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
             "\(command): \(resultCount) matches",
             "query: \(query)",
         ]
+        lines.append(contentsOf: renderedRecipeQueryFilters(filters))
+        lines.append("sort: \(sort.rawValue)")
 
         if results.isEmpty {
             lines.append("No indexed recipes matched.")
@@ -432,4 +455,22 @@ func renderedDuration(seconds: Int) -> String {
     let days = hours / 24
     let remainingHours = hours % 24
     return remainingHours == 0 ? "\(days)d" : "\(days)d \(remainingHours)h"
+}
+
+func renderedRecipeQueryFilters(_ filters: RecipeQueryFilters) -> [String] {
+    var lines = [String]()
+
+    if filters.favoritesOnly {
+        lines.append("favorite_only: yes")
+    }
+
+    if let minRating = filters.minRating {
+        lines.append("min_rating: \(minRating)")
+    }
+
+    if let maxRating = filters.maxRating {
+        lines.append("max_rating: \(maxRating)")
+    }
+
+    return lines
 }

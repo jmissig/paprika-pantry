@@ -11,6 +11,7 @@ Current architecture direction:
 - keep Paprika-specific Core Data weirdness behind a narrow adapter layer
 - use a sidecar SQLite database only for things we own: indexing, denormalized helper tables, derived facts, analysis artifacts, and refresh bookkeeping
 - keep sidecar outputs evidence-first and inspectable, not opaque magic
+- design the CLI as a good tool for an LLM: keep reasoning and fuzzy interpretation in the LLM, while the CLI exposes reliable filters, evidence, thresholds, and inspectable outputs
 - remove now-stale mirror-first and remote-auth-as-product planning
 
 ## Product-shaped use cases to support
@@ -101,28 +102,34 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Add query/report surfaces that use those features without pretending they are canonical truth
 - [ ] Support questions like "which main can I make in 30 minutes with the fewest ingredients?"
 
-### Phase E — source/cookbook aggregates
+### Phase E — ratings-aware querying
+
+- [ ] Add query surfaces for canonical rating/favorite filters
+- [ ] Support questions like "what are our favorite risottos?" by letting the LLM interpret the noun phrase while the CLI enforces thresholds like star rating and favorite status
+- [ ] Keep outputs inspectable so the LLM can cite the concrete rating/favorite evidence it used
+
+### Phase F — source/cookbook aggregates
 
 - [ ] Add rollups by source/cookbook
 - [ ] Add rating/favorite summaries by source
 - [ ] Add usage/frequency summaries where evidence exists
 - [ ] Support questions like "which cookbook have we consistently liked best?"
 
-### Phase F — ingredient normalization/indexing
+### Phase G — ingredient normalization/indexing
 
 - [ ] Parse and normalize ingredient lines into queryable tokens
 - [ ] Add ingredient-oriented helper tables and indexes
 - [ ] Support use-up queries and ingredient-based filtering
 - [ ] Support questions like "what can use up our avocados?"
 
-### Phase G — pattern tables and household evidence mining
+### Phase H — pattern tables and household evidence mining
 
 - [ ] Add substitution candidate tables with provenance/evidence counts
 - [ ] Add ingredient co-occurrence and pairing tables
 - [ ] Keep pattern outputs inspectable and confidence-limited
 - [ ] Support questions like "what have we found to be a good substitution for yams?"
 
-### Phase H — broaden direct read coverage
+### Phase I — broaden direct read coverage
 
 - [x] Add meals adapter/query support
 - [ ] Add groceries adapter/query support

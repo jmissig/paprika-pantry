@@ -107,7 +107,10 @@ public struct RecipeReadService: Sendable {
         self.source = source
     }
 
-    public func listRecipes() async throws -> [RecipeSummary] {
+    public func listRecipes(
+        filters: RecipeQueryFilters = RecipeQueryFilters(),
+        sort: RecipeListSort = .name
+    ) async throws -> [RecipeSummary] {
         let categoryNamesByUID = try await loadCategoryNamesByUID()
         let stubs = try await source.listRecipeStubs()
         let activeStubs = stubs.filter { !$0.isDeleted }
@@ -133,13 +136,9 @@ public struct RecipeReadService: Sendable {
             )
         }
 
-        return recipes.sorted {
-            if $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedSame {
-                return $0.uid < $1.uid
-            }
-
-            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
+        return recipes
+            .filter { filters.matches(starRating: $0.starRating, isFavorite: $0.isFavorite) }
+            .sorted { Self.sortRecipes(lhs: $0, rhs: $1, by: sort) }
     }
 
     public func resolveRecipe(selector: String) async throws -> RecipeDetail {
@@ -207,5 +206,40 @@ public struct RecipeReadService: Sendable {
         categoryNamesByUID: [String: String]
     ) -> [String] {
         references.map { categoryNamesByUID[$0] ?? $0 }
+    }
+
+    private static func sortRecipes(
+        lhs: RecipeSummary,
+        rhs: RecipeSummary,
+        by sort: RecipeListSort
+    ) -> Bool {
+        switch sort {
+        case .name:
+            return compareByName(lhs: lhs, rhs: rhs)
+        case .rating:
+            return compareByRating(lhs: lhs, rhs: rhs)
+        }
+    }
+
+    private static func compareByName(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
+            return lhs.uid < rhs.uid
+        }
+
+        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+
+    private static func compareByRating(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        let lhsRating = lhs.starRating ?? Int.min
+        let rhsRating = rhs.starRating ?? Int.min
+        if lhsRating != rhsRating {
+            return lhsRating > rhsRating
+        }
+
+        if lhs.isFavorite != rhs.isFavorite {
+            return lhs.isFavorite && !rhs.isFavorite
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
     }
 }

@@ -124,6 +124,63 @@ final class RecipeCommandResolutionTests: XCTestCase {
         )
     }
 
+    func testListRecipesAppliesCanonicalRatingAndFavoriteFilters() throws {
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Favorite Five", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Favorite Four", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Unrated Favorite", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Rated Nonfavorite", hash: "hash-ddd"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Favorite Five", starRating: 5, isFavorite: true),
+                "BBB": makeSourceRecipe(uid: "BBB", name: "Favorite Four", starRating: 4, isFavorite: true),
+                "CCC": makeSourceRecipe(uid: "CCC", name: "Unrated Favorite", starRating: nil, isFavorite: true),
+                "DDD": makeSourceRecipe(uid: "DDD", name: "Rated Nonfavorite", starRating: 5, isFavorite: false),
+            ]
+        )
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes(
+                filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
+                sort: .rating
+            )
+        }
+
+        XCTAssertEqual(listed.map(\.uid), ["AAA", "BBB"])
+    }
+
+    func testListRecipesSortsByRatingThenFavoriteThenName() throws {
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Alpha", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Beta", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Gamma", hash: "hash-ccc"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Alpha", starRating: 5, isFavorite: false),
+                "BBB": makeSourceRecipe(uid: "BBB", name: "Beta", starRating: 5, isFavorite: true),
+                "CCC": makeSourceRecipe(uid: "CCC", name: "Gamma", starRating: 4, isFavorite: true),
+            ]
+        )
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes(sort: .rating)
+        }
+
+        XCTAssertEqual(listed.map(\.uid), ["BBB", "AAA", "CCC"])
+    }
+
+    func testRecipeQueryCommandValidationRejectsInvalidRatingRanges() {
+        XCTAssertThrowsError(
+            try RecipesListCommand.parseAsRoot(["--min-rating", "0"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesSearchCommand.parseAsRoot(["risotto", "--min-rating", "5", "--max-rating", "4"])
+        )
+    }
+
     private func makeRecipeReadService(
         stubs: [SourceRecipeStub],
         categories: [SourceRecipeCategory] = [],

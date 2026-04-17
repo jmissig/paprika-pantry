@@ -204,6 +204,117 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(try store.searchRecipes(query: "   ").count, 0)
     }
 
+    func testSearchRecipesAppliesFavoriteAndRatingFiltersWithRatingSort() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Mushroom Risotto", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Lemon Risotto", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Risotto", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Unrated Risotto", hash: "hash-ddd"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Mushroom Risotto",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Rice\nMushroom",
+                    directions: nil,
+                    notes: "Stir often.",
+                    starRating: 5,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+                "BBB": SourceRecipe(
+                    uid: "BBB",
+                    name: "Lemon Risotto",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Rice\nLemon",
+                    directions: nil,
+                    notes: "Bright finish.",
+                    starRating: 5,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-bbb",
+                    rawJSON: "{}"
+                ),
+                "CCC": SourceRecipe(
+                    uid: "CCC",
+                    name: "Tomato Risotto",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Rice\nTomato",
+                    directions: nil,
+                    notes: "Deep red.",
+                    starRating: 4,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-ccc",
+                    rawJSON: "{}"
+                ),
+                "DDD": SourceRecipe(
+                    uid: "DDD",
+                    name: "Unrated Risotto",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Rice",
+                    directions: nil,
+                    notes: "No rating yet.",
+                    starRating: nil,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-ddd",
+                    rawJSON: "{}"
+                ),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let favoriteResults = try store.searchRecipes(
+            query: "risotto",
+            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
+            sort: .rating,
+            limit: 20
+        )
+        XCTAssertEqual(favoriteResults.map(\.uid), ["AAA", "CCC"])
+
+        let exactRatingResults = try store.searchRecipes(
+            query: "risotto",
+            filters: RecipeQueryFilters(minRating: 5, maxRating: 5),
+            sort: .rating,
+            limit: 20
+        )
+        XCTAssertEqual(exactRatingResults.map(\.uid), ["AAA", "BBB"])
+    }
+
     func testDerivedFeaturesPreferSourceTotalTimeWhenAvailable() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(

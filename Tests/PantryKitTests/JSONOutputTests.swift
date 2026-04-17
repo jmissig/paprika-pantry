@@ -38,12 +38,19 @@ final class JSONOutputTests: XCTestCase {
                     isFavorite: true,
                     updatedAt: "2026-04-02 10:00:00"
                 ),
-            ]
+            ],
+            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
+            sort: .rating
         )
 
         let recipesRendered = try JSONOutput.render(recipesReport)
         XCTAssertTrue(recipesRendered.contains("\"readPath\""))
         XCTAssertTrue(recipesRendered.contains("\"direct-source\""))
+        XCTAssertTrue(recipesRendered.contains("\"filters\""))
+        XCTAssertTrue(recipesRendered.contains("\"favoritesOnly\" : true"))
+        XCTAssertTrue(recipesRendered.contains("\"minRating\" : 4"))
+        XCTAssertTrue(recipesRendered.contains("\"sort\""))
+        XCTAssertTrue(recipesRendered.contains("\"rating\""))
         XCTAssertTrue(recipesRendered.contains("\"categories\""))
         XCTAssertTrue(recipesRendered.contains("\"Dinner\""))
         XCTAssertTrue(recipesRendered.contains("\"sourceName\""))

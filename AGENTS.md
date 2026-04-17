@@ -50,6 +50,7 @@ The system should produce:
 - clear source and index metadata
 - query surfaces optimized for extraction, not narration
 - outputs that keep evidence separate from judgment
+- a CLI that works as a reliable tool for an LLM or other downstream agent
 
 ## Non-goals
 
@@ -63,6 +64,12 @@ Avoid building, at least initially:
 
 The CLI should expose evidence.
 OpenClaw or downstream tools can do interpretation.
+
+Design for an LLM-assisted workflow:
+- let the LLM handle fuzzy interpretation, semantic grouping, and judgment calls
+- let the CLI handle reliable retrieval, filtering, thresholds, sorting, and evidence display
+- prefer canonical filters like rating, favorite status, category membership, and time bounds over embedding opaque reasoning into the CLI
+- keep outputs inspectable enough that an LLM can cite why an item matched
 
 ## Read-only first
 
@@ -186,6 +193,9 @@ Prefer a coherent command grammar over a pile of one-off verbs.
 
 Structured JSON output should be first-class for agent consumption.
 Compact human-readable output should remain pleasant by default.
+
+When choosing between a smart CLI and a useful CLI, prefer a useful CLI.
+The right split is usually: the model decides what the human meant, and the CLI returns trustworthy evidence-bounded candidates and filters.
 
 ## CLI direction
 
