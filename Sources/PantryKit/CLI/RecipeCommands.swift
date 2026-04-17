@@ -4,11 +4,12 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query canonical recipes and sidecar-backed recipe search.",
+        abstract: "Query canonical recipes and sidecar-backed recipe search/features.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
             RecipesSearchCommand.self,
+            RecipesFeaturesCommand.self,
         ]
     )
 
@@ -49,7 +50,8 @@ public struct RecipesShowCommand: PantryLeafCommand {
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
-        try context.write(RecipeShowReport(recipe: recipe))
+        let derivedFeatures = try context.makeStore().fetchRecipeFeatures(uid: recipe.uid)
+        try context.write(RecipeShowReport(recipe: recipe, derivedFeatures: derivedFeatures))
     }
 }
 
@@ -84,5 +86,36 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
         let results = try store.searchRecipes(query: query, limit: limit)
         try context.write(RecipesSearchReport(query: query, results: results, paths: context.paths))
+    }
+}
+
+public struct RecipesFeaturesCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "features",
+        abstract: "Show sidecar-derived recipe time and ingredient-line features for one recipe."
+    )
+
+    @Argument(help: "Recipe UID or name.")
+    public var selector: String
+
+    public init() {}
+    public mutating func run() throws {
+        let context = try makeContext()
+        let store = try context.makeStore()
+        guard try store.indexStats().recipeFeaturesReady else {
+            throw ValidationError("Recipe feature index is not ready. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let recipeReadService = try context.makeRecipeReadService()
+        let selector = self.selector
+        let recipe = try BlockingAsync.run {
+            try await recipeReadService.resolveRecipe(selector: selector)
+        }
+
+        guard let features = try store.fetchRecipeFeatures(uid: recipe.uid) else {
+            throw ValidationError("No derived feature row exists for recipe `\(recipe.uid)`. Run `paprika-pantry index rebuild` first.")
+        }
+
+        try context.write(RecipeFeaturesReport(recipe: recipe, features: features, paths: context.paths))
     }
 }

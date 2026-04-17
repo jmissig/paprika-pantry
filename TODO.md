@@ -94,11 +94,11 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase D — derived recipe features
 
-- [ ] Extract normalized recipe features into the sidecar, for example:
-  - [ ] total/prep/cook time where available
-  - [ ] ingredient counts
+- [x] Extract normalized recipe features into the sidecar, for example:
+  - [x] total/prep/cook time where available
+  - [x] ingredient counts
   - [ ] likely meal role or course hints such as main/side
-- [ ] Add query/report surfaces that use those features without pretending they are canonical truth
+- [x] Add query/report surfaces that use those features without pretending they are canonical truth
 - [ ] Support questions like "which main can I make in 30 minutes with the fewest ingredients?"
 
 ### Phase E — source/cookbook aggregates

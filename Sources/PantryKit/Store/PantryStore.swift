@@ -37,21 +37,40 @@ public struct PantryIndexRun: Codable, Equatable, Sendable {
 
 public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let recipeSearchDocumentCount: Int
+    public let recipeFeatureCount: Int
+    public let recipeFeaturesWithTotalTimeCount: Int
+    public let recipeFeaturesWithIngredientLineCountCount: Int
     public let lastRecipeSearchRun: PantryIndexRun?
     public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
+    public let lastRecipeFeatureRun: PantryIndexRun?
+    public let lastSuccessfulRecipeFeatureRun: PantryIndexRun?
 
     public init(
         recipeSearchDocumentCount: Int,
+        recipeFeatureCount: Int,
+        recipeFeaturesWithTotalTimeCount: Int,
+        recipeFeaturesWithIngredientLineCountCount: Int,
         lastRecipeSearchRun: PantryIndexRun?,
-        lastSuccessfulRecipeSearchRun: PantryIndexRun?
+        lastSuccessfulRecipeSearchRun: PantryIndexRun?,
+        lastRecipeFeatureRun: PantryIndexRun?,
+        lastSuccessfulRecipeFeatureRun: PantryIndexRun?
     ) {
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
+        self.recipeFeatureCount = recipeFeatureCount
+        self.recipeFeaturesWithTotalTimeCount = recipeFeaturesWithTotalTimeCount
+        self.recipeFeaturesWithIngredientLineCountCount = recipeFeaturesWithIngredientLineCountCount
         self.lastRecipeSearchRun = lastRecipeSearchRun
         self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
+        self.lastRecipeFeatureRun = lastRecipeFeatureRun
+        self.lastSuccessfulRecipeFeatureRun = lastSuccessfulRecipeFeatureRun
     }
 
     public var recipeSearchReady: Bool {
         recipeSearchDocumentCount > 0 && lastSuccessfulRecipeSearchRun != nil
+    }
+
+    public var recipeFeaturesReady: Bool {
+        recipeFeatureCount > 0 && lastSuccessfulRecipeFeatureRun != nil
     }
 }
 
@@ -80,15 +99,79 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
     }
 }
 
-public struct RecipeSearchIndexRebuildSummary: Codable, Equatable, Sendable {
+public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let startedAt: Date
     public let finishedAt: Date
-    public let recipeCount: Int
+    public let recipeSearchDocumentCount: Int
+    public let recipeFeatureCount: Int
+    public let recipeFeaturesWithTotalTimeCount: Int
+    public let recipeFeaturesWithIngredientLineCountCount: Int
 
-    public init(startedAt: Date, finishedAt: Date, recipeCount: Int) {
+    public init(
+        startedAt: Date,
+        finishedAt: Date,
+        recipeSearchDocumentCount: Int,
+        recipeFeatureCount: Int,
+        recipeFeaturesWithTotalTimeCount: Int,
+        recipeFeaturesWithIngredientLineCountCount: Int
+    ) {
         self.startedAt = startedAt
         self.finishedAt = finishedAt
-        self.recipeCount = recipeCount
+        self.recipeSearchDocumentCount = recipeSearchDocumentCount
+        self.recipeFeatureCount = recipeFeatureCount
+        self.recipeFeaturesWithTotalTimeCount = recipeFeaturesWithTotalTimeCount
+        self.recipeFeaturesWithIngredientLineCountCount = recipeFeaturesWithIngredientLineCountCount
+    }
+}
+
+public enum RecipeTotalTimeBasis: String, Codable, Equatable, Sendable {
+    case sourceTotalTime = "source-total-time"
+    case summedPrepAndCook = "prep-plus-cook"
+}
+
+public enum RecipeIngredientLineCountBasis: String, Codable, Equatable, Sendable {
+    case nonEmptyLines = "non-empty-ingredient-lines"
+}
+
+public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
+    public let uid: String
+    public let sourceRemoteHash: String?
+    public let derivedAt: Date
+    public let prepTimeMinutes: Int?
+    public let cookTimeMinutes: Int?
+    public let totalTimeMinutes: Int?
+    public let totalTimeBasis: RecipeTotalTimeBasis?
+    public let ingredientLineCount: Int?
+    public let ingredientLineCountBasis: RecipeIngredientLineCountBasis?
+
+    public init(
+        uid: String,
+        sourceRemoteHash: String?,
+        derivedAt: Date,
+        prepTimeMinutes: Int?,
+        cookTimeMinutes: Int?,
+        totalTimeMinutes: Int?,
+        totalTimeBasis: RecipeTotalTimeBasis?,
+        ingredientLineCount: Int?,
+        ingredientLineCountBasis: RecipeIngredientLineCountBasis?
+    ) {
+        self.uid = uid
+        self.sourceRemoteHash = sourceRemoteHash
+        self.derivedAt = derivedAt
+        self.prepTimeMinutes = prepTimeMinutes
+        self.cookTimeMinutes = cookTimeMinutes
+        self.totalTimeMinutes = totalTimeMinutes
+        self.totalTimeBasis = totalTimeBasis
+        self.ingredientLineCount = ingredientLineCount
+        self.ingredientLineCountBasis = ingredientLineCountBasis
+    }
+
+    public func sourceHashMatches(_ currentSourceHash: String?) -> Bool? {
+        guard let currentSourceHash, let sourceRemoteHash else {
+            return nil
+        }
+
+        return currentSourceHash == sourceRemoteHash
     }
 }
 
@@ -103,8 +186,19 @@ public struct PantryStore: @unchecked Sendable {
         try dbQueue.read { db in
             PantryIndexStats(
                 recipeSearchDocumentCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents") ?? 0,
+                recipeFeatureCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_features") ?? 0,
+                recipeFeaturesWithTotalTimeCount: try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM recipe_features WHERE total_time_minutes IS NOT NULL"
+                ) ?? 0,
+                recipeFeaturesWithIngredientLineCountCount: try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM recipe_features WHERE ingredient_line_count IS NOT NULL"
+                ) ?? 0,
                 lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
-                lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db)
+                lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db),
+                lastRecipeFeatureRun: try latestIndexRun(named: Self.recipeFeatureIndexName, db: db),
+                lastSuccessfulRecipeFeatureRun: try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db)
             )
         }
     }
@@ -145,12 +239,56 @@ public struct PantryStore: @unchecked Sendable {
         }
     }
 
-    public func rebuildRecipeSearchIndex(
+    public func fetchRecipeFeatures(uid: String) throws -> RecipeDerivedFeatures? {
+        try dbQueue.read { db in
+            guard
+                let row = try Row.fetchOne(
+                    db,
+                    sql: """
+                    SELECT
+                        uid,
+                        source_remote_hash,
+                        derived_at,
+                        prep_time_minutes,
+                        cook_time_minutes,
+                        total_time_minutes,
+                        total_time_basis,
+                        ingredient_line_count,
+                        ingredient_line_count_basis
+                    FROM recipe_features
+                    WHERE uid = ?
+                    LIMIT 1
+                    """,
+                    arguments: [uid]
+                )
+            else {
+                return nil
+            }
+
+            let totalTimeBasisRaw: String? = row["total_time_basis"]
+            let ingredientLineCountBasisRaw: String? = row["ingredient_line_count_basis"]
+
+            return RecipeDerivedFeatures(
+                uid: row["uid"],
+                sourceRemoteHash: row["source_remote_hash"],
+                derivedAt: DatabaseTimestamp.decodeRequired(row["derived_at"]),
+                prepTimeMinutes: row["prep_time_minutes"],
+                cookTimeMinutes: row["cook_time_minutes"],
+                totalTimeMinutes: row["total_time_minutes"],
+                totalTimeBasis: totalTimeBasisRaw.flatMap(RecipeTotalTimeBasis.init(rawValue:)),
+                ingredientLineCount: row["ingredient_line_count"],
+                ingredientLineCountBasis: ingredientLineCountBasisRaw.flatMap(RecipeIngredientLineCountBasis.init(rawValue:))
+            )
+        }
+    }
+
+    public func rebuildRecipeIndexes(
         from source: any PantrySource,
         now: @escaping @Sendable () -> Date = Date.init
-    ) async throws -> RecipeSearchIndexRebuildSummary {
+    ) async throws -> RecipeIndexesRebuildSummary {
         let startedAt = now()
-        let runID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
+        let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
+        let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
 
         do {
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
@@ -158,7 +296,9 @@ public struct PantryStore: @unchecked Sendable {
             let activeStubs = stubs.filter { !$0.isDeleted }
 
             var documents = [RecipeSearchDocument]()
+            var features = [RecipeDerivedFeatures]()
             documents.reserveCapacity(activeStubs.count)
+            features.reserveCapacity(activeStubs.count)
 
             for stub in activeStubs {
                 let recipe = try await source.fetchRecipe(uid: stub.uid)
@@ -178,14 +318,25 @@ public struct PantryStore: @unchecked Sendable {
                         starRating: recipe.starRating
                     )
                 )
+                features.append(
+                    Self.deriveFeatures(
+                        from: recipe,
+                        derivedAt: startedAt
+                    )
+                )
             }
 
             let finishedAt = now()
             let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
-            let recipeCount = sortedDocuments.count
+            let sortedFeatures = features.sorted { $0.uid < $1.uid }
+            let recipeSearchDocumentCount = sortedDocuments.count
+            let recipeFeatureCount = sortedFeatures.count
+            let recipeFeaturesWithTotalTimeCount = sortedFeatures.filter { $0.totalTimeMinutes != nil }.count
+            let recipeFeaturesWithIngredientLineCountCount = sortedFeatures.filter { $0.ingredientLineCount != nil }.count
             try await dbQueue.write { db in
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
                 try db.execute(sql: "DELETE FROM recipe_search_fts")
+                try db.execute(sql: "DELETE FROM recipe_features")
 
                 for document in sortedDocuments {
                     try db.execute(
@@ -239,24 +390,71 @@ public struct PantryStore: @unchecked Sendable {
                     )
                 }
 
+                for feature in sortedFeatures {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO recipe_features (
+                            uid,
+                            source_remote_hash,
+                            derived_at,
+                            prep_time_minutes,
+                            cook_time_minutes,
+                            total_time_minutes,
+                            total_time_basis,
+                            ingredient_line_count,
+                            ingredient_line_count_basis
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            feature.uid,
+                            feature.sourceRemoteHash,
+                            DatabaseTimestamp.encode(finishedAt),
+                            feature.prepTimeMinutes,
+                            feature.cookTimeMinutes,
+                            feature.totalTimeMinutes,
+                            feature.totalTimeBasis?.rawValue,
+                            feature.ingredientLineCount,
+                            feature.ingredientLineCountBasis?.rawValue,
+                        ]
+                    )
+                }
+
                 try finishIndexRun(
-                    id: runID,
+                    id: searchRunID,
                     status: .success,
                     finishedAt: finishedAt,
-                    recipeCount: recipeCount,
+                    recipeCount: recipeSearchDocumentCount,
+                    errorMessage: nil,
+                    in: db
+                )
+                try finishIndexRun(
+                    id: featureRunID,
+                    status: .success,
+                    finishedAt: finishedAt,
+                    recipeCount: recipeFeatureCount,
                     errorMessage: nil,
                     in: db
                 )
             }
 
-            return RecipeSearchIndexRebuildSummary(
+            return RecipeIndexesRebuildSummary(
                 startedAt: startedAt,
                 finishedAt: finishedAt,
-                recipeCount: recipeCount
+                recipeSearchDocumentCount: recipeSearchDocumentCount,
+                recipeFeatureCount: recipeFeatureCount,
+                recipeFeaturesWithTotalTimeCount: recipeFeaturesWithTotalTimeCount,
+                recipeFeaturesWithIngredientLineCountCount: recipeFeaturesWithIngredientLineCountCount
             )
         } catch {
             try finishIndexRun(
-                id: runID,
+                id: searchRunID,
+                status: .failed,
+                finishedAt: now(),
+                recipeCount: 0,
+                errorMessage: String(describing: error)
+            )
+            try finishIndexRun(
+                id: featureRunID,
                 status: .failed,
                 finishedAt: now(),
                 recipeCount: 0,
@@ -397,6 +595,7 @@ public struct PantryStore: @unchecked Sendable {
     }
 
     private static let recipeSearchIndexName = "recipe-search"
+    private static let recipeFeatureIndexName = "recipe-features"
 
     private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
         if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
@@ -419,6 +618,115 @@ public struct PantryStore: @unchecked Sendable {
 
     private static func decodeCategories(_ value: String) -> [String] {
         value.split(separator: "\u{1F}").map(String.init)
+    }
+
+    private static func deriveFeatures(from recipe: SourceRecipe, derivedAt: Date) -> RecipeDerivedFeatures {
+        let prepTimeMinutes = parsedDurationMinutes(recipe.prepTime)
+        let cookTimeMinutes = parsedDurationMinutes(recipe.cookTime)
+        let sourceTotalTimeMinutes = parsedDurationMinutes(recipe.totalTime)
+
+        let totalTimeMinutes: Int?
+        let totalTimeBasis: RecipeTotalTimeBasis?
+        if let sourceTotalTimeMinutes {
+            totalTimeMinutes = sourceTotalTimeMinutes
+            totalTimeBasis = .sourceTotalTime
+        } else if let prepTimeMinutes, let cookTimeMinutes {
+            totalTimeMinutes = prepTimeMinutes + cookTimeMinutes
+            totalTimeBasis = .summedPrepAndCook
+        } else {
+            totalTimeMinutes = nil
+            totalTimeBasis = nil
+        }
+
+        let ingredientLineCount = countedIngredientLines(recipe.ingredients)
+
+        return RecipeDerivedFeatures(
+            uid: recipe.uid,
+            sourceRemoteHash: recipe.remoteHash,
+            derivedAt: derivedAt,
+            prepTimeMinutes: prepTimeMinutes,
+            cookTimeMinutes: cookTimeMinutes,
+            totalTimeMinutes: totalTimeMinutes,
+            totalTimeBasis: totalTimeBasis,
+            ingredientLineCount: ingredientLineCount,
+            ingredientLineCountBasis: ingredientLineCount == nil ? nil : .nonEmptyLines
+        )
+    }
+
+    private static func countedIngredientLines(_ ingredients: String?) -> Int? {
+        guard let ingredients else {
+            return nil
+        }
+
+        let count = ingredients
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .count
+
+        return count == 0 ? nil : count
+    }
+
+    private static func parsedDurationMinutes(_ rawValue: String?) -> Int? {
+        guard let rawValue else {
+            return nil
+        }
+
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        let normalized = trimmed.lowercased()
+
+        if let colonMinutes = parsedColonDurationMinutes(normalized) {
+            return colonMinutes
+        }
+
+        let pattern = #"(\d+)\s*(hours?|hour|hrs?|hr|h|minutes?|minute|mins?|min|m)\b"#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return Int(normalized)
+        }
+
+        let fullRange = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+        let matches = expression.matches(in: normalized, options: [], range: fullRange)
+        if !matches.isEmpty {
+            var totalMinutes = 0
+
+            for match in matches {
+                guard
+                    let valueRange = Range(match.range(at: 1), in: normalized),
+                    let unitRange = Range(match.range(at: 2), in: normalized),
+                    let value = Int(normalized[valueRange])
+                else {
+                    continue
+                }
+
+                let unit = String(normalized[unitRange])
+                if unit.hasPrefix("h") {
+                    totalMinutes += value * 60
+                } else {
+                    totalMinutes += value
+                }
+            }
+
+            return totalMinutes == 0 ? nil : totalMinutes
+        }
+
+        return Int(normalized)
+    }
+
+    private static func parsedColonDurationMinutes(_ normalized: String) -> Int? {
+        let parts = normalized.split(separator: ":")
+        guard parts.count == 2, let hours = Int(parts[0]), let minutes = Int(parts[1]) else {
+            return nil
+        }
+
+        guard minutes >= 0 && minutes < 60 else {
+            return nil
+        }
+
+        return (hours * 60) + minutes
     }
 }
 

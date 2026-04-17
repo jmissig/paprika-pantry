@@ -4,7 +4,7 @@ public struct PantryCLI: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "paprika-pantry",
         abstract: "Local-first Paprika reader and query CLI.",
-        discussion: "The current slice validates and reads from the real local Paprika SQLite database, keeps direct source diagnostics legible, and now includes an owned sidecar recipe-search index for fast local queries.",
+        discussion: "The current slice validates and reads from the real local Paprika SQLite database, keeps direct source diagnostics legible, and includes owned sidecar recipe search plus inspectable derived recipe features.",
         subcommands: [
             SourceCommand.self,
             RecipesCommand.self,

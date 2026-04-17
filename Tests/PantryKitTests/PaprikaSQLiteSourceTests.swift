@@ -181,17 +181,21 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         )
     }
 
-    func testRecipeSearchIndexRebuildUsesDirectPaprikaSQLiteSource() async throws {
+    func testRecipeIndexesRebuildUsesDirectPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let store = try makeStore()
 
-        let summary = try await store.rebuildRecipeSearchIndex(
+        let summary = try await store.rebuildRecipeIndexes(
             from: source,
             now: { Date(timeIntervalSince1970: 1_712_736_000) }
         )
 
-        XCTAssertEqual(summary.recipeCount, 1)
+        XCTAssertEqual(summary.recipeSearchDocumentCount, 1)
+        XCTAssertEqual(summary.recipeFeatureCount, 1)
+        XCTAssertEqual(summary.recipeFeaturesWithTotalTimeCount, 1)
+        XCTAssertEqual(summary.recipeFeaturesWithIngredientLineCountCount, 1)
         XCTAssertEqual(try store.searchRecipes(query: "lemon").map(\.uid), ["AAA"])
+        XCTAssertEqual(try store.fetchRecipeFeatures(uid: "AAA")?.totalTimeMinutes, 40)
     }
 
     private func makeStore() throws -> PantryStore {

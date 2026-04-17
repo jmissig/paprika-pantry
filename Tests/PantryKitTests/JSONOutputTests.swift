@@ -64,6 +64,9 @@ final class JSONOutputTests: XCTestCase {
             ),
             indexStats: PantryIndexStats(
                 recipeSearchDocumentCount: 6,
+                recipeFeatureCount: 6,
+                recipeFeaturesWithTotalTimeCount: 5,
+                recipeFeaturesWithIngredientLineCountCount: 6,
                 lastRecipeSearchRun: PantryIndexRun(
                     id: 1,
                     startedAt: Date(timeIntervalSince1970: 1_712_736_000),
@@ -79,6 +82,24 @@ final class JSONOutputTests: XCTestCase {
                     finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
                     status: .success,
                     indexName: "recipe-search",
+                    recipeCount: 6,
+                    errorMessage: nil
+                ),
+                lastRecipeFeatureRun: PantryIndexRun(
+                    id: 2,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-features",
+                    recipeCount: 6,
+                    errorMessage: nil
+                ),
+                lastSuccessfulRecipeFeatureRun: PantryIndexRun(
+                    id: 2,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-features",
                     recipeCount: 6,
                     errorMessage: nil
                 )

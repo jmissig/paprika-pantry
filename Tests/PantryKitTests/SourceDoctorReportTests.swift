@@ -84,8 +84,13 @@ final class SourceDoctorReportTests: XCTestCase {
             ),
             indexStats: PantryIndexStats(
                 recipeSearchDocumentCount: 0,
+                recipeFeatureCount: 0,
+                recipeFeaturesWithTotalTimeCount: 0,
+                recipeFeaturesWithIngredientLineCountCount: 0,
                 lastRecipeSearchRun: nil,
-                lastSuccessfulRecipeSearchRun: nil
+                lastSuccessfulRecipeSearchRun: nil,
+                lastRecipeFeatureRun: nil,
+                lastSuccessfulRecipeFeatureRun: nil
             ),
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),

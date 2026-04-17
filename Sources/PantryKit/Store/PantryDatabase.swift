@@ -87,6 +87,24 @@ public struct PantryDatabase {
             }
         }
 
+        migrator.registerMigration("recipe-features-v1") { db in
+            try db.create(table: "recipe_features") { table in
+                table.column("uid", .text).notNull().primaryKey()
+                table.column("source_remote_hash", .text)
+                table.column("derived_at", .text).notNull()
+                table.column("prep_time_minutes", .integer)
+                table.column("cook_time_minutes", .integer)
+                table.column("total_time_minutes", .integer)
+                table.column("total_time_basis", .text)
+                table.column("ingredient_line_count", .integer)
+                table.column("ingredient_line_count_basis", .text)
+            }
+
+            try db.create(index: "recipe_features_on_derived_at", on: "recipe_features", columns: ["derived_at"])
+            try db.create(index: "recipe_features_on_total_time_minutes", on: "recipe_features", columns: ["total_time_minutes"])
+            try db.create(index: "recipe_features_on_ingredient_line_count", on: "recipe_features", columns: ["ingredient_line_count"])
+        }
+
         return migrator
     }
 }

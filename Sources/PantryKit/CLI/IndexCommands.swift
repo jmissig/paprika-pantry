@@ -4,7 +4,7 @@ import Foundation
 public struct IndexCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "index",
-        abstract: "Manage owned sidecar indexes.",
+        abstract: "Manage owned sidecar indexes and derived recipe features.",
         subcommands: [
             IndexStatsCommand.self,
             IndexRebuildCommand.self,
@@ -31,7 +31,7 @@ public struct IndexStatsCommand: PantryLeafCommand {
 public struct IndexRebuildCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rebuild",
-        abstract: "Rebuild the recipe search index from the configured local Paprika source."
+        abstract: "Rebuild owned recipe indexes and derived feature tables from the configured local Paprika source."
     )
 
     public init() {}
@@ -40,7 +40,7 @@ public struct IndexRebuildCommand: PantryLeafCommand {
         let source = try context.makeSource()
         let store = try context.makeStore()
         let summary = try BlockingAsync.run {
-            try await store.rebuildRecipeSearchIndex(from: source)
+            try await store.rebuildRecipeIndexes(from: source)
         }
         try context.write(IndexRebuildReport(summary: summary, paths: context.paths))
     }
