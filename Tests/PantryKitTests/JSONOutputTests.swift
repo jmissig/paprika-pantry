@@ -29,20 +29,21 @@ final class JSONOutputTests: XCTestCase {
     func testRenderRecipeMirrorReportsPreservesStructuredFields() throws {
         let recipesReport = RecipesListReport(
             recipes: [
-                MirroredRecipeSummary(
+                RecipeSummary(
                     uid: "AAA",
                     name: "Soup",
                     categories: ["Dinner", "Weeknight"],
                     sourceName: "Serious Eats",
                     starRating: 5,
                     isFavorite: true,
-                    updatedAt: "2026-04-02 10:00:00",
-                    lastSyncedAt: nil
+                    updatedAt: "2026-04-02 10:00:00"
                 ),
             ]
         )
 
         let recipesRendered = try JSONOutput.render(recipesReport)
+        XCTAssertTrue(recipesRendered.contains("\"readPath\""))
+        XCTAssertTrue(recipesRendered.contains("\"direct-source\""))
         XCTAssertTrue(recipesRendered.contains("\"categories\""))
         XCTAssertTrue(recipesRendered.contains("\"Dinner\""))
         XCTAssertTrue(recipesRendered.contains("\"sourceName\""))

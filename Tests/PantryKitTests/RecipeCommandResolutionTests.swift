@@ -3,55 +3,61 @@ import XCTest
 @testable import PantryKit
 
 final class RecipeCommandResolutionTests: XCTestCase {
-    private var temporaryDirectoryURL: URL?
-
-    override func tearDownWithError() throws {
-        if let temporaryDirectoryURL {
-            try? FileManager.default.removeItem(at: temporaryDirectoryURL)
-        }
-        temporaryDirectoryURL = nil
-    }
-
     func testResolveRecipePrefersUIDBeforeNameMatch() throws {
-        let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
-
-        try store.upsertRecipe(
-            makeRecipe(uid: "MATCH", name: "UID Winner"),
-            syncedAt: syncedAt
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "MATCH", name: "UID Winner", hash: "hash-match"),
+                SourceRecipeStub(uid: "OTHER", name: "match", hash: "hash-other"),
+            ],
+            recipesByUID: [
+                "MATCH": makeSourceRecipe(uid: "MATCH", name: "UID Winner"),
+                "OTHER": makeSourceRecipe(uid: "OTHER", name: "match"),
+            ]
         )
-        try store.upsertRecipe(
-            makeRecipe(uid: "OTHER", name: "match"),
-            syncedAt: syncedAt
-        )
 
-        let resolved = try resolveRecipe(selector: "MATCH", store: store)
+        let resolved = try BlockingAsync.run {
+            try await service.resolveRecipe(selector: "MATCH")
+        }
+
         XCTAssertEqual(resolved.uid, "MATCH")
         XCTAssertEqual(resolved.name, "UID Winner")
     }
 
     func testResolveRecipeFallsBackToExactCaseInsensitiveName() throws {
-        let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
-
-        try store.upsertRecipe(
-            makeRecipe(uid: "AAA", name: "Weeknight Soup"),
-            syncedAt: syncedAt
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Weeknight Soup"),
+            ]
         )
 
-        let resolved = try resolveRecipe(selector: "weeknight soup", store: store)
+        let resolved = try BlockingAsync.run {
+            try await service.resolveRecipe(selector: "weeknight soup")
+        }
+
         XCTAssertEqual(resolved.uid, "AAA")
     }
 
     func testResolveRecipeThrowsAmbiguityErrorForDuplicateNames() throws {
-        let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Curry", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "curry", hash: "hash-bbb"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Curry"),
+                "BBB": makeSourceRecipe(uid: "BBB", name: "curry"),
+            ]
+        )
 
-        try store.upsertRecipe(makeRecipe(uid: "AAA", name: "Curry"), syncedAt: syncedAt)
-        try store.upsertRecipe(makeRecipe(uid: "BBB", name: "curry"), syncedAt: syncedAt)
-
-        XCTAssertThrowsError(try resolveRecipe(selector: "CURRY", store: store)) { error in
-            guard case let RecipesCommandError.ambiguousRecipeName(selector, matchingUIDs) = error else {
+        XCTAssertThrowsError(
+            try BlockingAsync.run {
+                try await service.resolveRecipe(selector: "CURRY")
+            }
+        ) { error in
+            guard case let RecipeReadServiceError.ambiguousRecipeName(selector, matchingUIDs) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
 
@@ -60,11 +66,15 @@ final class RecipeCommandResolutionTests: XCTestCase {
         }
     }
 
-    func testResolveRecipeThrowsNotFoundErrorWhenSelectorMisses() throws {
-        let store = try makeStore()
+    func testResolveRecipeThrowsNotFoundErrorWhenSelectorMisses() {
+        let service = makeRecipeReadService(stubs: [], recipesByUID: [:])
 
-        XCTAssertThrowsError(try resolveRecipe(selector: "missing", store: store)) { error in
-            guard case let RecipesCommandError.recipeNotFound(selector) = error else {
+        XCTAssertThrowsError(
+            try BlockingAsync.run {
+                try await service.resolveRecipe(selector: "missing")
+            }
+        ) { error in
+            guard case let RecipeReadServiceError.recipeNotFound(selector) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
 
@@ -72,24 +82,80 @@ final class RecipeCommandResolutionTests: XCTestCase {
         }
     }
 
-    private func makeStore() throws -> PantryStore {
-        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        temporaryDirectoryURL = directoryURL
-        let database = PantryDatabase(path: directoryURL.appendingPathComponent("pantry.sqlite"))
-        return PantryStore(dbQueue: try database.openQueue())
+    func testListRecipesReadsActiveRecipesFromSourceAndResolvesCategoryNames() throws {
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", hash: "hash-bbb", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Archived", isDeleted: true),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categories: ["CAT1", "CAT2", "MISSING"],
+                    sourceName: "Serious Eats",
+                    starRating: 4,
+                    isFavorite: true
+                ),
+            ]
+        )
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes()
+        }
+
+        XCTAssertEqual(
+            listed,
+            [
+                RecipeSummary(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categories: ["Dinner", "CAT2", "MISSING"],
+                    sourceName: "Serious Eats",
+                    starRating: 4,
+                    isFavorite: true,
+                    updatedAt: nil
+                ),
+            ]
+        )
     }
 
-    private func makeRecipe(uid: String, name: String) -> MirroredRecipeInput {
-        MirroredRecipeInput(
+    private func makeRecipeReadService(
+        stubs: [SourceRecipeStub],
+        categories: [SourceRecipeCategory] = [],
+        recipesByUID: [String: SourceRecipe]
+    ) -> RecipeReadService {
+        RecipeReadService(
+            source: InMemoryPantrySource(
+                stubs: stubs,
+                categories: categories,
+                recipesByUID: recipesByUID
+            )
+        )
+    }
+
+    private func makeSourceRecipe(
+        uid: String,
+        name: String,
+        categories: [String] = ["CAT1"],
+        sourceName: String? = nil,
+        starRating: Int? = nil,
+        isFavorite: Bool = false
+    ) -> SourceRecipe {
+        SourceRecipe(
             uid: uid,
             name: name,
-            categories: ["Dinner"],
-            sourceName: nil,
+            categoryReferences: categories,
+            sourceName: sourceName,
             ingredients: nil,
             directions: nil,
             notes: nil,
-            starRating: nil,
-            isFavorite: false,
+            starRating: starRating,
+            isFavorite: isFavorite,
             prepTime: nil,
             cookTime: nil,
             totalTime: nil,

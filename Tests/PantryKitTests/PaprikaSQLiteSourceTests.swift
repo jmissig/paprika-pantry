@@ -109,6 +109,41 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertNil(recipe.updatedAt)
     }
 
+    func testRecipeReadServiceReadsListAndShowDirectlyFromPaprikaSQLiteSource() throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+        let service = RecipeReadService(source: source)
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes()
+        }
+        let recipe = try BlockingAsync.run {
+            try await service.resolveRecipe(selector: "weeknight soup")
+        }
+
+        XCTAssertEqual(
+            listed,
+            [
+                RecipeSummary(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categories: ["Dinner"],
+                    sourceName: "Serious Eats",
+                    starRating: 4,
+                    isFavorite: true,
+                    updatedAt: nil
+                ),
+            ]
+        )
+
+        XCTAssertEqual(recipe.uid, "AAA")
+        XCTAssertEqual(recipe.name, "Weeknight Soup")
+        XCTAssertEqual(recipe.categories, ["Dinner"])
+        XCTAssertEqual(recipe.sourceName, "Serious Eats")
+        XCTAssertEqual(recipe.starRating, 4)
+        XCTAssertTrue(recipe.isFavorite)
+        XCTAssertEqual(recipe.remoteHash, "hash-aaa")
+    }
+
     private func makePaprikaSourceDatabase() throws -> URL {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("Paprika.sqlite")

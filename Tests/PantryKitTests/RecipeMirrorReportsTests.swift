@@ -114,19 +114,19 @@ final class RecipeMirrorReportsTests: XCTestCase {
     func testRecipesListReportIncludesSummaryMetadata() {
         let report = RecipesListReport(
             recipes: [
-                MirroredRecipeSummary(
+                RecipeSummary(
                     uid: "AAA",
                     name: "Soup",
                     categories: ["Dinner"],
                     sourceName: "Serious Eats",
                     starRating: 4,
                     isFavorite: true,
-                    updatedAt: "2026-04-02 10:00:00",
-                    lastSyncedAt: Date(timeIntervalSince1970: 1_712_736_000)
+                    updatedAt: "2026-04-02 10:00:00"
                 ),
             ]
         )
 
+        XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
         XCTAssertTrue(report.humanDescription.contains("source=Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("rating=4"))
@@ -135,7 +135,7 @@ final class RecipeMirrorReportsTests: XCTestCase {
 
     func testRecipeShowReportIncludesRecipeMetadata() {
         let report = RecipeShowReport(
-            recipe: MirroredRecipe(
+            recipe: RecipeDetail(
                 uid: "AAA",
                 name: "Soup",
                 categories: ["Dinner", "Weeknight"],
@@ -152,17 +152,15 @@ final class RecipeMirrorReportsTests: XCTestCase {
                 createdAt: "2026-04-01 10:00:00",
                 updatedAt: "2026-04-02 10:00:00",
                 remoteHash: "hash-1",
-                isDeleted: false,
-                lastSyncedAt: Date(timeIntervalSince1970: 1_712_736_000),
                 rawJSON: #"{"uid":"AAA"}"#
             )
         )
 
+        XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("categories: Dinner, Weeknight"))
         XCTAssertTrue(report.humanDescription.contains("source_name: Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("star_rating: 5"))
         XCTAssertTrue(report.humanDescription.contains("favorite: yes"))
-        XCTAssertTrue(report.humanDescription.contains("last_synced_at:"))
     }
 
     func testDBStatsReportIncludesDatabaseCountsAndPaths() {

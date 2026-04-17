@@ -117,20 +117,22 @@ public struct SyncStatusReport: ConsoleRenderable, Equatable, Sendable {
 
 public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
+    public let readPath: String
     public let recipeCount: Int
-    public let recipes: [MirroredRecipeSummary]
+    public let recipes: [RecipeSummary]
 
-    public init(recipes: [MirroredRecipeSummary]) {
+    public init(recipes: [RecipeSummary], readPath: String = "direct-source") {
         self.command = "recipes list"
+        self.readPath = readPath
         self.recipeCount = recipes.count
         self.recipes = recipes
     }
 
     public var humanDescription: String {
-        var lines = ["\(command): \(recipeCount) recipes"]
+        var lines = ["\(command): \(recipeCount) recipes", "read_path: \(readPath)"]
 
         if recipes.isEmpty {
-            lines.append("No local recipes found.")
+            lines.append("No source recipes found.")
             return lines.joined(separator: "\n")
         }
 
@@ -162,16 +164,19 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
 
 public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
-    public let recipe: MirroredRecipe
+    public let readPath: String
+    public let recipe: RecipeDetail
 
-    public init(recipe: MirroredRecipe) {
+    public init(recipe: RecipeDetail, readPath: String = "direct-source") {
         self.command = "recipes show"
+        self.readPath = readPath
         self.recipe = recipe
     }
 
     public var humanDescription: String {
         var lines = [
             "\(command): \(recipe.name)",
+            "read_path: \(readPath)",
             "uid: \(recipe.uid)",
         ]
 
@@ -209,9 +214,6 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         }
         if let remoteHash = recipe.remoteHash, !remoteHash.isEmpty {
             lines.append("remote_hash: \(remoteHash)")
-        }
-        if let lastSyncedAt = recipe.lastSyncedAt {
-            lines.append("last_synced_at: \(renderedTimestamp(lastSyncedAt))")
         }
 
         if let ingredients = recipe.ingredients, !ingredients.isEmpty {

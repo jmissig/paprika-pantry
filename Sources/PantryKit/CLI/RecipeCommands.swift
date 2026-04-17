@@ -4,7 +4,7 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query locally cached recipe data.",
+        abstract: "Query recipe data from the configured pantry source.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
@@ -18,21 +18,24 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List locally cached recipes."
+        abstract: "List recipes from the configured pantry source."
     )
 
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeStore()
-        try context.write(RecipesListReport(recipes: try store.listRecipes()))
+        let recipeReadService = try context.makeRecipeReadService()
+        let recipes = try BlockingAsync.run {
+            try await recipeReadService.listRecipes()
+        }
+        try context.write(RecipesListReport(recipes: recipes))
     }
 }
 
 public struct RecipesShowCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "show",
-        abstract: "Show one recipe by UID or name."
+        abstract: "Show one source recipe by UID or name."
     )
 
     @Argument(help: "Recipe UID or name.")
@@ -41,8 +44,11 @@ public struct RecipesShowCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeStore()
-        let recipe = try resolveRecipe(selector: selector, store: store)
+        let recipeReadService = try context.makeRecipeReadService()
+        let selector = self.selector
+        let recipe = try BlockingAsync.run {
+            try await recipeReadService.resolveRecipe(selector: selector)
+        }
         try context.write(RecipeShowReport(recipe: recipe))
     }
 }
@@ -65,35 +71,4 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             details: ["query": query]
         )
     }
-}
-
-enum RecipesCommandError: Error, LocalizedError {
-    case recipeNotFound(String)
-    case ambiguousRecipeName(String, [String])
-
-    var errorDescription: String? {
-        switch self {
-        case .recipeNotFound(let selector):
-            return "No local recipe matched `\(selector)`. Run `paprika-pantry sync run` first if needed."
-        case .ambiguousRecipeName(let selector, let matchingUIDs):
-            return "Recipe name `\(selector)` matched multiple local recipes. Use a UID instead: \(matchingUIDs.joined(separator: ", "))"
-        }
-    }
-}
-
-func resolveRecipe(selector: String, store: PantryStore) throws -> MirroredRecipe {
-    if let recipe = try store.fetchRecipe(uid: selector) {
-        return recipe
-    }
-
-    let nameMatches = try store.fetchRecipes(namedExactlyCaseInsensitive: selector)
-    guard !nameMatches.isEmpty else {
-        throw RecipesCommandError.recipeNotFound(selector)
-    }
-
-    guard nameMatches.count == 1 else {
-        throw RecipesCommandError.ambiguousRecipeName(selector, nameMatches.map(\.uid))
-    }
-
-    return nameMatches[0]
 }
