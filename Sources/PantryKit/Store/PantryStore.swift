@@ -217,6 +217,7 @@ public struct PantryStore: @unchecked Sendable {
         return try dbQueue.read { db in
             var arguments: StatementArguments = [normalizedQuery]
             var conditions = ["recipe_search_fts MATCH ?"]
+            let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty
 
             if filters.favoritesOnly {
                 conditions.append("recipe_search_documents.is_favorite = 1")
@@ -234,7 +235,10 @@ public struct PantryStore: @unchecked Sendable {
                 arguments += [maxRating]
             }
 
-            arguments += [max(1, limit)]
+            let limitClause = applyCategoryFilterAfterRead ? "" : "LIMIT ?"
+            if !applyCategoryFilterAfterRead {
+                arguments += [max(1, limit)]
+            }
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -250,12 +254,12 @@ public struct PantryStore: @unchecked Sendable {
                     ON recipe_search_documents.uid = recipe_search_fts.uid
                 WHERE \(conditions.joined(separator: " AND "))
                 ORDER BY \(Self.recipeSearchOrderClause(sort: sort))
-                LIMIT ?
+                \(limitClause)
                 """,
                 arguments: arguments
             )
 
-            return rows.map { row in
+            let results = rows.map { row in
                 IndexedRecipeSearchResult(
                     uid: row["uid"],
                     name: row["name"],
@@ -265,6 +269,17 @@ public struct PantryStore: @unchecked Sendable {
                     starRating: row["star_rating"]
                 )
             }
+
+            return results
+                .filter {
+                    filters.matches(
+                        starRating: $0.starRating,
+                        isFavorite: $0.isFavorite,
+                        categories: $0.categories
+                    )
+                }
+                .prefix(max(1, limit))
+                .map { $0 }
         }
     }
 

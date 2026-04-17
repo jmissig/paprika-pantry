@@ -315,6 +315,99 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(exactRatingResults.map(\.uid), ["AAA", "BBB"])
     }
 
+    func testSearchRecipesAppliesCanonicalCategoryFiltersAfterFTSMatch() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Weeknight Salad", hash: "hash-ccc"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Soup"),
+                SourceRecipeCategory(uid: "CAT3", name: "Side"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categoryReferences: ["CAT1", "CAT2"],
+                    sourceName: nil,
+                    ingredients: "Broth",
+                    directions: nil,
+                    notes: "Lemon finish.",
+                    starRating: 4,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+                "BBB": SourceRecipe(
+                    uid: "BBB",
+                    name: "Tomato Soup",
+                    categoryReferences: ["CAT2"],
+                    sourceName: nil,
+                    ingredients: "Tomato",
+                    directions: nil,
+                    notes: "Weeknight easy.",
+                    starRating: 5,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-bbb",
+                    rawJSON: "{}"
+                ),
+                "CCC": SourceRecipe(
+                    uid: "CCC",
+                    name: "Weeknight Salad",
+                    categoryReferences: ["CAT3"],
+                    sourceName: nil,
+                    ingredients: "Lettuce",
+                    directions: nil,
+                    notes: nil,
+                    starRating: 3,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-ccc",
+                    rawJSON: "{}"
+                ),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let dinnerSoupResults = try store.searchRecipes(
+            query: "weeknight",
+            filters: RecipeQueryFilters(categoryNames: [" dinner ", "SOUP"]),
+            sort: .rating,
+            limit: 20
+        )
+        XCTAssertEqual(dinnerSoupResults.map(\.uid), ["AAA"])
+
+        let sideResults = try store.searchRecipes(
+            query: "weeknight",
+            filters: RecipeQueryFilters(categoryNames: ["side"]),
+            sort: .name,
+            limit: 20
+        )
+        XCTAssertEqual(sideResults.map(\.uid), ["CCC"])
+    }
+
     func testDerivedFeaturesPreferSourceTotalTimeWhenAvailable() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(

@@ -39,7 +39,7 @@ final class JSONOutputTests: XCTestCase {
                     updatedAt: "2026-04-02 10:00:00"
                 ),
             ],
-            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
+            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Dinner"]),
             sort: .rating
         )
 
@@ -49,6 +49,7 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"filters\""))
         XCTAssertTrue(recipesRendered.contains("\"favoritesOnly\" : true"))
         XCTAssertTrue(recipesRendered.contains("\"minRating\" : 4"))
+        XCTAssertTrue(recipesRendered.contains("\"categoryNames\""))
         XCTAssertTrue(recipesRendered.contains("\"sort\""))
         XCTAssertTrue(recipesRendered.contains("\"rating\""))
         XCTAssertTrue(recipesRendered.contains("\"categories\""))

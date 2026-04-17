@@ -137,7 +137,13 @@ public struct RecipeReadService: Sendable {
         }
 
         return recipes
-            .filter { filters.matches(starRating: $0.starRating, isFavorite: $0.isFavorite) }
+            .filter {
+                filters.matches(
+                    starRating: $0.starRating,
+                    isFavorite: $0.isFavorite,
+                    categories: $0.categories
+                )
+            }
             .sorted { Self.sortRecipes(lhs: $0, rhs: $1, by: sort) }
     }
 

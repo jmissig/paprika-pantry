@@ -19,11 +19,14 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List recipes from the configured pantry source with canonical rating/favorite filters."
+        abstract: "List recipes from the configured pantry source with canonical category, rating, and favorite filters."
     )
 
     @Flag(name: .long, help: "Only include recipes marked favorite in Paprika.")
     public var favorite: Bool = false
+
+    @Option(name: .long, help: "Require this canonical Paprika category/tag name. Repeat to require multiple categories.")
+    public var category: [String] = []
 
     @Option(name: .long, help: "Only include recipes rated at least this many stars (1-5).")
     public var minRating: Int?
@@ -37,7 +40,7 @@ public struct RecipesListCommand: PantryLeafCommand {
     public init() {}
 
     public mutating func validate() throws {
-        try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating)
+        try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
     }
 
     public mutating func run() throws {
@@ -47,7 +50,8 @@ public struct RecipesListCommand: PantryLeafCommand {
         let filters = RecipeQueryFilters(
             favoritesOnly: favorite,
             minRating: minRating,
-            maxRating: maxRating
+            maxRating: maxRating,
+            categoryNames: category
         )
         let recipes = try BlockingAsync.run {
             try await recipeReadService.listRecipes(filters: filters, sort: sort)
@@ -81,7 +85,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search recipes through the owned sidecar index with canonical rating/favorite filters."
+        abstract: "Search recipes through the owned sidecar index with canonical category, rating, and favorite filters."
     )
 
     @Argument(help: "Search query.")
@@ -89,6 +93,9 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
     @Flag(name: .long, help: "Only include recipes marked favorite in Paprika.")
     public var favorite: Bool = false
+
+    @Option(name: .long, help: "Require this canonical Paprika category/tag name. Repeat to require multiple categories.")
+    public var category: [String] = []
 
     @Option(name: .long, help: "Only include recipes rated at least this many stars (1-5).")
     public var minRating: Int?
@@ -105,7 +112,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
     public init() {}
 
     public mutating func validate() throws {
-        try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating)
+        try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
     }
 
     public mutating func run() throws {
@@ -127,7 +134,8 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         let filters = RecipeQueryFilters(
             favoritesOnly: favorite,
             minRating: minRating,
-            maxRating: maxRating
+            maxRating: maxRating,
+            categoryNames: category
         )
         let results = try store.searchRecipes(query: query, filters: filters, sort: sort, limit: limit)
         try context.write(
@@ -173,7 +181,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     }
 }
 
-private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?) throws {
+private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, categories: [String]) throws {
     if let minRating, !(1 ... 5).contains(minRating) {
         throw ValidationError("--min-rating must be between 1 and 5.")
     }
@@ -184,5 +192,9 @@ private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?) throws
 
     if let minRating, let maxRating, minRating > maxRating {
         throw ValidationError("--min-rating must be less than or equal to --max-rating.")
+    }
+
+    if categories.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        throw ValidationError("--category must not be empty.")
     }
 }

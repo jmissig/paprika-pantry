@@ -150,6 +150,34 @@ final class RecipeCommandResolutionTests: XCTestCase {
         XCTAssertEqual(listed.map(\.uid), ["AAA", "BBB"])
     }
 
+    func testListRecipesAppliesCanonicalCategoryFiltersCaseInsensitively() throws {
+        let service = makeRecipeReadService(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Sheet Pan Salmon", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Salad", hash: "hash-ccc"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Soup"),
+                SourceRecipeCategory(uid: "CAT3", name: "Side"),
+            ],
+            recipesByUID: [
+                "AAA": makeSourceRecipe(uid: "AAA", name: "Weeknight Soup", categories: ["CAT1", "CAT2"]),
+                "BBB": makeSourceRecipe(uid: "BBB", name: "Sheet Pan Salmon", categories: ["CAT1"]),
+                "CCC": makeSourceRecipe(uid: "CCC", name: "Salad", categories: ["CAT3"]),
+            ]
+        )
+
+        let listed = try BlockingAsync.run {
+            try await service.listRecipes(
+                filters: RecipeQueryFilters(categoryNames: [" dinner ", "SOUP"])
+            )
+        }
+
+        XCTAssertEqual(listed.map(\.uid), ["AAA"])
+    }
+
     func testListRecipesSortsByRatingThenFavoriteThenName() throws {
         let service = makeRecipeReadService(
             stubs: [
@@ -178,6 +206,10 @@ final class RecipeCommandResolutionTests: XCTestCase {
 
         XCTAssertThrowsError(
             try RecipesSearchCommand.parseAsRoot(["risotto", "--min-rating", "5", "--max-rating", "4"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesListCommand.parseAsRoot(["--category", "  "])
         )
     }
 

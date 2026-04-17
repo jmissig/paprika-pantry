@@ -16,13 +16,14 @@ final class QueryReportsTests: XCTestCase {
                     updatedAt: "2026-04-02 10:00:00"
                 ),
             ],
-            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
+            filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Side"]),
             sort: .rating
         )
 
         XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("min_rating: 4"))
+        XCTAssertTrue(report.humanDescription.contains("categories_all: Side"))
         XCTAssertTrue(report.humanDescription.contains("sort: rating"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
         XCTAssertTrue(report.humanDescription.contains("source=Serious Eats"))
@@ -121,7 +122,7 @@ final class QueryReportsTests: XCTestCase {
     func testRecipesSearchReportIncludesMatches() {
         let report = RecipesSearchReport(
             query: "lemon",
-            filters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4),
+            filters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4, categoryNames: ["Soup"]),
             sort: .rating,
             results: [
                 IndexedRecipeSearchResult(
@@ -140,6 +141,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("query: lemon"))
         XCTAssertTrue(report.humanDescription.contains("favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("max_rating: 4"))
+        XCTAssertTrue(report.humanDescription.contains("categories_all: Soup"))
         XCTAssertTrue(report.humanDescription.contains("sort: rating"))
         XCTAssertTrue(report.humanDescription.contains("AAA  Weeknight Soup"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))

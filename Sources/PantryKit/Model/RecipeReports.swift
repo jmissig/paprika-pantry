@@ -472,5 +472,9 @@ func renderedRecipeQueryFilters(_ filters: RecipeQueryFilters) -> [String] {
         lines.append("max_rating: \(maxRating)")
     }
 
+    if !filters.categoryNames.isEmpty {
+        lines.append("categories_all: \(filters.categoryNames.joined(separator: ", "))")
+    }
+
     return lines
 }
