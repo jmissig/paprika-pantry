@@ -11,7 +11,6 @@ final class SourceDoctorReportTests: XCTestCase {
                 sourceKind: .paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
-                credentialSource: nil,
                 sourceLocation: "/Users/test/Library/Group Containers/.../Paprika.sqlite",
                 schemaFlavor: "paprika-3-core-data",
                 accessMode: "read-only",
@@ -71,5 +70,34 @@ final class SourceDoctorReportTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("categories_deleted: 1"))
         XCTAssertTrue(report.humanDescription.contains("sample_recipe: Apple Cake [AAA] categories=Dessert"))
         XCTAssertTrue(report.humanDescription.contains("sample_failure: Broken Recipe [BBB] error=Missing recipe fixture for BBB."))
+    }
+
+    func testDoctorReportHighlightsMissingIndexBuild() {
+        let report = DoctorReport(
+            sourceSnapshot: PantrySourceDoctorSnapshot(
+                status: .ready,
+                message: "The configured pantry source is ready for direct read-only Paprika access.",
+                sourceKind: .paprikaSQLite,
+                displayName: "default Paprika SQLite",
+                implementation: "direct Paprika SQLite source",
+                sourceLocation: "/Users/test/Paprika.sqlite"
+            ),
+            indexStats: PantryIndexStats(
+                recipeSearchDocumentCount: 0,
+                lastRecipeSearchRun: nil,
+                lastSuccessfulRecipeSearchRun: nil
+            ),
+            paths: PantryPaths(
+                homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
+                configFile: URL(fileURLWithPath: "/tmp/pantry/config.json"),
+                databaseFile: URL(fileURLWithPath: "/tmp/pantry/pantry.sqlite")
+            ),
+            now: Date(timeIntervalSince1970: 1_712_736_180)
+        )
+
+        XCTAssertEqual(report.status, "needs-index")
+        XCTAssertTrue(report.humanDescription.contains("index_status: missing"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: never-built"))
+        XCTAssertTrue(report.humanDescription.contains("next_action: Run `paprika-pantry index rebuild`"))
     }
 }

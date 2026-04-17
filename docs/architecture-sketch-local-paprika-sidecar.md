@@ -2,7 +2,7 @@
 
 ## Summary
 
-`paprika-pantry` should pivot from a mirror-first design to a read-adapter-plus-sidecar design.
+`paprika-pantry` is a read-adapter-plus-sidecar design.
 
 Canonical facts live in Paprika's own local SQLite database.
 `paprika-pantry` reads those facts read-only, maps them into stable internal models, and maintains a separate sidecar database only for value-added local capabilities.
@@ -42,7 +42,7 @@ Paprika.sqlite (real source, read-only)
     -> optional PantrySidecar.sqlite
         -> FTS indexes
         -> denormalized helper tables
-        -> derived facts / clustering / patterns
+        -> derived facts / patterns
         -> bookkeeping
     -> CLI + agent-facing reports
 ```
@@ -100,9 +100,11 @@ Purpose:
 
 Good sidecar candidates:
 - full-text search indexes
+- derived recipe feature tables like normalized time, ingredient counts, and meal-role hints
+- source/cookbook aggregate tables
 - tokenized ingredient search helpers
-- recipe embeddings
-- co-occurrence / clustering tables
+- substitution, pairing, and co-occurrence tables with evidence counts
+- recipe embeddings when they add concrete query value
 - normalized denormalized projections for expensive queries
 - source fingerprint / refresh bookkeeping
 
@@ -110,6 +112,7 @@ Bad sidecar candidates:
 - wholesale duplication of every canonical Paprika row just because we can
 - write-back state for Paprika
 - a second shadow source of truth
+- opaque recommendation artifacts that cannot explain themselves
 
 ## Read strategy
 
@@ -154,6 +157,7 @@ That implies:
 General rule:
 - direct facts should come from Paprika
 - search and heavier analysis may come from the sidecar
+- sidecar-derived answers should be able to point back to evidence, counts, or contributing recipes
 
 ## Recommended file/module shape
 
@@ -168,7 +172,7 @@ Possible direction:
 - `Sources/PantryKit/CLI/SourceCommands.swift`
 - `Sources/PantryKit/CLI/IndexCommands.swift`
 
-Existing mirror-oriented code can be reused selectively, but should stop implying that full duplication is the default architecture.
+Legacy mirror-oriented code should be deleted or rewritten so the repo reflects the direct-source plus owned-sidecar architecture it actually ships today.
 
 ## Phased implementation plan
 
@@ -185,18 +189,37 @@ Existing mirror-oriented code can be reused selectively, but should stop implyin
 - define a minimal sidecar schema
 - add index bookkeeping and stats
 - implement one useful sidecar-backed feature, likely search
+- make freshness and provenance legible
 
-### Phase 3: broader data coverage
+### Phase 3: derived recipe features
+
+- derive normalized time facts
+- derive ingredient counts
+- derive lightweight meal-role hints like main or side when supported by evidence
+- support constraint-style queries over those features
+
+### Phase 4: source/cookbook aggregates
+
+- summarize ratings, favorites, and other household evidence by source/cookbook
+- support cookbook-quality and usage questions
+
+### Phase 5: ingredient normalization
+
+- normalize ingredient lines into queryable tokens
+- support ingredient-oriented lookup and use-up queries
+
+### Phase 6: pattern tables
+
+- substitutions
+- pairings
+- co-occurrence
+- other evidence-backed household cooking patterns
+
+### Phase 7: broader data coverage
 
 - add meals
 - add groceries
 - add pantry items if worthwhile
-
-### Phase 4: analysis features
-
-- pattern finding
-- clustering
-- richer derived fact extraction
 
 ## Tradeoff call
 

@@ -17,10 +17,10 @@ final class PantryConfigStoreTests: XCTestCase {
         let store = PantryConfigStore(paths: paths)
         let config = PantryConfig(
             source: PantrySourceConfiguration(
-                kind: .paprikaToken,
-                displayName: "legacy token",
-                paprikaToken: PaprikaTokenSourceConfiguration(
-                    tokenEnvironmentVariable: "PAPRIKA_PANTRY_SOURCE_TOKEN"
+                kind: .paprikaSQLite,
+                displayName: "local paprika",
+                paprikaSQLite: PaprikaSQLiteSourceConfiguration(
+                    databasePath: "/Users/test/Library/Group Containers/.../Paprika.sqlite"
                 )
             ),
             updatedAt: Date(timeIntervalSince1970: 1_712_736_000)

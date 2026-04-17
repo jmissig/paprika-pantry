@@ -7,7 +7,6 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let sourceKind: PantrySourceKind?
     public let displayName: String?
     public let implementation: String?
-    public let credentialSource: String?
     public let sourceLocation: String?
     public let schemaFlavor: String?
     public let accessMode: String?
@@ -23,7 +22,6 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.sourceKind = snapshot.sourceKind
         self.displayName = snapshot.displayName
         self.implementation = snapshot.implementation
-        self.credentialSource = snapshot.credentialSource
         self.sourceLocation = snapshot.sourceLocation
         self.schemaFlavor = snapshot.schemaFlavor
         self.accessMode = snapshot.accessMode
@@ -49,10 +47,6 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
 
         if let implementation, !implementation.isEmpty {
             lines.append("implementation: \(implementation)")
-        }
-
-        if let credentialSource, !credentialSource.isEmpty {
-            lines.append("credential_source: \(credentialSource)")
         }
 
         if let sourceLocation, !sourceLocation.isEmpty {
@@ -145,6 +139,112 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
 
         for failure in sampleFailures {
             lines.append("sample_failure: \(failure.name) [\(failure.uid)] error=\(failure.message)")
+        }
+
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
+    }
+}
+
+public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
+    public let command: String
+    public let status: String
+    public let message: String
+    public let sourceStatus: String
+    public let indexStatus: String
+    public let sourceKind: PantrySourceKind?
+    public let sourceLocation: String?
+    public let recipeSearchDocumentCount: Int
+    public let recipeSearchFreshnessSeconds: Int?
+    public let lastRecipeSearchRunStatus: String?
+    public let nextAction: String?
+    public let paths: PantryPathReport
+
+    public init(
+        sourceSnapshot: PantrySourceDoctorSnapshot,
+        indexStats: PantryIndexStats,
+        paths: PantryPaths,
+        now: Date
+    ) {
+        let indexFreshnessSeconds = indexStats.lastSuccessfulRecipeSearchRun.map {
+            max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
+        }
+        let indexStatus: String
+        let status: String
+        let message: String
+        let nextAction: String?
+
+        if sourceSnapshot.status != .ready {
+            indexStatus = "blocked"
+            status = "blocked"
+            message = sourceSnapshot.message
+            nextAction = "Make the local Paprika SQLite source readable, then rebuild indexes as needed."
+        } else if let lastRun = indexStats.lastRecipeSearchRun, lastRun.status == .failed,
+                  indexStats.lastSuccessfulRecipeSearchRun == nil {
+            indexStatus = "failed"
+            status = "needs-index"
+            message = "The direct source is ready, but the recipe search index is unavailable because the last rebuild failed."
+            nextAction = "Run `paprika-pantry index rebuild` after fixing the source issue."
+        } else if let lastRun = indexStats.lastRecipeSearchRun, lastRun.status == .failed {
+            indexStatus = "stale"
+            status = "stale"
+            message = "The direct source is ready, but the last index rebuild failed. Search data is from the previous successful rebuild."
+            nextAction = "Run `paprika-pantry index rebuild` to refresh the stale sidecar index."
+        } else if indexStats.recipeSearchReady {
+            indexStatus = "ready"
+            status = "ready"
+            message = "The direct source is ready and the recipe search index is available."
+            nextAction = nil
+        } else {
+            indexStatus = "missing"
+            status = "needs-index"
+            message = "The direct source is ready, but the recipe search index has not been built yet."
+            nextAction = "Run `paprika-pantry index rebuild` to populate sidecar search."
+        }
+
+        self.command = "doctor"
+        self.status = status
+        self.message = message
+        self.sourceStatus = sourceSnapshot.status.rawValue
+        self.indexStatus = indexStatus
+        self.sourceKind = sourceSnapshot.sourceKind
+        self.sourceLocation = sourceSnapshot.sourceLocation
+        self.recipeSearchDocumentCount = indexStats.recipeSearchDocumentCount
+        self.recipeSearchFreshnessSeconds = indexFreshnessSeconds
+        self.lastRecipeSearchRunStatus = indexStats.lastRecipeSearchRun?.status.rawValue
+        self.nextAction = nextAction
+        self.paths = paths.report
+    }
+
+    public var humanDescription: String {
+        var lines = [
+            "\(command): \(message)",
+            "status: \(status)",
+            "source_status: \(sourceStatus)",
+            "index_status: \(indexStatus)",
+            "recipe_search_documents: \(recipeSearchDocumentCount)",
+        ]
+
+        if let sourceKind {
+            lines.append("source_kind: \(sourceKind.rawValue)")
+        }
+
+        if let sourceLocation, !sourceLocation.isEmpty {
+            lines.append("source_location: \(sourceLocation)")
+        }
+
+        if let lastRecipeSearchRunStatus, !lastRecipeSearchRunStatus.isEmpty {
+            lines.append("recipe_search_last_run_status: \(lastRecipeSearchRunStatus)")
+        }
+
+        if let recipeSearchFreshnessSeconds {
+            lines.append("recipe_search_freshness: \(renderedDuration(seconds: recipeSearchFreshnessSeconds)) old")
+        } else {
+            lines.append("recipe_search_freshness: never-built")
+        }
+
+        if let nextAction, !nextAction.isEmpty {
+            lines.append("next_action: \(nextAction)")
         }
 
         lines.append(renderedPaths(paths))

@@ -1,256 +1,94 @@
 import Foundation
 import GRDB
 
-public struct MirroredRecipeInput: Equatable, Sendable {
-    public let uid: String
-    public let name: String
-    public let categories: [String]
-    public let sourceName: String?
-    public let ingredients: String?
-    public let directions: String?
-    public let notes: String?
-    public let starRating: Int?
-    public let isFavorite: Bool
-    public let prepTime: String?
-    public let cookTime: String?
-    public let totalTime: String?
-    public let servings: String?
-    public let createdAt: String?
-    public let updatedAt: String?
-    public let remoteHash: String?
-    public let rawJSON: String
-
-    public init(
-        uid: String,
-        name: String,
-        categories: [String],
-        sourceName: String?,
-        ingredients: String?,
-        directions: String?,
-        notes: String?,
-        starRating: Int?,
-        isFavorite: Bool,
-        prepTime: String?,
-        cookTime: String?,
-        totalTime: String?,
-        servings: String?,
-        createdAt: String?,
-        updatedAt: String?,
-        remoteHash: String?,
-        rawJSON: String
-    ) {
-        self.uid = uid
-        self.name = name
-        self.categories = categories
-        self.sourceName = sourceName
-        self.ingredients = ingredients
-        self.directions = directions
-        self.notes = notes
-        self.starRating = starRating
-        self.isFavorite = isFavorite
-        self.prepTime = prepTime
-        self.cookTime = cookTime
-        self.totalTime = totalTime
-        self.servings = servings
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.remoteHash = remoteHash
-        self.rawJSON = rawJSON
-    }
-}
-
-public struct RecipeMirrorIndexEntry: Equatable, Sendable {
-    public let uid: String
-    public let remoteHash: String?
-    public let isDeleted: Bool
-
-    public init(uid: String, remoteHash: String?, isDeleted: Bool) {
-        self.uid = uid
-        self.remoteHash = remoteHash
-        self.isDeleted = isDeleted
-    }
-}
-
-public struct MirroredRecipe: Codable, Equatable, Sendable {
-    public let uid: String
-    public let name: String
-    public let categories: [String]
-    public let sourceName: String?
-    public let ingredients: String?
-    public let directions: String?
-    public let notes: String?
-    public let starRating: Int?
-    public let isFavorite: Bool
-    public let prepTime: String?
-    public let cookTime: String?
-    public let totalTime: String?
-    public let servings: String?
-    public let createdAt: String?
-    public let updatedAt: String?
-    public let remoteHash: String?
-    public let isDeleted: Bool
-    public let lastSyncedAt: Date?
-    public let rawJSON: String
-
-    public init(
-        uid: String,
-        name: String,
-        categories: [String],
-        sourceName: String?,
-        ingredients: String?,
-        directions: String?,
-        notes: String?,
-        starRating: Int?,
-        isFavorite: Bool,
-        prepTime: String?,
-        cookTime: String?,
-        totalTime: String?,
-        servings: String?,
-        createdAt: String?,
-        updatedAt: String?,
-        remoteHash: String?,
-        isDeleted: Bool,
-        lastSyncedAt: Date?,
-        rawJSON: String
-    ) {
-        self.uid = uid
-        self.name = name
-        self.categories = categories
-        self.sourceName = sourceName
-        self.ingredients = ingredients
-        self.directions = directions
-        self.notes = notes
-        self.starRating = starRating
-        self.isFavorite = isFavorite
-        self.prepTime = prepTime
-        self.cookTime = cookTime
-        self.totalTime = totalTime
-        self.servings = servings
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.remoteHash = remoteHash
-        self.isDeleted = isDeleted
-        self.lastSyncedAt = lastSyncedAt
-        self.rawJSON = rawJSON
-    }
-}
-
-public struct MirroredRecipeSummary: Codable, Equatable, Sendable {
-    public let uid: String
-    public let name: String
-    public let categories: [String]
-    public let sourceName: String?
-    public let starRating: Int?
-    public let isFavorite: Bool
-    public let updatedAt: String?
-    public let lastSyncedAt: Date?
-
-    public init(
-        uid: String,
-        name: String,
-        categories: [String],
-        sourceName: String?,
-        starRating: Int?,
-        isFavorite: Bool,
-        updatedAt: String?,
-        lastSyncedAt: Date?
-    ) {
-        self.uid = uid
-        self.name = name
-        self.categories = categories
-        self.sourceName = sourceName
-        self.starRating = starRating
-        self.isFavorite = isFavorite
-        self.updatedAt = updatedAt
-        self.lastSyncedAt = lastSyncedAt
-    }
-}
-
-public enum PantrySyncRunStatus: String, Codable, Equatable, Sendable {
+public enum PantryIndexRunStatus: String, Codable, Equatable, Sendable {
     case running
     case success
     case failed
 }
 
-public struct PantrySyncRun: Codable, Equatable, Sendable {
+public struct PantryIndexRun: Codable, Equatable, Sendable {
     public let id: Int64
     public let startedAt: Date
     public let finishedAt: Date?
-    public let status: PantrySyncRunStatus
-    public let recipesSeen: Int
-    public let recipesChanged: Int
-    public let recipesDeleted: Int
+    public let status: PantryIndexRunStatus
+    public let indexName: String
+    public let recipeCount: Int
     public let errorMessage: String?
 
     public init(
         id: Int64,
         startedAt: Date,
         finishedAt: Date?,
-        status: PantrySyncRunStatus,
-        recipesSeen: Int,
-        recipesChanged: Int,
-        recipesDeleted: Int,
+        status: PantryIndexRunStatus,
+        indexName: String,
+        recipeCount: Int,
         errorMessage: String?
     ) {
         self.id = id
         self.startedAt = startedAt
         self.finishedAt = finishedAt
         self.status = status
-        self.recipesSeen = recipesSeen
-        self.recipesChanged = recipesChanged
-        self.recipesDeleted = recipesDeleted
+        self.indexName = indexName
+        self.recipeCount = recipeCount
         self.errorMessage = errorMessage
     }
 }
 
-public struct PantrySyncStatusSnapshot: Codable, Equatable, Sendable {
-    public let lastAttempt: PantrySyncRun?
-    public let lastSuccess: PantrySyncRun?
-    public let totalRecipeCount: Int
-    public let activeRecipeCount: Int
-    public let deletedRecipeCount: Int
+public struct PantryIndexStats: Codable, Equatable, Sendable {
+    public let recipeSearchDocumentCount: Int
+    public let lastRecipeSearchRun: PantryIndexRun?
+    public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
 
     public init(
-        lastAttempt: PantrySyncRun?,
-        lastSuccess: PantrySyncRun?,
-        totalRecipeCount: Int,
-        activeRecipeCount: Int,
-        deletedRecipeCount: Int
+        recipeSearchDocumentCount: Int,
+        lastRecipeSearchRun: PantryIndexRun?,
+        lastSuccessfulRecipeSearchRun: PantryIndexRun?
     ) {
-        self.lastAttempt = lastAttempt
-        self.lastSuccess = lastSuccess
-        self.totalRecipeCount = totalRecipeCount
-        self.activeRecipeCount = activeRecipeCount
-        self.deletedRecipeCount = deletedRecipeCount
+        self.recipeSearchDocumentCount = recipeSearchDocumentCount
+        self.lastRecipeSearchRun = lastRecipeSearchRun
+        self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
     }
 
-    public var hasSuccessfulSync: Bool {
-        lastSuccess != nil
+    public var recipeSearchReady: Bool {
+        recipeSearchDocumentCount > 0 && lastSuccessfulRecipeSearchRun != nil
     }
 }
 
-public struct PantryDatabaseStats: Codable, Equatable, Sendable {
-    public let totalRecipeCount: Int
-    public let activeRecipeCount: Int
-    public let deletedRecipeCount: Int
-    public let favoriteRecipeCount: Int
-    public let categoryLinkCount: Int
-    public let syncRunCount: Int
+public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
+    public let uid: String
+    public let name: String
+    public let categories: [String]
+    public let sourceName: String?
+    public let isFavorite: Bool
+    public let starRating: Int?
 
     public init(
-        totalRecipeCount: Int,
-        activeRecipeCount: Int,
-        deletedRecipeCount: Int,
-        favoriteRecipeCount: Int,
-        categoryLinkCount: Int,
-        syncRunCount: Int
+        uid: String,
+        name: String,
+        categories: [String],
+        sourceName: String?,
+        isFavorite: Bool,
+        starRating: Int?
     ) {
-        self.totalRecipeCount = totalRecipeCount
-        self.activeRecipeCount = activeRecipeCount
-        self.deletedRecipeCount = deletedRecipeCount
-        self.favoriteRecipeCount = favoriteRecipeCount
-        self.categoryLinkCount = categoryLinkCount
-        self.syncRunCount = syncRunCount
+        self.uid = uid
+        self.name = name
+        self.categories = categories
+        self.sourceName = sourceName
+        self.isFavorite = isFavorite
+        self.starRating = starRating
+    }
+}
+
+public struct RecipeSearchIndexRebuildSummary: Codable, Equatable, Sendable {
+    public let startedAt: Date
+    public let finishedAt: Date
+    public let recipeCount: Int
+
+    public init(startedAt: Date, finishedAt: Date, recipeCount: Int) {
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.recipeCount = recipeCount
     }
 }
 
@@ -261,494 +99,336 @@ public struct PantryStore: @unchecked Sendable {
         self.dbQueue = dbQueue
     }
 
-    public func write(_ updates: (Database) throws -> Void) throws {
-        try dbQueue.write(updates)
+    public func indexStats() throws -> PantryIndexStats {
+        try dbQueue.read { db in
+            PantryIndexStats(
+                recipeSearchDocumentCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents") ?? 0,
+                lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
+                lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db)
+            )
+        }
     }
 
-    public func fetchRecipeIndex() throws -> [String: RecipeMirrorIndexEntry] {
-        try dbQueue.read { db in
+    public func searchRecipes(query: String, limit: Int = 20) throws -> [IndexedRecipeSearchResult] {
+        let normalizedQuery = Self.normalizedSearchQuery(query)
+        guard !normalizedQuery.isEmpty else {
+            return []
+        }
+
+        return try dbQueue.read { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT uid, remote_hash, is_deleted
-                FROM recipes
-                """
-            )
-
-            return Dictionary(uniqueKeysWithValues: rows.map { row in
-                let uid: String = row["uid"]
-                let entry = RecipeMirrorIndexEntry(
-                    uid: uid,
-                    remoteHash: row["remote_hash"],
-                    isDeleted: row["is_deleted"]
+                SELECT uid, name, categories, source_name, is_favorite, star_rating
+                FROM recipe_search_documents
+                WHERE uid IN (
+                    SELECT uid
+                    FROM recipe_search_fts
+                    WHERE recipe_search_fts MATCH ?
                 )
-                return (uid, entry)
-            })
-        }
-    }
-
-    public func upsertRecipe(_ recipe: MirroredRecipeInput, syncedAt: Date) throws {
-        try dbQueue.write { db in
-            try upsertRecipe(recipe, syncedAt: syncedAt, in: db)
-        }
-    }
-
-    public func listRecipes() throws -> [MirroredRecipeSummary] {
-        try dbQueue.read { db in
-            let rows = try RecipeRow.fetchAll(
-                db,
-                sql: """
-                SELECT *
-                FROM recipes
-                WHERE is_deleted = 0
                 ORDER BY name COLLATE NOCASE ASC, uid ASC
-                """
+                LIMIT ?
+                """,
+                arguments: [normalizedQuery, max(1, limit)]
             )
-            let categoriesByUID = try fetchCategoriesByRecipeUID(for: rows.map(\.uid), db: db)
 
             return rows.map { row in
-                MirroredRecipeSummary(
-                    uid: row.uid,
-                    name: row.name,
-                    categories: categoriesByUID[row.uid] ?? [],
-                    sourceName: row.sourceName,
-                    starRating: row.starRating,
-                    isFavorite: row.isFavorite,
-                    updatedAt: row.updatedAt,
-                    lastSyncedAt: DatabaseTimestamp.decode(row.lastSyncedAt)
+                IndexedRecipeSearchResult(
+                    uid: row["uid"],
+                    name: row["name"],
+                    categories: Self.decodeCategories(row["categories"]),
+                    sourceName: row["source_name"],
+                    isFavorite: row["is_favorite"],
+                    starRating: row["star_rating"]
                 )
             }
         }
     }
 
-    public func fetchRecipe(uid: String) throws -> MirroredRecipe? {
-        try dbQueue.read { db in
-            guard let row = try RecipeRow.fetchOne(
-                db,
-                sql: """
-                SELECT *
-                FROM recipes
-                WHERE uid = ? AND is_deleted = 0
-                """,
-                arguments: [uid]
-            ) else {
-                return nil
+    public func rebuildRecipeSearchIndex(
+        from source: any PantrySource,
+        now: @escaping @Sendable () -> Date = Date.init
+    ) async throws -> RecipeSearchIndexRebuildSummary {
+        let startedAt = now()
+        let runID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
+
+        do {
+            let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
+            let stubs = try await source.listRecipeStubs()
+            let activeStubs = stubs.filter { !$0.isDeleted }
+
+            var documents = [RecipeSearchDocument]()
+            documents.reserveCapacity(activeStubs.count)
+
+            for stub in activeStubs {
+                let recipe = try await source.fetchRecipe(uid: stub.uid)
+                documents.append(
+                    RecipeSearchDocument(
+                        uid: recipe.uid,
+                        name: recipe.name,
+                        categories: resolvedCategories(
+                            recipe.categoryReferences,
+                            categoryNamesByUID: categoryNamesByUID
+                        ),
+                        sourceName: recipe.sourceName,
+                        ingredients: recipe.ingredients,
+                        notes: recipe.notes,
+                        remoteHash: recipe.remoteHash,
+                        isFavorite: recipe.isFavorite,
+                        starRating: recipe.starRating
+                    )
+                )
             }
 
-            let categories = try fetchCategories(recipeUID: uid, db: db)
-            return mirroredRecipe(from: row, categories: categories)
-        }
-    }
+            let finishedAt = now()
+            let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
+            let recipeCount = sortedDocuments.count
+            try await dbQueue.write { db in
+                try db.execute(sql: "DELETE FROM recipe_search_documents")
+                try db.execute(sql: "DELETE FROM recipe_search_fts")
 
-    public func fetchRecipes(namedExactlyCaseInsensitive name: String) throws -> [MirroredRecipe] {
-        try dbQueue.read { db in
-            let rows = try RecipeRow.fetchAll(
-                db,
-                sql: """
-                SELECT *
-                FROM recipes
-                WHERE is_deleted = 0
-                  AND lower(name) = lower(?)
-                ORDER BY uid ASC
-                """,
-                arguments: [name]
+                for document in sortedDocuments {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO recipe_search_documents (
+                            uid,
+                            name,
+                            categories,
+                            source_name,
+                            ingredients,
+                            notes,
+                            remote_hash,
+                            indexed_at,
+                            is_favorite,
+                            star_rating
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            document.uid,
+                            document.name,
+                            Self.encodeCategories(document.categories),
+                            document.sourceName,
+                            document.ingredients,
+                            document.notes,
+                            document.remoteHash,
+                            DatabaseTimestamp.encode(finishedAt),
+                            document.isFavorite,
+                            document.starRating,
+                        ]
+                    )
+
+                    try db.execute(
+                        sql: """
+                        INSERT INTO recipe_search_fts (
+                            uid,
+                            name,
+                            categories,
+                            source_name,
+                            ingredients,
+                            notes
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            document.uid,
+                            document.name,
+                            document.categories.joined(separator: " "),
+                            document.sourceName,
+                            document.ingredients,
+                            document.notes,
+                        ]
+                    )
+                }
+
+                try finishIndexRun(
+                    id: runID,
+                    status: .success,
+                    finishedAt: finishedAt,
+                    recipeCount: recipeCount,
+                    errorMessage: nil,
+                    in: db
+                )
+            }
+
+            return RecipeSearchIndexRebuildSummary(
+                startedAt: startedAt,
+                finishedAt: finishedAt,
+                recipeCount: recipeCount
             )
-            let categoriesByUID = try fetchCategoriesByRecipeUID(for: rows.map(\.uid), db: db)
-            return rows.map { mirroredRecipe(from: $0, categories: categoriesByUID[$0.uid] ?? []) }
+        } catch {
+            try finishIndexRun(
+                id: runID,
+                status: .failed,
+                finishedAt: now(),
+                recipeCount: 0,
+                errorMessage: String(describing: error)
+            )
+            throw error
         }
     }
 
-    public func tombstoneRecipes(missingFrom remoteUIDs: Set<String>, syncedAt: Date) throws -> Int {
-        try dbQueue.write { db in
-            try tombstoneRecipes(missingFrom: remoteUIDs, syncedAt: syncedAt, in: db)
-        }
+    private func latestIndexRun(named indexName: String, db: Database) throws -> PantryIndexRun? {
+        try fetchIndexRun(
+            db,
+            sql: """
+            SELECT *
+            FROM index_runs
+            WHERE index_name = ?
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+            """,
+            arguments: [indexName]
+        )
     }
 
-    public func startSyncRun(startedAt: Date) throws -> Int64 {
+    private func latestSuccessfulIndexRun(named indexName: String, db: Database) throws -> PantryIndexRun? {
+        try fetchIndexRun(
+            db,
+            sql: """
+            SELECT *
+            FROM index_runs
+            WHERE index_name = ? AND status = ?
+            ORDER BY finished_at DESC, id DESC
+            LIMIT 1
+            """,
+            arguments: [indexName, PantryIndexRunStatus.success.rawValue]
+        )
+    }
+
+    private func fetchIndexRun(
+        _ db: Database,
+        sql: String,
+        arguments: StatementArguments = StatementArguments()
+    ) throws -> PantryIndexRun? {
+        guard let row = try IndexRunRow.fetchOne(db, sql: sql, arguments: arguments) else {
+            return nil
+        }
+
+        return PantryIndexRun(
+            id: row.id,
+            startedAt: DatabaseTimestamp.decodeRequired(row.startedAt),
+            finishedAt: DatabaseTimestamp.decode(row.finishedAt),
+            status: PantryIndexRunStatus(rawValue: row.status) ?? .failed,
+            indexName: row.indexName,
+            recipeCount: row.recipeCount,
+            errorMessage: row.errorMessage
+        )
+    }
+
+    private func startIndexRun(named indexName: String, startedAt: Date) throws -> Int64 {
         try dbQueue.write { db in
             try db.execute(
                 sql: """
-                INSERT INTO sync_runs (
+                INSERT INTO index_runs (
                     started_at,
-                    status
-                ) VALUES (?, ?)
+                    status,
+                    index_name
+                ) VALUES (?, ?, ?)
                 """,
                 arguments: [
                     DatabaseTimestamp.encode(startedAt),
-                    PantrySyncRunStatus.running.rawValue,
+                    PantryIndexRunStatus.running.rawValue,
+                    indexName,
                 ]
             )
             return db.lastInsertedRowID
         }
     }
 
-    public func finishSyncRun(
+    private func finishIndexRun(
         id: Int64,
-        status: PantrySyncRunStatus,
+        status: PantryIndexRunStatus,
         finishedAt: Date,
-        recipesSeen: Int,
-        recipesChanged: Int,
-        recipesDeleted: Int,
+        recipeCount: Int,
         errorMessage: String?
     ) throws {
         try dbQueue.write { db in
-            try finishSyncRun(
+            try finishIndexRun(
                 id: id,
                 status: status,
                 finishedAt: finishedAt,
-                recipesSeen: recipesSeen,
-                recipesChanged: recipesChanged,
-                recipesDeleted: recipesDeleted,
+                recipeCount: recipeCount,
                 errorMessage: errorMessage,
                 in: db
             )
         }
     }
 
-    public func latestSyncRun() throws -> PantrySyncRun? {
-        try dbQueue.read { db in
-            try fetchSyncRun(
-                db,
-                sql: """
-                SELECT *
-                FROM sync_runs
-                ORDER BY started_at DESC, id DESC
-                LIMIT 1
-                """
-            )
-        }
-    }
-
-    public func latestSuccessfulSyncRun() throws -> PantrySyncRun? {
-        try dbQueue.read { db in
-            try fetchSyncRun(
-                db,
-                sql: """
-                SELECT *
-                FROM sync_runs
-                WHERE status = ?
-                ORDER BY finished_at DESC, id DESC
-                LIMIT 1
-                """,
-                arguments: [PantrySyncRunStatus.success.rawValue]
-            )
-        }
-    }
-
-    public func syncStatus() throws -> PantrySyncStatusSnapshot {
-        let stats = try stats()
-        return PantrySyncStatusSnapshot(
-            lastAttempt: try latestSyncRun(),
-            lastSuccess: try latestSuccessfulSyncRun(),
-            totalRecipeCount: stats.totalRecipeCount,
-            activeRecipeCount: stats.activeRecipeCount,
-            deletedRecipeCount: stats.deletedRecipeCount
-        )
-    }
-
-    public func stats() throws -> PantryDatabaseStats {
-        try dbQueue.read { db in
-            PantryDatabaseStats(
-                totalRecipeCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipes") ?? 0,
-                activeRecipeCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipes WHERE is_deleted = 0") ?? 0,
-                deletedRecipeCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipes WHERE is_deleted = 1") ?? 0,
-                favoriteRecipeCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipes WHERE is_deleted = 0 AND is_favorite = 1") ?? 0,
-                categoryLinkCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_categories") ?? 0,
-                syncRunCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sync_runs") ?? 0
-            )
-        }
-    }
-
-    func upsertRecipe(_ recipe: MirroredRecipeInput, syncedAt: Date, in db: Database) throws {
-        try db.execute(
-            sql: """
-            INSERT INTO recipes (
-                uid,
-                name,
-                source_name,
-                ingredients,
-                directions,
-                notes,
-                star_rating,
-                is_favorite,
-                prep_time,
-                cook_time,
-                total_time,
-                servings,
-                created_at,
-                updated_at,
-                remote_hash,
-                is_deleted,
-                last_synced_at,
-                raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-            ON CONFLICT(uid) DO UPDATE SET
-                name = excluded.name,
-                source_name = excluded.source_name,
-                ingredients = excluded.ingredients,
-                directions = excluded.directions,
-                notes = excluded.notes,
-                star_rating = excluded.star_rating,
-                is_favorite = excluded.is_favorite,
-                prep_time = excluded.prep_time,
-                cook_time = excluded.cook_time,
-                total_time = excluded.total_time,
-                servings = excluded.servings,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at,
-                remote_hash = excluded.remote_hash,
-                is_deleted = 0,
-                last_synced_at = excluded.last_synced_at,
-                raw_json = excluded.raw_json
-            """,
-            arguments: [
-                recipe.uid,
-                recipe.name,
-                recipe.sourceName,
-                recipe.ingredients,
-                recipe.directions,
-                recipe.notes,
-                recipe.starRating,
-                recipe.isFavorite,
-                recipe.prepTime,
-                recipe.cookTime,
-                recipe.totalTime,
-                recipe.servings,
-                recipe.createdAt,
-                recipe.updatedAt,
-                recipe.remoteHash,
-                DatabaseTimestamp.encode(syncedAt),
-                recipe.rawJSON,
-            ]
-        )
-
-        try replaceCategories(recipe.categories, forRecipeUID: recipe.uid, in: db)
-    }
-
-    func replaceCategories(_ categories: [String], forRecipeUID recipeUID: String, in db: Database) throws {
-        try db.execute(
-            sql: "DELETE FROM recipe_categories WHERE recipe_uid = ?",
-            arguments: [recipeUID]
-        )
-
-        for category in normalizedCategories(categories) {
-            try db.execute(
-                sql: """
-                INSERT INTO recipe_categories (
-                    recipe_uid,
-                    category_name
-                ) VALUES (?, ?)
-                """,
-                arguments: [recipeUID, category]
-            )
-        }
-    }
-
-    func tombstoneRecipes(missingFrom remoteUIDs: Set<String>, syncedAt: Date, in db: Database) throws -> Int {
-        let localUIDs = Set(try String.fetchAll(
-            db,
-            sql: """
-            SELECT uid
-            FROM recipes
-            WHERE is_deleted = 0
-            """
-        ))
-
-        let missingUIDs = localUIDs.subtracting(remoteUIDs)
-        guard !missingUIDs.isEmpty else {
-            return 0
-        }
-
-        let timestamp = DatabaseTimestamp.encode(syncedAt)
-        for uid in missingUIDs.sorted() {
-            try db.execute(
-                sql: """
-                UPDATE recipes
-                SET is_deleted = 1,
-                    last_synced_at = ?
-                WHERE uid = ?
-                """,
-                arguments: [timestamp, uid]
-            )
-        }
-
-        return missingUIDs.count
-    }
-
-    func finishSyncRun(
+    private func finishIndexRun(
         id: Int64,
-        status: PantrySyncRunStatus,
+        status: PantryIndexRunStatus,
         finishedAt: Date,
-        recipesSeen: Int,
-        recipesChanged: Int,
-        recipesDeleted: Int,
+        recipeCount: Int,
         errorMessage: String?,
         in db: Database
     ) throws {
         try db.execute(
             sql: """
-            UPDATE sync_runs
+            UPDATE index_runs
             SET finished_at = ?,
                 status = ?,
-                recipes_seen = ?,
-                recipes_changed = ?,
-                recipes_deleted = ?,
+                recipe_count = ?,
                 error_message = ?
             WHERE id = ?
             """,
             arguments: [
                 DatabaseTimestamp.encode(finishedAt),
                 status.rawValue,
-                recipesSeen,
-                recipesChanged,
-                recipesDeleted,
+                recipeCount,
                 errorMessage,
                 id,
             ]
         )
     }
 
-    private func mirroredRecipe(from row: RecipeRow, categories: [String]) -> MirroredRecipe {
-        MirroredRecipe(
-            uid: row.uid,
-            name: row.name,
-            categories: categories,
-            sourceName: row.sourceName,
-            ingredients: row.ingredients,
-            directions: row.directions,
-            notes: row.notes,
-            starRating: row.starRating,
-            isFavorite: row.isFavorite,
-            prepTime: row.prepTime,
-            cookTime: row.cookTime,
-            totalTime: row.totalTime,
-            servings: row.servings,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            remoteHash: row.remoteHash,
-            isDeleted: row.isDeleted,
-            lastSyncedAt: DatabaseTimestamp.decode(row.lastSyncedAt),
-            rawJSON: row.rawJSON
+    private func loadCategoryNamesByUID(from source: any PantrySource) async throws -> [String: String] {
+        let categories = try await source.listRecipeCategories()
+        return Dictionary(
+            uniqueKeysWithValues: categories
+                .filter { !$0.isDeleted }
+                .map { ($0.uid, $0.name) }
         )
     }
 
-    private func fetchCategories(recipeUID: String, db: Database) throws -> [String] {
-        try String.fetchAll(
-            db,
-            sql: """
-            SELECT category_name
-            FROM recipe_categories
-            WHERE recipe_uid = ?
-            ORDER BY category_name COLLATE NOCASE ASC
-            """,
-            arguments: [recipeUID]
-        )
+    private func resolvedCategories(
+        _ references: [String],
+        categoryNamesByUID: [String: String]
+    ) -> [String] {
+        references.map { categoryNamesByUID[$0] ?? $0 }
     }
 
-    private func fetchCategoriesByRecipeUID(for recipeUIDs: [String], db: Database) throws -> [String: [String]] {
-        guard !recipeUIDs.isEmpty else {
-            return [:]
+    private static let recipeSearchIndexName = "recipe-search"
+
+    private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
+        if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
+            return lhs.uid < rhs.uid
         }
 
-        let rows = try RecipeCategoryRow
-            .filter(recipeUIDs.contains(Column("recipe_uid")))
-            .order(Column("category_name").collating(.nocase))
-            .fetchAll(db)
-
-        return rows.reduce(into: [:]) { partialResult, row in
-            partialResult[row.recipeUID, default: []].append(row.categoryName)
-        }
+        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
 
-    private func fetchSyncRun(
-        _ db: Database,
-        sql: String,
-        arguments: StatementArguments = StatementArguments()
-    ) throws -> PantrySyncRun? {
-        guard let row = try SyncRunRow.fetchOne(db, sql: sql, arguments: arguments) else {
-            return nil
-        }
-
-        return PantrySyncRun(
-            id: row.id,
-            startedAt: DatabaseTimestamp.decodeRequired(row.startedAt),
-            finishedAt: DatabaseTimestamp.decode(row.finishedAt),
-            status: PantrySyncRunStatus(rawValue: row.status) ?? .failed,
-            recipesSeen: row.recipesSeen,
-            recipesChanged: row.recipesChanged,
-            recipesDeleted: row.recipesDeleted,
-            errorMessage: row.errorMessage
-        )
+    private static func normalizedSearchQuery(_ query: String) -> String {
+        query
+            .split(whereSeparator: \.isWhitespace)
+            .map { "\"\($0.replacing("\"", with: "\"\""))\"" }
+            .joined(separator: " ")
     }
 
-    private func normalizedCategories(_ categories: [String]) -> [String] {
-        Array(Set(categories.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }))
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    private static func encodeCategories(_ categories: [String]) -> String {
+        categories.joined(separator: "\u{1F}")
+    }
+
+    private static func decodeCategories(_ value: String) -> [String] {
+        value.split(separator: "\u{1F}").map(String.init)
     }
 }
 
-private struct RecipeRow: FetchableRecord, Decodable {
-    let uid: String
-    let name: String
-    let sourceName: String?
-    let ingredients: String?
-    let directions: String?
-    let notes: String?
-    let starRating: Int?
-    let isFavorite: Bool
-    let prepTime: String?
-    let cookTime: String?
-    let totalTime: String?
-    let servings: String?
-    let createdAt: String?
-    let updatedAt: String?
-    let remoteHash: String?
-    let isDeleted: Bool
-    let lastSyncedAt: String?
-    let rawJSON: String
-
-    enum CodingKeys: String, CodingKey {
-        case uid
-        case name
-        case sourceName = "source_name"
-        case ingredients
-        case directions
-        case notes
-        case starRating = "star_rating"
-        case isFavorite = "is_favorite"
-        case prepTime = "prep_time"
-        case cookTime = "cook_time"
-        case totalTime = "total_time"
-        case servings
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case remoteHash = "remote_hash"
-        case isDeleted = "is_deleted"
-        case lastSyncedAt = "last_synced_at"
-        case rawJSON = "raw_json"
-    }
-}
-
-private struct RecipeCategoryRow: FetchableRecord, Decodable, TableRecord {
-    static let databaseTableName = "recipe_categories"
-
-    let recipeUID: String
-    let categoryName: String
-
-    enum CodingKeys: String, CodingKey {
-        case recipeUID = "recipe_uid"
-        case categoryName = "category_name"
-    }
-}
-
-private struct SyncRunRow: FetchableRecord, Decodable {
+private struct IndexRunRow: FetchableRecord, Decodable {
     let id: Int64
     let startedAt: String
     let finishedAt: String?
     let status: String
-    let recipesSeen: Int
-    let recipesChanged: Int
-    let recipesDeleted: Int
+    let indexName: String
+    let recipeCount: Int
     let errorMessage: String?
 
     enum CodingKeys: String, CodingKey {
@@ -756,11 +436,22 @@ private struct SyncRunRow: FetchableRecord, Decodable {
         case startedAt = "started_at"
         case finishedAt = "finished_at"
         case status
-        case recipesSeen = "recipes_seen"
-        case recipesChanged = "recipes_changed"
-        case recipesDeleted = "recipes_deleted"
+        case indexName = "index_name"
+        case recipeCount = "recipe_count"
         case errorMessage = "error_message"
     }
+}
+
+private struct RecipeSearchDocument: Equatable, Sendable {
+    let uid: String
+    let name: String
+    let categories: [String]
+    let sourceName: String?
+    let ingredients: String?
+    let notes: String?
+    let remoteHash: String?
+    let isFavorite: Bool
+    let starRating: Int?
 }
 
 enum DatabaseTimestamp {
@@ -775,17 +466,14 @@ enum DatabaseTimestamp {
             return nil
         }
 
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) {
-            return date
-        }
-
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
+        return decodeRequired(value)
     }
 
     static func decodeRequired(_ value: String) -> Date {
-        decode(value) ?? Date(timeIntervalSince1970: 0)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
+            ?? ISO8601DateFormatter().date(from: value)
+            ?? Date(timeIntervalSince1970: 0)
     }
 }

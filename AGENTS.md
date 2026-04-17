@@ -129,7 +129,9 @@ SQLite sidecar storage is for things we own.
 The sidecar should store only data that adds value beyond direct Paprika reads, for example:
 - FTS/search indexes
 - denormalized helper tables
-- embeddings or clustering artifacts
+- derived recipe feature tables like time, ingredient count, and meal-role hints
+- source/cookbook aggregate tables
+- ingredient normalization artifacts
 - pattern-detection outputs
 - cached derived facts
 - index/update bookkeeping
@@ -143,6 +145,7 @@ The system should make these questions easy to answer:
 
 Prefer explicit, inspectable tables over opaque blobs.
 Do not duplicate whole canonical Paprika entities into the sidecar unless a concrete need proves that duplication is worth the drift risk.
+If a sidecar-derived answer would be surprising, the CLI should be able to show what evidence, counts, or contributing recipes led to it.
 
 ## Source model guidance
 
@@ -171,7 +174,10 @@ Support should eventually include:
 - recipe lookup by ID or name
 - full-text recipe search
 - category filtering
+- feature-constrained queries like fast mains with few ingredients
+- source/cookbook aggregate queries
 - ingredient-oriented search
+- substitution/pairing evidence queries
 - meals lookup
 - groceries lookup
 - source doctor and index status reporting
@@ -252,9 +258,11 @@ Suggested sequence:
 3. map recipes and categories into stable internal models
 4. add direct recipe search and lookup
 5. add sidecar schema and indexing only where it adds clear value
-6. add meals, groceries, and categories
-7. add source / index / doctor reporting
-8. consider heavier caching only if direct-read performance or stability proves inadequate
+6. add derived recipe features and source/cookbook aggregates
+7. add ingredient normalization and evidence-backed pattern tables
+8. add meals, groceries, and categories
+9. add source / index / doctor reporting
+10. consider heavier caching only if direct-read performance or stability proves inadequate
 
 ## Final rule
 

@@ -4,10 +4,10 @@ import XCTest
 final class JSONOutputTests: XCTestCase {
     func testRenderProducesStructuredJSON() throws {
         let report = CommandReport(
-            command: "doctor",
+            command: "groceries list",
             status: "stub",
             plannedPhase: "Later",
-            message: "Doctor is intentionally deferred until sync and freshness signals exist.",
+            message: "Direct grocery reads are intentionally deferred until after the first recipe read slice.",
             details: [:],
             paths: PantryPathReport(
                 home: "/tmp/pantry",
@@ -20,13 +20,13 @@ final class JSONOutputTests: XCTestCase {
 
         XCTAssertTrue(rendered.hasSuffix("\n"))
         XCTAssertTrue(rendered.contains("\"command\""))
-        XCTAssertTrue(rendered.contains("\"doctor\""))
+        XCTAssertTrue(rendered.contains("\"groceries list\""))
         XCTAssertTrue(rendered.contains("\"paths\""))
         XCTAssertTrue(rendered.contains("\"database\""))
         XCTAssertFalse(rendered.contains("\\/"))
     }
 
-    func testRenderRecipeMirrorReportsPreservesStructuredFields() throws {
+    func testRenderRecipeReportsPreservesStructuredFields() throws {
         let recipesReport = RecipesListReport(
             recipes: [
                 RecipeSummary(
@@ -52,24 +52,36 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"isFavorite\" : true"))
     }
 
-    func testRenderSyncStatusReportIncludesFreshnessAndCounts() throws {
-        let success = PantrySyncRun(
-            id: 1,
-            startedAt: Date(timeIntervalSince1970: 1_712_736_000),
-            finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
-            status: .success,
-            recipesSeen: 6,
-            recipesChanged: 2,
-            recipesDeleted: 1,
-            errorMessage: nil
-        )
-        let report = SyncStatusReport(
-            snapshot: PantrySyncStatusSnapshot(
-                lastAttempt: success,
-                lastSuccess: success,
-                totalRecipeCount: 6,
-                activeRecipeCount: 5,
-                deletedRecipeCount: 1
+    func testRenderDoctorReportIncludesStatusAndIndexFields() throws {
+        let report = DoctorReport(
+            sourceSnapshot: PantrySourceDoctorSnapshot(
+                status: .ready,
+                message: "The configured pantry source is ready for direct read-only Paprika access.",
+                sourceKind: .paprikaSQLite,
+                displayName: "default Paprika SQLite",
+                implementation: "direct Paprika SQLite source",
+                sourceLocation: "/Users/test/Paprika.sqlite"
+            ),
+            indexStats: PantryIndexStats(
+                recipeSearchDocumentCount: 6,
+                lastRecipeSearchRun: PantryIndexRun(
+                    id: 1,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-search",
+                    recipeCount: 6,
+                    errorMessage: nil
+                ),
+                lastSuccessfulRecipeSearchRun: PantryIndexRun(
+                    id: 1,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-search",
+                    recipeCount: 6,
+                    errorMessage: nil
+                )
             ),
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
@@ -81,10 +93,10 @@ final class JSONOutputTests: XCTestCase {
 
         let rendered = try JSONOutput.render(report)
 
-        XCTAssertTrue(rendered.contains("\"freshnessSeconds\" : 60"))
-        XCTAssertTrue(rendered.contains("\"totalRecipeCount\" : 6"))
-        XCTAssertTrue(rendered.contains("\"activeRecipeCount\" : 5"))
-        XCTAssertTrue(rendered.contains("\"deletedRecipeCount\" : 1"))
-        XCTAssertTrue(rendered.contains("\"status\" : \"current\""))
+        XCTAssertTrue(rendered.contains("\"status\" : \"ready\""))
+        XCTAssertTrue(rendered.contains("\"sourceStatus\" : \"ready\""))
+        XCTAssertTrue(rendered.contains("\"indexStatus\" : \"ready\""))
+        XCTAssertTrue(rendered.contains("\"recipeSearchDocumentCount\" : 6"))
+        XCTAssertTrue(rendered.contains("\"recipeSearchFreshnessSeconds\" : 60"))
     }
 }

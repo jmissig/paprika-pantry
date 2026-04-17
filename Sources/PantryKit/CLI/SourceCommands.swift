@@ -3,7 +3,7 @@ import ArgumentParser
 public struct SourceCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "source",
-        abstract: "Inspect pantry source configuration and readiness.",
+        abstract: "Inspect direct Paprika SQLite source readiness.",
         subcommands: [
             SourceDoctorCommand.self,
             SourceStatsCommand.self,

@@ -13,10 +13,11 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         temporaryDirectories.removeAll()
     }
 
-    func testEnvironmentTokenProvidesReadyPaprikaSource() throws {
+    func testEnvironmentDatabasePathProvidesReadyPaprikaSQLiteSource() throws {
+        let databaseURL = try makePaprikaSourceDatabase(at: "Paprika.sqlite")
         let provider = ConfiguredPantrySourceProvider(
             paths: try makePaths(),
-            environment: ["PAPRIKA_PANTRY_SOURCE_TOKEN": "token-123"],
+            environment: ["PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB": databaseURL.path],
             fileManager: try makeProviderFileManager()
         )
 
@@ -24,38 +25,35 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         let source = try provider.makeSource()
 
         XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.sourceKind, .paprikaToken)
-        XCTAssertEqual(snapshot.credentialSource, "env:PAPRIKA_PANTRY_SOURCE_TOKEN")
-        XCTAssertNotNil(source as? PaprikaTokenSource)
+        XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(snapshot.sourceLocation, databaseURL.path)
+        XCTAssertNotNil(source as? PaprikaSQLiteSource)
     }
 
-    func testConfiguredPaprikaTokenSourceUsesConfiguredEnvironmentVariable() throws {
+    func testLegacyTokenConfigurationReportsUnsupported() throws {
         let paths = try makePaths()
         try PantryConfigStore(paths: paths).saveConfig(
             PantryConfig(
                 source: PantrySourceConfiguration(
                     kind: .paprikaToken,
-                    displayName: "kitchen token",
-                    paprikaToken: PaprikaTokenSourceConfiguration(
-                        tokenEnvironmentVariable: "KITCHEN_TOKEN",
-                        baseURL: "https://www.paprikaapp.com"
-                    )
+                    displayName: "legacy token"
                 ),
                 updatedAt: Date(timeIntervalSince1970: 1_712_736_000)
             )
         )
         let provider = ConfiguredPantrySourceProvider(
             paths: paths,
-            environment: ["KITCHEN_TOKEN": "token-456"],
+            environment: [:],
             fileManager: try makeProviderFileManager()
         )
 
         let snapshot = try provider.diagnose()
 
-        XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.displayName, "kitchen token")
-        XCTAssertEqual(snapshot.credentialSource, "env:KITCHEN_TOKEN")
-        XCTAssertNotNil(try provider.makeSource() as? PaprikaTokenSource)
+        XCTAssertEqual(snapshot.status, .unsupported)
+        XCTAssertEqual(snapshot.sourceKind, .paprikaToken)
+        XCTAssertThrowsError(try provider.makeSource()) { error in
+            XCTAssertEqual(error as? PantrySourceProviderError, .unsupportedSource(.paprikaToken))
+        }
     }
 
     func testConfiguredPaprikaSQLiteSourceUsesConfiguredDatabasePath() throws {
@@ -141,8 +139,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
             PantryConfig(
                 source: PantrySourceConfiguration(
                     kind: .kappari,
-                    displayName: "kappari",
-                    kappari: KappariSourceConfiguration(executable: "kappari")
+                    displayName: "kappari"
                 ),
                 updatedAt: Date(timeIntervalSince1970: 1_712_736_000)
             )

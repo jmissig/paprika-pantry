@@ -1,17 +1,24 @@
 import ArgumentParser
+import Foundation
 
 public struct DoctorCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "doctor",
-        abstract: "Diagnose local pantry state."
+        abstract: "Diagnose current source and sidecar index health."
     )
 
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "doctor",
-            plannedPhase: "Later",
-            message: "Broader doctor output is still deferred; use `source doctor` for direct Paprika source readiness today."
+        let context = try makeContext()
+        let snapshot = try context.makeSourceProvider().diagnose()
+        let stats = try context.makeStore().indexStats()
+        try context.write(
+            DoctorReport(
+                sourceSnapshot: snapshot,
+                indexStats: stats,
+                paths: context.paths,
+                now: Date()
+            )
         )
     }
 }

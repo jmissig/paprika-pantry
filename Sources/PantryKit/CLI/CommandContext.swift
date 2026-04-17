@@ -16,10 +16,6 @@ public struct CommandContext: Sendable {
         }
     }
 
-    public func makeConfigStore() -> PantryConfigStore {
-        PantryConfigStore(paths: paths)
-    }
-
     public func makeDatabase() -> PantryDatabase {
         PantryDatabase(path: paths.databaseFile)
     }

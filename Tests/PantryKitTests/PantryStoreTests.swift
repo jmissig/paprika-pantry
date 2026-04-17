@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import XCTest
 @testable import PantryKit
 
@@ -16,10 +17,6 @@ final class PantryStoreTests: XCTestCase {
         let queue = try makeDatabase().openQueue()
 
         try queue.read { db in
-            XCTAssertTrue(try db.tableExists("recipes"))
-            XCTAssertTrue(try db.tableExists("recipe_categories"))
-            XCTAssertTrue(try db.tableExists("sync_runs"))
-
             let indexes = try String.fetchAll(
                 db,
                 sql: """
@@ -30,15 +27,40 @@ final class PantryStoreTests: XCTestCase {
                 """
             )
 
-            XCTAssertTrue(indexes.contains("recipes_on_name"))
-            XCTAssertTrue(indexes.contains("recipes_on_is_favorite"))
-            XCTAssertTrue(indexes.contains("recipes_on_star_rating"))
-            XCTAssertTrue(indexes.contains("recipes_on_is_deleted"))
-            XCTAssertTrue(indexes.contains("recipes_on_last_synced_at"))
-            XCTAssertTrue(indexes.contains("recipe_categories_on_category_name"))
-            XCTAssertTrue(indexes.contains("recipe_categories_on_recipe_uid"))
-            XCTAssertTrue(indexes.contains("sync_runs_on_started_at"))
-            XCTAssertTrue(indexes.contains("sync_runs_on_status"))
+            XCTAssertTrue(indexes.contains("recipe_search_documents_on_name"))
+            XCTAssertTrue(indexes.contains("recipe_search_documents_on_indexed_at"))
+            XCTAssertTrue(indexes.contains("index_runs_on_started_at"))
+            XCTAssertTrue(indexes.contains("index_runs_on_status"))
+            XCTAssertTrue(indexes.contains("index_runs_on_index_name"))
+            XCTAssertTrue(try db.tableExists("recipe_search_documents"))
+            XCTAssertTrue(try db.tableExists("recipe_search_fts"))
+            XCTAssertTrue(try db.tableExists("index_runs"))
+            XCTAssertFalse(try db.tableExists("recipes"))
+            XCTAssertFalse(try db.tableExists("recipe_categories"))
+            XCTAssertFalse(try db.tableExists("sync_runs"))
+        }
+    }
+
+    func testMigrationCleansUpLegacyMirrorTables() throws {
+        let database = try makeDatabase()
+        try FileManager.default.createDirectory(
+            at: database.path.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let queue = try DatabaseQueue(path: database.path.path)
+
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE recipes (uid TEXT PRIMARY KEY)")
+            try db.execute(sql: "CREATE TABLE recipe_categories (recipe_uid TEXT, category_name TEXT)")
+            try db.execute(sql: "CREATE TABLE sync_runs (id INTEGER PRIMARY KEY)")
+        }
+
+        let migratedQueue = try database.openQueue()
+        try migratedQueue.read { db in
+            XCTAssertFalse(try db.tableExists("recipes"))
+            XCTAssertFalse(try db.tableExists("recipe_categories"))
+            XCTAssertFalse(try db.tableExists("sync_runs"))
+            XCTAssertTrue(try db.tableExists("recipe_search_documents"))
         }
     }
 
@@ -48,138 +70,117 @@ final class PantryStoreTests: XCTestCase {
         _ = try database.openQueue()
     }
 
-    func testUpsertRecipeWritesFieldsAndReplacesCategories() throws {
+    func testRecipeSearchIndexRebuildAndSearch() async throws {
         let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
-
-        try store.upsertRecipe(
-            MirroredRecipeInput(
-                uid: "AAA",
-                name: "Weeknight Pasta",
-                categories: ["Dinner", "Pasta", "Dinner"],
-                sourceName: "Serious Eats",
-                ingredients: "Pasta\nSauce",
-                directions: "Boil.\nSauce.",
-                notes: "Use good olive oil.",
-                starRating: 4,
-                isFavorite: true,
-                prepTime: "10 min",
-                cookTime: "20 min",
-                totalTime: "30 min",
-                servings: "4",
-                createdAt: "2026-04-01T00:00:00Z",
-                updatedAt: "2026-04-02T00:00:00Z",
-                remoteHash: "hash-1",
-                rawJSON: #"{"uid":"AAA","name":"Weeknight Pasta"}"#
-            ),
-            syncedAt: syncedAt
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Pasta Salad", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Deleted", hash: "hash-ccc", isDeleted: true),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+                SourceRecipeCategory(uid: "CAT2", name: "Soup"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categoryReferences: ["CAT1", "CAT2"],
+                    sourceName: "Serious Eats",
+                    ingredients: "Broth\nBeans",
+                    directions: nil,
+                    notes: "Finish with lemon.",
+                    starRating: 4,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+                "BBB": SourceRecipe(
+                    uid: "BBB",
+                    name: "Pasta Salad",
+                    categoryReferences: ["CAT1"],
+                    sourceName: "Smitten Kitchen",
+                    ingredients: "Pasta\nHerbs",
+                    directions: nil,
+                    notes: "Good cold.",
+                    starRating: 3,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-bbb",
+                    rawJSON: "{}"
+                ),
+            ]
         )
 
-        try store.upsertRecipe(
-            MirroredRecipeInput(
-                uid: "AAA",
-                name: "Weeknight Pasta",
-                categories: ["Comfort Food", "Dinner"],
-                sourceName: "Serious Eats",
-                ingredients: "Pasta\nSauce",
-                directions: "Boil.\nSauce.",
-                notes: "Updated note.",
-                starRating: 5,
-                isFavorite: false,
-                prepTime: "10 min",
-                cookTime: "20 min",
-                totalTime: "30 min",
-                servings: "4",
-                createdAt: "2026-04-01T00:00:00Z",
-                updatedAt: "2026-04-03T00:00:00Z",
-                remoteHash: "hash-2",
-                rawJSON: #"{"uid":"AAA","name":"Weeknight Pasta","updated":true}"#
-            ),
-            syncedAt: syncedAt
+        let summary = try await store.rebuildRecipeSearchIndex(
+            from: source,
+            now: {
+                Date(timeIntervalSince1970: 1_712_736_000)
+            }
         )
 
-        let recipe = try XCTUnwrap(store.fetchRecipe(uid: "AAA"))
-        XCTAssertEqual(recipe.name, "Weeknight Pasta")
-        XCTAssertEqual(recipe.categories, ["Comfort Food", "Dinner"])
-        XCTAssertEqual(recipe.sourceName, "Serious Eats")
-        XCTAssertEqual(recipe.notes, "Updated note.")
-        XCTAssertEqual(recipe.starRating, 5)
-        XCTAssertFalse(recipe.isFavorite)
-        XCTAssertEqual(recipe.remoteHash, "hash-2")
-        XCTAssertEqual(recipe.rawJSON, #"{"uid":"AAA","name":"Weeknight Pasta","updated":true}"#)
+        XCTAssertEqual(summary.recipeCount, 2)
+
+        let results = try store.searchRecipes(query: "lemon", limit: 20)
+        XCTAssertEqual(results.map(\.uid), ["AAA"])
+        XCTAssertEqual(results[0].categories, ["Dinner", "Soup"])
+        XCTAssertTrue(results[0].isFavorite)
+
+        let stats = try store.indexStats()
+        XCTAssertEqual(stats.recipeSearchDocumentCount, 2)
+        XCTAssertTrue(stats.recipeSearchReady)
+        XCTAssertEqual(stats.lastRecipeSearchRun?.status, .success)
+        XCTAssertEqual(stats.lastRecipeSearchRun?.recipeCount, 2)
     }
 
-    func testTombstoneMarksMissingRecipesDeletedWithoutDeletingRows() throws {
+    func testSearchNormalizesPlainQueriesForFTS() async throws {
         let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
-
-        try store.upsertRecipe(makeRecipe(uid: "AAA", name: "First"), syncedAt: syncedAt)
-        try store.upsertRecipe(makeRecipe(uid: "BBB", name: "Second"), syncedAt: syncedAt)
-
-        let deletedCount = try store.tombstoneRecipes(
-            missingFrom: ["AAA"],
-            syncedAt: Date(timeIntervalSince1970: 1_712_740_000)
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Weeknight Soup",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Broth",
+                    directions: nil,
+                    notes: nil,
+                    starRating: nil,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: nil,
+                    rawJSON: "{}"
+                ),
+            ]
         )
 
-        XCTAssertEqual(deletedCount, 1)
-        XCTAssertNil(try store.fetchRecipe(uid: "BBB"))
+        _ = try await store.rebuildRecipeSearchIndex(from: source)
 
-        let stats = try store.stats()
-        XCTAssertEqual(stats.totalRecipeCount, 2)
-        XCTAssertEqual(stats.activeRecipeCount, 1)
-        XCTAssertEqual(stats.deletedRecipeCount, 1)
-    }
-
-    func testListAndNameLookupExcludeDeletedRecipes() throws {
-        let store = try makeStore()
-        let syncedAt = Date(timeIntervalSince1970: 1_712_736_000)
-
-        try store.upsertRecipe(makeRecipe(uid: "AAA", name: "Curry"), syncedAt: syncedAt)
-        try store.upsertRecipe(makeRecipe(uid: "BBB", name: "Curry"), syncedAt: syncedAt)
-        try store.upsertRecipe(makeRecipe(uid: "CCC", name: "Soup"), syncedAt: syncedAt)
-        _ = try store.tombstoneRecipes(missingFrom: ["AAA", "BBB"], syncedAt: syncedAt)
-
-        let listed = try store.listRecipes()
-        XCTAssertEqual(listed.map(\.uid), ["AAA", "BBB"])
-
-        let named = try store.fetchRecipes(namedExactlyCaseInsensitive: "cUrRy")
-        XCTAssertEqual(named.map(\.uid), ["AAA", "BBB"])
-
-        XCTAssertNil(try store.fetchRecipe(uid: "CCC"))
-    }
-
-    func testSyncRunsAndStatsReflectStoredHistory() throws {
-        let store = try makeStore()
-        let startedAt = Date(timeIntervalSince1970: 1_712_736_000)
-        let finishedAt = Date(timeIntervalSince1970: 1_712_736_120)
-
-        let runID = try store.startSyncRun(startedAt: startedAt)
-        try store.finishSyncRun(
-            id: runID,
-            status: .success,
-            finishedAt: finishedAt,
-            recipesSeen: 10,
-            recipesChanged: 4,
-            recipesDeleted: 1,
-            errorMessage: nil
-        )
-
-        let latestRun = try XCTUnwrap(store.latestSyncRun())
-        XCTAssertEqual(latestRun.id, runID)
-        XCTAssertEqual(latestRun.status, .success)
-        XCTAssertEqual(latestRun.recipesSeen, 10)
-        XCTAssertEqual(latestRun.recipesChanged, 4)
-        XCTAssertEqual(latestRun.recipesDeleted, 1)
-        XCTAssertEqual(latestRun.startedAt, startedAt)
-        XCTAssertEqual(latestRun.finishedAt, finishedAt)
-
-        let stats = try store.stats()
-        XCTAssertEqual(stats.syncRunCount, 1)
-
-        let syncStatus = try store.syncStatus()
-        XCTAssertEqual(syncStatus.lastAttempt, latestRun)
-        XCTAssertEqual(syncStatus.lastSuccess, latestRun)
-        XCTAssertTrue(syncStatus.hasSuccessfulSync)
+        XCTAssertEqual(try store.searchRecipes(query: "weeknight soup").map(\.uid), ["AAA"])
+        XCTAssertEqual(try store.searchRecipes(query: "   ").count, 0)
     }
 
     private func makeDatabase() throws -> PantryDatabase {
@@ -191,27 +192,5 @@ final class PantryStoreTests: XCTestCase {
     private func makeStore() throws -> PantryStore {
         let database = try makeDatabase()
         return PantryStore(dbQueue: try database.openQueue())
-    }
-
-    private func makeRecipe(uid: String, name: String) -> MirroredRecipeInput {
-        MirroredRecipeInput(
-            uid: uid,
-            name: name,
-            categories: ["Dinner"],
-            sourceName: "Test Kitchen",
-            ingredients: nil,
-            directions: nil,
-            notes: nil,
-            starRating: 3,
-            isFavorite: false,
-            prepTime: nil,
-            cookTime: nil,
-            totalTime: nil,
-            servings: nil,
-            createdAt: nil,
-            updatedAt: nil,
-            remoteHash: "hash-\(uid)",
-            rawJSON: #"{"uid":"test"}"#
-        )
     }
 }

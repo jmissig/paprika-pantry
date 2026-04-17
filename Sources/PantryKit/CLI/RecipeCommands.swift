@@ -4,7 +4,7 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query recipe data from the configured pantry source.",
+        abstract: "Query canonical recipes and sidecar-backed recipe search.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
@@ -56,19 +56,33 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search recipes once sidecar indexing is available."
+        abstract: "Search recipes through the owned sidecar index."
     )
 
     @Argument(help: "Search query.")
     public var query: String
 
+    @Option(name: .long, help: "Maximum results to return.")
+    public var limit: Int = 20
+
     public init() {}
     public mutating func run() throws {
-        try emitStub(
-            command: "recipes search",
-            plannedPhase: "Later",
-            message: "Recipe search is intentionally deferred until the first owned sidecar index slice lands.",
-            details: ["query": query]
-        )
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            throw ValidationError("Search query must not be empty.")
+        }
+
+        guard limit > 0 else {
+            throw ValidationError("--limit must be greater than zero.")
+        }
+
+        let context = try makeContext()
+        let store = try context.makeStore()
+        guard try store.indexStats().recipeSearchReady else {
+            throw ValidationError("Recipe search index is not ready. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let results = try store.searchRecipes(query: query, limit: limit)
+        try context.write(RecipesSearchReport(query: query, results: results, paths: context.paths))
     }
 }
