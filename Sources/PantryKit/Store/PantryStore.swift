@@ -41,29 +41,44 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let recipeFeatureCount: Int
     public let recipeFeaturesWithTotalTimeCount: Int
     public let recipeFeaturesWithIngredientLineCountCount: Int
+    public let recipeIngredientRecipeCount: Int
+    public let recipeIngredientLineCount: Int
+    public let recipeIngredientTokenCount: Int
     public let lastRecipeSearchRun: PantryIndexRun?
     public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
     public let lastRecipeFeatureRun: PantryIndexRun?
     public let lastSuccessfulRecipeFeatureRun: PantryIndexRun?
+    public let lastRecipeIngredientRun: PantryIndexRun?
+    public let lastSuccessfulRecipeIngredientRun: PantryIndexRun?
 
     public init(
         recipeSearchDocumentCount: Int,
         recipeFeatureCount: Int,
         recipeFeaturesWithTotalTimeCount: Int,
         recipeFeaturesWithIngredientLineCountCount: Int,
+        recipeIngredientRecipeCount: Int = 0,
+        recipeIngredientLineCount: Int = 0,
+        recipeIngredientTokenCount: Int = 0,
         lastRecipeSearchRun: PantryIndexRun?,
         lastSuccessfulRecipeSearchRun: PantryIndexRun?,
         lastRecipeFeatureRun: PantryIndexRun?,
-        lastSuccessfulRecipeFeatureRun: PantryIndexRun?
+        lastSuccessfulRecipeFeatureRun: PantryIndexRun?,
+        lastRecipeIngredientRun: PantryIndexRun? = nil,
+        lastSuccessfulRecipeIngredientRun: PantryIndexRun? = nil
     ) {
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
         self.recipeFeatureCount = recipeFeatureCount
         self.recipeFeaturesWithTotalTimeCount = recipeFeaturesWithTotalTimeCount
         self.recipeFeaturesWithIngredientLineCountCount = recipeFeaturesWithIngredientLineCountCount
+        self.recipeIngredientRecipeCount = recipeIngredientRecipeCount
+        self.recipeIngredientLineCount = recipeIngredientLineCount
+        self.recipeIngredientTokenCount = recipeIngredientTokenCount
         self.lastRecipeSearchRun = lastRecipeSearchRun
         self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
         self.lastRecipeFeatureRun = lastRecipeFeatureRun
         self.lastSuccessfulRecipeFeatureRun = lastSuccessfulRecipeFeatureRun
+        self.lastRecipeIngredientRun = lastRecipeIngredientRun
+        self.lastSuccessfulRecipeIngredientRun = lastSuccessfulRecipeIngredientRun
     }
 
     public var recipeSearchReady: Bool {
@@ -72,6 +87,10 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
 
     public var recipeFeaturesReady: Bool {
         recipeFeatureCount > 0 && lastSuccessfulRecipeFeatureRun != nil
+    }
+
+    public var recipeIngredientIndexReady: Bool {
+        lastSuccessfulRecipeIngredientRun != nil
     }
 }
 
@@ -178,6 +197,9 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let recipeFeatureCount: Int
     public let recipeFeaturesWithTotalTimeCount: Int
     public let recipeFeaturesWithIngredientLineCountCount: Int
+    public let recipeIngredientRecipeCount: Int
+    public let recipeIngredientLineCount: Int
+    public let recipeIngredientTokenCount: Int
 
     public init(
         startedAt: Date,
@@ -185,7 +207,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         recipeSearchDocumentCount: Int,
         recipeFeatureCount: Int,
         recipeFeaturesWithTotalTimeCount: Int,
-        recipeFeaturesWithIngredientLineCountCount: Int
+        recipeFeaturesWithIngredientLineCountCount: Int,
+        recipeIngredientRecipeCount: Int = 0,
+        recipeIngredientLineCount: Int = 0,
+        recipeIngredientTokenCount: Int = 0
     ) {
         self.startedAt = startedAt
         self.finishedAt = finishedAt
@@ -193,6 +218,9 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.recipeFeatureCount = recipeFeatureCount
         self.recipeFeaturesWithTotalTimeCount = recipeFeaturesWithTotalTimeCount
         self.recipeFeaturesWithIngredientLineCountCount = recipeFeaturesWithIngredientLineCountCount
+        self.recipeIngredientRecipeCount = recipeIngredientRecipeCount
+        self.recipeIngredientLineCount = recipeIngredientLineCount
+        self.recipeIngredientTokenCount = recipeIngredientTokenCount
     }
 }
 
@@ -267,10 +295,18 @@ public struct PantryStore: @unchecked Sendable {
                     db,
                     sql: "SELECT COUNT(*) FROM recipe_features WHERE ingredient_line_count IS NOT NULL"
                 ) ?? 0,
+                recipeIngredientRecipeCount: try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(DISTINCT recipe_uid) FROM recipe_ingredient_lines"
+                ) ?? 0,
+                recipeIngredientLineCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_lines") ?? 0,
+                recipeIngredientTokenCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_tokens") ?? 0,
                 lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastRecipeFeatureRun: try latestIndexRun(named: Self.recipeFeatureIndexName, db: db),
-                lastSuccessfulRecipeFeatureRun: try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db)
+                lastSuccessfulRecipeFeatureRun: try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db),
+                lastRecipeIngredientRun: try latestIndexRun(named: Self.recipeIngredientIndexName, db: db),
+                lastSuccessfulRecipeIngredientRun: try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db)
             )
         }
     }
@@ -278,6 +314,7 @@ public struct PantryStore: @unchecked Sendable {
     public func searchRecipes(
         query: String,
         filters: RecipeQueryFilters = RecipeQueryFilters(),
+        ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeSearchSort = .relevance,
         limit: Int = 20
@@ -291,6 +328,25 @@ public struct PantryStore: @unchecked Sendable {
             var arguments: StatementArguments = [normalizedQuery]
             var conditions = ["recipe_search_fts MATCH ?"]
             let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty
+
+            if !ingredientFilter.isDefault {
+                let ingredientPlaceholders = Self.sqlPlaceholders(count: ingredientFilter.normalizedTokens.count)
+                conditions.append(
+                    """
+                    recipe_search_documents.uid IN (
+                        SELECT recipe_uid
+                        FROM recipe_ingredient_tokens
+                        WHERE token IN (\(ingredientPlaceholders))
+                        GROUP BY recipe_uid
+                        HAVING COUNT(DISTINCT token) = ?
+                    )
+                    """
+                )
+                for token in ingredientFilter.normalizedTokens {
+                    arguments += [token]
+                }
+                arguments += [ingredientFilter.normalizedTokens.count]
+            }
 
             if filters.favoritesOnly {
                 conditions.append("recipe_search_documents.is_favorite = 1")
@@ -536,6 +592,103 @@ public struct PantryStore: @unchecked Sendable {
         }
     }
 
+    public func fetchRecipeIngredientIndex(uid: String) throws -> RecipeIngredientIndex? {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT
+                    recipe_ingredient_lines.recipe_uid,
+                    recipe_ingredient_lines.source_remote_hash,
+                    recipe_ingredient_lines.derived_at,
+                    recipe_ingredient_lines.line_number,
+                    recipe_ingredient_lines.source_text,
+                    recipe_ingredient_lines.normalized_text,
+                    recipe_ingredient_tokens.token,
+                    recipe_ingredient_tokens.token_position
+                FROM recipe_ingredient_lines
+                LEFT JOIN recipe_ingredient_tokens
+                    ON recipe_ingredient_tokens.recipe_uid = recipe_ingredient_lines.recipe_uid
+                    AND recipe_ingredient_tokens.line_number = recipe_ingredient_lines.line_number
+                WHERE recipe_ingredient_lines.recipe_uid = ?
+                ORDER BY recipe_ingredient_lines.line_number ASC, recipe_ingredient_tokens.token_position ASC
+                """,
+                arguments: [uid]
+            )
+
+            guard let firstRow = rows.first else {
+                return nil
+            }
+
+            let derivedAt = DatabaseTimestamp.decodeRequired(firstRow["derived_at"])
+            let sourceRemoteHash: String? = firstRow["source_remote_hash"]
+            var linesByNumber = [Int: RecipeIngredientLine]()
+            var orderedLineNumbers = [Int]()
+
+            for row in rows {
+                let lineNumber: Int = row["line_number"]
+                let sourceText: String = row["source_text"]
+                let normalizedText: String? = row["normalized_text"]
+                let token: String? = row["token"]
+
+                if linesByNumber[lineNumber] == nil {
+                    orderedLineNumbers.append(lineNumber)
+                    linesByNumber[lineNumber] = RecipeIngredientLine(
+                        lineNumber: lineNumber,
+                        sourceText: sourceText,
+                        normalizedText: normalizedText,
+                        normalizedTokens: []
+                    )
+                }
+
+                if let token {
+                    let existing = linesByNumber[lineNumber]!
+                    linesByNumber[lineNumber] = RecipeIngredientLine(
+                        lineNumber: existing.lineNumber,
+                        sourceText: existing.sourceText,
+                        normalizedText: existing.normalizedText,
+                        normalizedTokens: existing.normalizedTokens + [token]
+                    )
+                }
+            }
+
+            return RecipeIngredientIndex(
+                uid: uid,
+                sourceRemoteHash: sourceRemoteHash,
+                derivedAt: derivedAt,
+                lines: orderedLineNumbers.compactMap { linesByNumber[$0] }
+            )
+        }
+    }
+
+    public func matchingRecipeUIDs(for ingredientFilter: RecipeIngredientFilter) throws -> Set<String> {
+        guard !ingredientFilter.isDefault else {
+            return []
+        }
+
+        return try dbQueue.read { db in
+            let placeholders = Self.sqlPlaceholders(count: ingredientFilter.normalizedTokens.count)
+            var arguments = StatementArguments()
+            for token in ingredientFilter.normalizedTokens {
+                arguments += [token]
+            }
+            arguments += [ingredientFilter.normalizedTokens.count]
+            let recipeUIDs = try String.fetchAll(
+                db,
+                sql: """
+                SELECT recipe_uid
+                FROM recipe_ingredient_tokens
+                WHERE token IN (\(placeholders))
+                GROUP BY recipe_uid
+                HAVING COUNT(DISTINCT token) = ?
+                """,
+                arguments: arguments
+            )
+
+            return Set(recipeUIDs)
+        }
+    }
+
     public func rebuildRecipeIndexes(
         from source: any PantrySource,
         now: @escaping @Sendable () -> Date = Date.init
@@ -543,6 +696,7 @@ public struct PantryStore: @unchecked Sendable {
         let startedAt = now()
         let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
         let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
+        let ingredientRunID = try startIndexRun(named: Self.recipeIngredientIndexName, startedAt: startedAt)
 
         do {
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
@@ -551,8 +705,10 @@ public struct PantryStore: @unchecked Sendable {
 
             var documents = [RecipeSearchDocument]()
             var features = [RecipeDerivedFeatures]()
+            var ingredientIndexes = [RecipeIngredientIndex]()
             documents.reserveCapacity(activeStubs.count)
             features.reserveCapacity(activeStubs.count)
+            ingredientIndexes.reserveCapacity(activeStubs.count)
 
             for stub in activeStubs {
                 let recipe = try await source.fetchRecipe(uid: stub.uid)
@@ -578,19 +734,37 @@ public struct PantryStore: @unchecked Sendable {
                         derivedAt: startedAt
                     )
                 )
+                if let ingredientIndex = IngredientNormalizer.normalizeIngredientLines(
+                    recipeUID: recipe.uid,
+                    sourceRemoteHash: recipe.remoteHash,
+                    ingredients: recipe.ingredients,
+                    derivedAt: startedAt
+                ) {
+                    ingredientIndexes.append(ingredientIndex)
+                }
             }
 
             let finishedAt = now()
             let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
             let sortedFeatures = features.sorted { $0.uid < $1.uid }
+            let sortedIngredientIndexes = ingredientIndexes.sorted { $0.uid < $1.uid }
             let recipeSearchDocumentCount = sortedDocuments.count
             let recipeFeatureCount = sortedFeatures.count
             let recipeFeaturesWithTotalTimeCount = sortedFeatures.filter { $0.totalTimeMinutes != nil }.count
             let recipeFeaturesWithIngredientLineCountCount = sortedFeatures.filter { $0.ingredientLineCount != nil }.count
+            let recipeIngredientRecipeCount = sortedIngredientIndexes.count
+            let recipeIngredientLineCount = sortedIngredientIndexes.reduce(into: 0) { partialResult, index in
+                partialResult += index.lines.count
+            }
+            let recipeIngredientTokenCount = sortedIngredientIndexes.reduce(into: 0) { partialResult, index in
+                partialResult += index.normalizedTokenCount
+            }
             try await dbQueue.write { db in
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
                 try db.execute(sql: "DELETE FROM recipe_search_fts")
                 try db.execute(sql: "DELETE FROM recipe_features")
+                try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
+                try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
 
                 for document in sortedDocuments {
                     try db.execute(
@@ -673,6 +847,50 @@ public struct PantryStore: @unchecked Sendable {
                     )
                 }
 
+                for ingredientIndex in sortedIngredientIndexes {
+                    for line in ingredientIndex.lines {
+                        try db.execute(
+                            sql: """
+                            INSERT INTO recipe_ingredient_lines (
+                                recipe_uid,
+                                line_number,
+                                source_text,
+                                normalized_text,
+                                source_remote_hash,
+                                derived_at
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            arguments: [
+                                ingredientIndex.uid,
+                                line.lineNumber,
+                                line.sourceText,
+                                line.normalizedText,
+                                ingredientIndex.sourceRemoteHash,
+                                DatabaseTimestamp.encode(finishedAt),
+                            ]
+                        )
+
+                        for (offset, token) in line.normalizedTokens.enumerated() {
+                            try db.execute(
+                                sql: """
+                                INSERT INTO recipe_ingredient_tokens (
+                                    recipe_uid,
+                                    line_number,
+                                    token,
+                                    token_position
+                                ) VALUES (?, ?, ?, ?)
+                                """,
+                                arguments: [
+                                    ingredientIndex.uid,
+                                    line.lineNumber,
+                                    token,
+                                    offset + 1,
+                                ]
+                            )
+                        }
+                    }
+                }
+
                 try finishIndexRun(
                     id: searchRunID,
                     status: .success,
@@ -689,6 +907,14 @@ public struct PantryStore: @unchecked Sendable {
                     errorMessage: nil,
                     in: db
                 )
+                try finishIndexRun(
+                    id: ingredientRunID,
+                    status: .success,
+                    finishedAt: finishedAt,
+                    recipeCount: recipeIngredientRecipeCount,
+                    errorMessage: nil,
+                    in: db
+                )
             }
 
             return RecipeIndexesRebuildSummary(
@@ -697,7 +923,10 @@ public struct PantryStore: @unchecked Sendable {
                 recipeSearchDocumentCount: recipeSearchDocumentCount,
                 recipeFeatureCount: recipeFeatureCount,
                 recipeFeaturesWithTotalTimeCount: recipeFeaturesWithTotalTimeCount,
-                recipeFeaturesWithIngredientLineCountCount: recipeFeaturesWithIngredientLineCountCount
+                recipeFeaturesWithIngredientLineCountCount: recipeFeaturesWithIngredientLineCountCount,
+                recipeIngredientRecipeCount: recipeIngredientRecipeCount,
+                recipeIngredientLineCount: recipeIngredientLineCount,
+                recipeIngredientTokenCount: recipeIngredientTokenCount
             )
         } catch {
             try finishIndexRun(
@@ -709,6 +938,13 @@ public struct PantryStore: @unchecked Sendable {
             )
             try finishIndexRun(
                 id: featureRunID,
+                status: .failed,
+                finishedAt: now(),
+                recipeCount: 0,
+                errorMessage: String(describing: error)
+            )
+            try finishIndexRun(
+                id: ingredientRunID,
                 status: .failed,
                 finishedAt: now(),
                 recipeCount: 0,
@@ -850,6 +1086,7 @@ public struct PantryStore: @unchecked Sendable {
 
     private static let recipeSearchIndexName = "recipe-search"
     private static let recipeFeatureIndexName = "recipe-features"
+    private static let recipeIngredientIndexName = "recipe-ingredients"
 
     private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
         if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
@@ -993,6 +1230,10 @@ public struct PantryStore: @unchecked Sendable {
             .split(whereSeparator: \.isWhitespace)
             .map { "\"\($0.replacing("\"", with: "\"\""))\"" }
             .joined(separator: " ")
+    }
+
+    private static func sqlPlaceholders(count: Int) -> String {
+        Array(repeating: "?", count: max(1, count)).joined(separator: ", ")
     }
 
     private static func encodeCategories(_ categories: [String]) -> String {

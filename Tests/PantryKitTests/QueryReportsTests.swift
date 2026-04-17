@@ -28,16 +28,21 @@ final class QueryReportsTests: XCTestCase {
                 ),
             ],
             canonicalFilters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Side"]),
+            ingredientFilter: RecipeIngredientFilter(rawTerms: ["tomatoes", "basil leaves"]),
             derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
             sort: .fewestIngredients,
-            derivedReadPath: "sidecar-derived"
+            derivedReadPath: "sidecar-derived",
+            ingredientReadPath: "sidecar-ingredient-index"
         )
 
         XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.min_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Side"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.terms_all: tomatoes, basil leaves"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.normalized_tokens_all: tomato, basil, leaves"))
         XCTAssertTrue(report.humanDescription.contains("derived.max_total_time_minutes: 30"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
@@ -117,10 +122,15 @@ final class QueryReportsTests: XCTestCase {
                 recipeFeatureCount: 12,
                 recipeFeaturesWithTotalTimeCount: 9,
                 recipeFeaturesWithIngredientLineCountCount: 11,
+                recipeIngredientRecipeCount: 10,
+                recipeIngredientLineCount: 42,
+                recipeIngredientTokenCount: 77,
                 lastRecipeSearchRun: searchRun,
                 lastSuccessfulRecipeSearchRun: searchRun,
                 lastRecipeFeatureRun: featureRun,
-                lastSuccessfulRecipeFeatureRun: featureRun
+                lastSuccessfulRecipeFeatureRun: featureRun,
+                lastRecipeIngredientRun: featureRun,
+                lastSuccessfulRecipeIngredientRun: featureRun
             ),
             paths: makePaths(),
             now: Date(timeIntervalSince1970: 1_712_736_180)
@@ -134,12 +144,17 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("recipe_feature_rows: 12"))
         XCTAssertTrue(report.humanDescription.contains("recipe_features_with_total_time: 9"))
         XCTAssertTrue(report.humanDescription.contains("recipe_features_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_ingredient_index_ready: yes"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_ingredient_recipes: 10"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_ingredient_tokens: 77"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_ingredients_freshness: 1m old"))
     }
 
     func testRecipesSearchReportIncludesMatches() {
         let report = RecipesSearchReport(
             query: "lemon",
             canonicalFilters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4, categoryNames: ["Soup"]),
+            ingredientFilter: RecipeIngredientFilter(rawTerms: ["green onions"]),
             derivedConstraints: RecipeDerivedConstraints(maxIngredientLineCount: 6),
             sort: .fewestIngredients,
             results: [
@@ -164,16 +179,20 @@ final class QueryReportsTests: XCTestCase {
                 )
             ],
             paths: makePaths(),
-            derivedReadPath: "sidecar-derived"
+            derivedReadPath: "sidecar-derived",
+            ingredientReadPath: "sidecar-ingredient-index"
         )
 
         XCTAssertTrue(report.humanDescription.contains("recipes search: 1 matches"))
         XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
         XCTAssertTrue(report.humanDescription.contains("query: lemon"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.max_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Soup"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.terms_all: green onions"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.normalized_tokens_all: green, onion"))
         XCTAssertTrue(report.humanDescription.contains("derived.max_ingredient_line_count: 6"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("AAA  Weeknight Soup"))
@@ -222,6 +241,57 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("source_prep_time: 10 min"))
         XCTAssertTrue(report.humanDescription.contains("total_time_basis: prep-plus-cook"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_line_count: 2"))
+    }
+
+    func testRecipeIngredientsReportShowsSourceLinesBesideNormalizedTokens() {
+        let report = RecipeIngredientsReport(
+            recipe: RecipeDetail(
+                uid: "AAA",
+                name: "Soup",
+                categories: ["Dinner"],
+                sourceName: "Serious Eats",
+                ingredients: "1 can tomatoes\nfresh basil leaves",
+                directions: nil,
+                notes: nil,
+                starRating: nil,
+                isFavorite: false,
+                prepTime: nil,
+                cookTime: nil,
+                totalTime: nil,
+                servings: nil,
+                createdAt: nil,
+                updatedAt: nil,
+                remoteHash: "hash-1",
+                rawJSON: #"{"uid":"AAA"}"#
+            ),
+            ingredientIndex: RecipeIngredientIndex(
+                uid: "AAA",
+                sourceRemoteHash: "hash-1",
+                derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                lines: [
+                    RecipeIngredientLine(
+                        lineNumber: 1,
+                        sourceText: "1 can tomatoes",
+                        normalizedText: "tomato",
+                        normalizedTokens: ["tomato"]
+                    ),
+                    RecipeIngredientLine(
+                        lineNumber: 2,
+                        sourceText: "fresh basil leaves",
+                        normalizedText: "fresh basil leaves",
+                        normalizedTokens: ["fresh", "basil", "leaves"]
+                    ),
+                ]
+            ),
+            paths: makePaths()
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("source_read_path: direct-source"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
+        XCTAssertTrue(report.humanDescription.contains("source_ingredients:"))
+        XCTAssertTrue(report.humanDescription.contains("indexed_ingredient_lines: 2"))
+        XCTAssertTrue(report.humanDescription.contains("1: source=\"1 can tomatoes\" | normalized_text=tomato | normalized_tokens=tomato"))
+        XCTAssertTrue(report.humanDescription.contains("2: source=\"fresh basil leaves\" | normalized_text=fresh basil leaves | normalized_tokens=fresh, basil, leaves"))
     }
 
     func testSourceCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {

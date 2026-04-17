@@ -119,9 +119,10 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase G — ingredient normalization/indexing
 
-- [ ] Parse and normalize ingredient lines into queryable tokens
-- [ ] Add ingredient-oriented helper tables and indexes
-- [ ] Support use-up queries and ingredient-based filtering
+- [x] Parse and normalize ingredient lines into queryable tokens
+- [x] Add ingredient-oriented helper tables and indexes
+- [x] Support ingredient-based filtering through recipe query surfaces
+- [ ] Support use-up queries
 - [ ] Support questions like "what can use up our avocados?"
 
 ### Phase H — pattern tables and household evidence mining

@@ -32,12 +32,19 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertTrue(indexes.contains("recipe_features_on_derived_at"))
             XCTAssertTrue(indexes.contains("recipe_features_on_total_time_minutes"))
             XCTAssertTrue(indexes.contains("recipe_features_on_ingredient_line_count"))
+            XCTAssertTrue(indexes.contains("recipe_ingredient_lines_on_recipe_uid"))
+            XCTAssertTrue(indexes.contains("recipe_ingredient_lines_on_derived_at"))
+            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_token"))
+            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid"))
+            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid_token"))
             XCTAssertTrue(indexes.contains("index_runs_on_started_at"))
             XCTAssertTrue(indexes.contains("index_runs_on_status"))
             XCTAssertTrue(indexes.contains("index_runs_on_index_name"))
             XCTAssertTrue(try db.tableExists("recipe_search_documents"))
             XCTAssertTrue(try db.tableExists("recipe_search_fts"))
             XCTAssertTrue(try db.tableExists("recipe_features"))
+            XCTAssertTrue(try db.tableExists("recipe_ingredient_lines"))
+            XCTAssertTrue(try db.tableExists("recipe_ingredient_tokens"))
             XCTAssertTrue(try db.tableExists("index_runs"))
             XCTAssertFalse(try db.tableExists("recipes"))
             XCTAssertFalse(try db.tableExists("recipe_categories"))
@@ -139,6 +146,9 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(summary.recipeFeatureCount, 2)
         XCTAssertEqual(summary.recipeFeaturesWithTotalTimeCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithIngredientLineCountCount, 2)
+        XCTAssertEqual(summary.recipeIngredientRecipeCount, 2)
+        XCTAssertEqual(summary.recipeIngredientLineCount, 4)
+        XCTAssertEqual(summary.recipeIngredientTokenCount, 4)
 
         let results = try store.searchRecipes(query: "lemon", limit: 20)
         XCTAssertEqual(results.map(\.uid), ["AAA"])
@@ -153,17 +163,27 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(features?.ingredientLineCount, 2)
         XCTAssertEqual(features?.ingredientLineCountBasis, .nonEmptyLines)
 
+        let ingredientIndex = try XCTUnwrap(store.fetchRecipeIngredientIndex(uid: "AAA"))
+        XCTAssertEqual(ingredientIndex.lines.map(\.sourceText), ["Broth", "Beans"])
+        XCTAssertEqual(ingredientIndex.lines.flatMap(\.normalizedTokens), ["broth", "bean"])
+
         let stats = try store.indexStats()
         XCTAssertEqual(stats.recipeSearchDocumentCount, 2)
         XCTAssertEqual(stats.recipeFeatureCount, 2)
         XCTAssertEqual(stats.recipeFeaturesWithTotalTimeCount, 1)
         XCTAssertEqual(stats.recipeFeaturesWithIngredientLineCountCount, 2)
+        XCTAssertEqual(stats.recipeIngredientRecipeCount, 2)
+        XCTAssertEqual(stats.recipeIngredientLineCount, 4)
+        XCTAssertEqual(stats.recipeIngredientTokenCount, 4)
         XCTAssertTrue(stats.recipeSearchReady)
         XCTAssertTrue(stats.recipeFeaturesReady)
+        XCTAssertTrue(stats.recipeIngredientIndexReady)
         XCTAssertEqual(stats.lastRecipeSearchRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeSearchRun?.recipeCount, 2)
         XCTAssertEqual(stats.lastRecipeFeatureRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeFeatureRun?.recipeCount, 2)
+        XCTAssertEqual(stats.lastRecipeIngredientRun?.status, .success)
+        XCTAssertEqual(stats.lastRecipeIngredientRun?.recipeCount, 2)
     }
 
     func testSearchNormalizesPlainQueriesForFTS() async throws {
@@ -313,6 +333,50 @@ final class PantryStoreTests: XCTestCase {
             limit: 20
         )
         XCTAssertEqual(exactRatingResults.map(\.uid), ["AAA", "BBB"])
+    }
+
+    func testIngredientNormalizationIndexesConservativeTokensPerLine() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Salad", hash: "hash-aaa"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Tomato Salad",
+                    categoryReferences: [],
+                    sourceName: nil,
+                    ingredients: """
+                    1 (14-ounce) can diced tomatoes, drained
+                    2 cups fresh basil leaves, roughly chopped
+                    kosher salt, to taste
+                    """,
+                    directions: nil,
+                    notes: nil,
+                    starRating: nil,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let ingredientIndex = try XCTUnwrap(store.fetchRecipeIngredientIndex(uid: "AAA"))
+        XCTAssertEqual(ingredientIndex.lines.count, 3)
+        XCTAssertEqual(ingredientIndex.lines[0].sourceText, "1 (14-ounce) can diced tomatoes, drained")
+        XCTAssertEqual(ingredientIndex.lines[0].normalizedTokens, ["tomato"])
+        XCTAssertEqual(ingredientIndex.lines[1].normalizedTokens, ["fresh", "basil", "leaves"])
+        XCTAssertEqual(ingredientIndex.lines[2].normalizedTokens, ["kosher", "salt"])
     }
 
     func testListCookbookAggregatesGroupsTrimmedSourceNamesAndUnlabeledRows() async throws {
@@ -491,6 +555,94 @@ final class PantryStoreTests: XCTestCase {
             limit: 20
         )
         XCTAssertEqual(sideResults.map(\.uid), ["CCC"])
+    }
+
+    func testSearchRecipesAppliesIngredientTokenFilter() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Pasta", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Lemon Pasta", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Green Salad", hash: "hash-ccc"),
+            ],
+            categories: [
+                SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+            ],
+            recipesByUID: [
+                "AAA": SourceRecipe(
+                    uid: "AAA",
+                    name: "Tomato Pasta",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Pasta\nTomatoes\nBasil",
+                    directions: nil,
+                    notes: "Weeknight favorite.",
+                    starRating: 5,
+                    isFavorite: true,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-aaa",
+                    rawJSON: "{}"
+                ),
+                "BBB": SourceRecipe(
+                    uid: "BBB",
+                    name: "Lemon Pasta",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Pasta\nLemon\nButter",
+                    directions: nil,
+                    notes: "Weeknight bright.",
+                    starRating: 4,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-bbb",
+                    rawJSON: "{}"
+                ),
+                "CCC": SourceRecipe(
+                    uid: "CCC",
+                    name: "Green Salad",
+                    categoryReferences: ["CAT1"],
+                    sourceName: nil,
+                    ingredients: "Lettuce\nTomatoes\nCucumber",
+                    directions: nil,
+                    notes: "Fresh side.",
+                    starRating: 3,
+                    isFavorite: false,
+                    prepTime: nil,
+                    cookTime: nil,
+                    totalTime: nil,
+                    servings: nil,
+                    createdAt: nil,
+                    updatedAt: nil,
+                    remoteHash: "hash-ccc",
+                    rawJSON: "{}"
+                ),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let tomatoResults = try store.searchRecipes(
+            query: "weeknight pasta",
+            ingredientFilter: RecipeIngredientFilter(rawTerms: ["tomatoes"]),
+            sort: .rating,
+            limit: 20
+        )
+        XCTAssertEqual(tomatoResults.map(\.uid), ["AAA"])
+
+        let pastaAndTomatoUIDs = try store.matchingRecipeUIDs(
+            for: RecipeIngredientFilter(rawTerms: ["pasta", "tomato"])
+        )
+        XCTAssertEqual(pastaAndTomatoUIDs, Set(["AAA"]))
     }
 
     func testDerivedFeaturesPreferSourceTotalTimeWhenAvailable() async throws {

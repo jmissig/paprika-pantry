@@ -272,6 +272,14 @@ final class RecipeCommandResolutionTests: XCTestCase {
         )
 
         XCTAssertThrowsError(
+            try RecipesListCommand.parseAsRoot(["--ingredient", "  "])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesSearchCommand.parseAsRoot(["risotto", "--ingredient", "1 cup"])
+        )
+
+        XCTAssertThrowsError(
             try RecipesListCommand.parseAsRoot(["--min-total-time-minutes", "40", "--max-total-time-minutes", "30"])
         )
 

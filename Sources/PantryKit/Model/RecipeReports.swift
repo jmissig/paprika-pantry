@@ -4,8 +4,10 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let derivedReadPath: String?
+    public let ingredientReadPath: String?
     public let recipeCount: Int
     public let canonicalFilters: RecipeQueryFilters
+    public let ingredientFilter: RecipeIngredientFilter
     public let derivedConstraints: RecipeDerivedConstraints
     public let sort: RecipeListSort
     public let recipes: [RecipeSummary]
@@ -13,16 +15,20 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public init(
         recipes: [RecipeSummary],
         canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
+        ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeListSort = .name,
         readPath: String = "direct-source",
-        derivedReadPath: String? = nil
+        derivedReadPath: String? = nil,
+        ingredientReadPath: String? = nil
     ) {
         self.command = "recipes list"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
+        self.ingredientReadPath = ingredientReadPath
         self.recipeCount = recipes.count
         self.canonicalFilters = canonicalFilters
+        self.ingredientFilter = ingredientFilter
         self.derivedConstraints = derivedConstraints
         self.sort = sort
         self.recipes = recipes
@@ -33,7 +39,11 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
         if let derivedReadPath {
             lines.append("derived_read_path: \(derivedReadPath)")
         }
+        if let ingredientReadPath {
+            lines.append("ingredient_read_path: \(ingredientReadPath)")
+        }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
+        lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
         lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
         lines.append("sort: \(sort.rawValue)")
 
@@ -191,6 +201,7 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public let stats: PantryIndexStats
     public let recipeSearchFreshnessSeconds: Int?
     public let recipeFeatureFreshnessSeconds: Int?
+    public let recipeIngredientFreshnessSeconds: Int?
     public let paths: PantryPathReport
 
     public init(stats: PantryIndexStats, paths: PantryPaths, now: Date) {
@@ -200,6 +211,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.recipeFeatureFreshnessSeconds = stats.lastSuccessfulRecipeFeatureRun.map {
+            max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
+        }
+        self.recipeIngredientFreshnessSeconds = stats.lastSuccessfulRecipeIngredientRun.map {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.paths = paths.report
@@ -214,6 +228,10 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_feature_rows: \(stats.recipeFeatureCount)",
             "recipe_features_with_total_time: \(stats.recipeFeaturesWithTotalTimeCount)",
             "recipe_features_with_ingredient_line_count: \(stats.recipeFeaturesWithIngredientLineCountCount)",
+            "recipe_ingredient_index_ready: \(stats.recipeIngredientIndexReady ? "yes" : "no")",
+            "recipe_ingredient_recipes: \(stats.recipeIngredientRecipeCount)",
+            "recipe_ingredient_lines: \(stats.recipeIngredientLineCount)",
+            "recipe_ingredient_tokens: \(stats.recipeIngredientTokenCount)",
         ]
 
         if let lastRun = stats.lastRecipeSearchRun {
@@ -246,6 +264,21 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("recipe_features_freshness: never-built")
         }
 
+        if let lastRun = stats.lastRecipeIngredientRun {
+            lines.append("recipe_ingredients_last_run_at: \(renderedTimestamp(lastRun.startedAt))")
+            lines.append("recipe_ingredients_last_run_status: \(lastRun.status.rawValue)")
+        }
+
+        if let lastSuccess = stats.lastSuccessfulRecipeIngredientRun {
+            lines.append("recipe_ingredients_last_success_at: \(renderedTimestamp(lastSuccess.finishedAt ?? lastSuccess.startedAt))")
+        }
+
+        if let recipeIngredientFreshnessSeconds {
+            lines.append("recipe_ingredients_freshness: \(renderedDuration(seconds: recipeIngredientFreshnessSeconds)) old")
+        } else {
+            lines.append("recipe_ingredients_freshness: never-built")
+        }
+
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
@@ -264,13 +297,16 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
 
     public var humanDescription: String {
         [
-            "\(command): Rebuilt owned recipe indexes and derived features.",
+            "\(command): Rebuilt owned recipe search, feature, and ingredient indexes.",
             "started_at: \(renderedTimestamp(summary.startedAt))",
             "finished_at: \(renderedTimestamp(summary.finishedAt))",
             "recipe_search_documents: \(summary.recipeSearchDocumentCount)",
             "recipe_feature_rows: \(summary.recipeFeatureCount)",
             "recipe_features_with_total_time: \(summary.recipeFeaturesWithTotalTimeCount)",
             "recipe_features_with_ingredient_line_count: \(summary.recipeFeaturesWithIngredientLineCountCount)",
+            "recipe_ingredient_recipes: \(summary.recipeIngredientRecipeCount)",
+            "recipe_ingredient_lines: \(summary.recipeIngredientLineCount)",
+            "recipe_ingredient_tokens: \(summary.recipeIngredientTokenCount)",
             renderedPaths(paths),
         ].joined(separator: "\n")
     }
@@ -280,9 +316,11 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let derivedReadPath: String?
+    public let ingredientReadPath: String?
     public let query: String
     public let resultCount: Int
     public let canonicalFilters: RecipeQueryFilters
+    public let ingredientFilter: RecipeIngredientFilter
     public let derivedConstraints: RecipeDerivedConstraints
     public let sort: RecipeSearchSort
     public let results: [IndexedRecipeSearchResult]
@@ -291,19 +329,23 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public init(
         query: String,
         canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
+        ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
         sort: RecipeSearchSort = .relevance,
         results: [IndexedRecipeSearchResult],
         paths: PantryPaths,
         readPath: String = "sidecar-search-index",
-        derivedReadPath: String? = nil
+        derivedReadPath: String? = nil,
+        ingredientReadPath: String? = nil
     ) {
         self.command = "recipes search"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
+        self.ingredientReadPath = ingredientReadPath
         self.query = query
         self.resultCount = results.count
         self.canonicalFilters = canonicalFilters
+        self.ingredientFilter = ingredientFilter
         self.derivedConstraints = derivedConstraints
         self.sort = sort
         self.results = results
@@ -319,7 +361,11 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
         if let derivedReadPath {
             lines.append("derived_read_path: \(derivedReadPath)")
         }
+        if let ingredientReadPath {
+            lines.append("ingredient_read_path: \(ingredientReadPath)")
+        }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
+        lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
         lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
         lines.append("sort: \(sort.rawValue)")
 
@@ -448,6 +494,87 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
+public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
+    public let command: String
+    public let sourceReadPath: String
+    public let ingredientReadPath: String
+    public let recipe: RecipeDetail
+    public let ingredientIndex: RecipeIngredientIndex?
+    public let paths: PantryPathReport
+
+    public init(
+        recipe: RecipeDetail,
+        ingredientIndex: RecipeIngredientIndex?,
+        paths: PantryPaths,
+        sourceReadPath: String = "direct-source",
+        ingredientReadPath: String = "sidecar-ingredient-index"
+    ) {
+        self.command = "recipes ingredients"
+        self.sourceReadPath = sourceReadPath
+        self.ingredientReadPath = ingredientReadPath
+        self.recipe = recipe
+        self.ingredientIndex = ingredientIndex
+        self.paths = paths.report
+    }
+
+    public var humanDescription: String {
+        var lines = [
+            "\(command): \(recipe.name)",
+            "source_read_path: \(sourceReadPath)",
+            "ingredient_read_path: \(ingredientReadPath)",
+            "uid: \(recipe.uid)",
+        ]
+
+        if !recipe.categories.isEmpty {
+            lines.append("categories: \(recipe.categories.joined(separator: ", "))")
+        }
+
+        if let sourceName = recipe.sourceName, !sourceName.isEmpty {
+            lines.append("source_name: \(sourceName)")
+        }
+
+        if let ingredientIndex {
+            lines.append("derived_at: \(renderedTimestamp(ingredientIndex.derivedAt))")
+
+            switch ingredientIndex.sourceHashMatches(recipe.remoteHash) {
+            case .some(true):
+                lines.append("derived_source_hash_matches: yes")
+            case .some(false):
+                lines.append("derived_source_hash_matches: no")
+            case .none:
+                lines.append("derived_source_hash_matches: unknown")
+            }
+
+            lines.append("indexed_ingredient_lines: \(ingredientIndex.lines.count)")
+            lines.append("indexed_ingredient_tokens: \(ingredientIndex.normalizedTokenCount)")
+        } else {
+            lines.append("indexed_ingredient_lines: 0")
+            lines.append("indexed_ingredient_tokens: 0")
+        }
+
+        if let ingredients = recipe.ingredients, !ingredients.isEmpty {
+            lines.append("source_ingredients:")
+            lines.append(ingredients)
+        }
+
+        if let ingredientIndex, !ingredientIndex.lines.isEmpty {
+            lines.append("indexed_lines:")
+            for line in ingredientIndex.lines {
+                let normalizedTokens = line.normalizedTokens.isEmpty ? "-" : line.normalizedTokens.joined(separator: ", ")
+                let normalizedText = line.normalizedText ?? "-"
+                lines.append(
+                    "\(line.lineNumber): source=\"\(line.sourceText)\" | normalized_text=\(normalizedText) | normalized_tokens=\(normalizedTokens)"
+                )
+            }
+        } else {
+            lines.append("No non-empty ingredient lines were indexed from the source recipe.")
+        }
+
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
+    }
+}
+
 func renderedTimestamp(_ date: Date) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
@@ -524,6 +651,19 @@ func renderedRecipeDerivedConstraints(_ constraints: RecipeDerivedConstraints) -
         lines.append("derived.max_ingredient_line_count: \(maxIngredientLineCount)")
     }
 
+    return lines
+}
+
+func renderedRecipeIngredientFilter(_ filter: RecipeIngredientFilter) -> [String] {
+    guard !filter.isDefault else {
+        return []
+    }
+
+    var lines = [String]()
+    if !filter.rawTerms.isEmpty {
+        lines.append("ingredient.terms_all: \(filter.rawTerms.joined(separator: ", "))")
+    }
+    lines.append("ingredient.normalized_tokens_all: \(filter.normalizedTokens.joined(separator: ", "))")
     return lines
 }
 

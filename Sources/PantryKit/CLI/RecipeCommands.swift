@@ -4,12 +4,13 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query canonical recipes and sidecar-backed recipe search/features.",
+        abstract: "Query canonical recipes and sidecar-backed recipe search/features/ingredient tokens.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
             RecipesSearchCommand.self,
             RecipesFeaturesCommand.self,
+            RecipesIngredientsCommand.self,
         ]
     )
 
@@ -19,7 +20,7 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List recipes from the configured pantry source with canonical filters and optional sidecar-derived time/ingredient constraints."
+        abstract: "List recipes from the configured pantry source with canonical filters plus optional sidecar-derived ingredient/time constraints."
     )
 
     @Flag(name: .long, help: "Only include recipes marked favorite in Paprika.")
@@ -33,6 +34,9 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
+
+    @Option(name: .long, help: "Require this normalized ingredient term from the sidecar ingredient index. Repeat to require multiple terms.")
+    public var ingredient: [String] = []
 
     @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
     public var minTotalTimeMinutes: Int?
@@ -53,6 +57,7 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
+        try validateRecipeIngredientOptions(ingredient)
         try validateRecipeDerivedQueryOptions(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -71,6 +76,7 @@ public struct RecipesListCommand: PantryLeafCommand {
             maxRating: maxRating,
             categoryNames: category
         )
+        let ingredientFilter = RecipeIngredientFilter(rawTerms: ingredient)
         let derivedConstraints = RecipeDerivedConstraints(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -79,6 +85,7 @@ public struct RecipesListCommand: PantryLeafCommand {
         )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
         let store = try context.makeStore()
+        let matchingRecipeUIDs: Set<String>?
         let derivedFeaturesByUID: [String: RecipeDerivedFeatures]
         let derivedReadPath: String?
 
@@ -94,6 +101,16 @@ public struct RecipesListCommand: PantryLeafCommand {
             derivedReadPath = nil
         }
 
+        if ingredientFilter.isDefault {
+            matchingRecipeUIDs = nil
+        } else {
+            guard try store.indexStats().recipeIngredientIndexReady else {
+                throw ValidationError("Recipe ingredient index is required for ingredient filters. Run `paprika-pantry index rebuild` first.")
+            }
+
+            matchingRecipeUIDs = try store.matchingRecipeUIDs(for: ingredientFilter)
+        }
+
         let recipes = try BlockingAsync.run {
             try await recipeReadService.listRecipes(
                 filters: canonicalFilters,
@@ -102,13 +119,18 @@ public struct RecipesListCommand: PantryLeafCommand {
                 derivedFeaturesByUID: derivedFeaturesByUID
             )
         }
+        let filteredRecipes = matchingRecipeUIDs.map { requiredUIDs in
+            recipes.filter { requiredUIDs.contains($0.uid) }
+        } ?? recipes
         try context.write(
             RecipesListReport(
-                recipes: recipes,
+                recipes: filteredRecipes,
                 canonicalFilters: canonicalFilters,
+                ingredientFilter: ingredientFilter,
                 derivedConstraints: derivedConstraints,
                 sort: sort,
-                derivedReadPath: derivedReadPath
+                derivedReadPath: derivedReadPath,
+                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index"
             )
         )
     }
@@ -139,7 +161,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search recipes through the owned sidecar index with canonical filters and optional derived time/ingredient constraints."
+        abstract: "Search recipes through the owned sidecar index with canonical filters plus optional ingredient-token and derived time constraints."
     )
 
     @Argument(help: "Search query.")
@@ -156,6 +178,9 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
+
+    @Option(name: .long, help: "Require this normalized ingredient term from the sidecar ingredient index. Repeat to require multiple terms.")
+    public var ingredient: [String] = []
 
     @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
     public var minTotalTimeMinutes: Int?
@@ -179,6 +204,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
+        try validateRecipeIngredientOptions(ingredient)
         try validateRecipeDerivedQueryOptions(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -209,6 +235,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             maxRating: maxRating,
             categoryNames: category
         )
+        let ingredientFilter = RecipeIngredientFilter(rawTerms: ingredient)
         let derivedConstraints = RecipeDerivedConstraints(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -222,9 +249,14 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
+        if !ingredientFilter.isDefault && !indexStats.recipeIngredientIndexReady {
+            throw ValidationError("Recipe ingredient index is required for ingredient filters. Run `paprika-pantry index rebuild` first.")
+        }
+
         let results = try store.searchRecipes(
             query: query,
             filters: canonicalFilters,
+            ingredientFilter: ingredientFilter,
             derivedConstraints: derivedConstraints,
             sort: sort,
             limit: limit
@@ -233,11 +265,13 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             RecipesSearchReport(
                 query: query,
                 canonicalFilters: canonicalFilters,
+                ingredientFilter: ingredientFilter,
                 derivedConstraints: derivedConstraints,
                 sort: sort,
                 results: results,
                 paths: context.paths,
-                derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil
+                derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil,
+                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index"
             )
         )
     }
@@ -274,6 +308,33 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     }
 }
 
+public struct RecipesIngredientsCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "ingredients",
+        abstract: "Show source ingredient lines beside sidecar-normalized ingredient tokens for one recipe."
+    )
+
+    @Argument(help: "Recipe UID or name.")
+    public var selector: String
+
+    public init() {}
+    public mutating func run() throws {
+        let context = try makeContext()
+        let store = try context.makeStore()
+        guard try store.indexStats().recipeIngredientIndexReady else {
+            throw ValidationError("Recipe ingredient index is not ready. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let recipeReadService = try context.makeRecipeReadService()
+        let selector = self.selector
+        let recipe = try BlockingAsync.run {
+            try await recipeReadService.resolveRecipe(selector: selector)
+        }
+        let ingredientIndex = try store.fetchRecipeIngredientIndex(uid: recipe.uid)
+        try context.write(RecipeIngredientsReport(recipe: recipe, ingredientIndex: ingredientIndex, paths: context.paths))
+    }
+}
+
 private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, categories: [String]) throws {
     if let minRating, !(1 ... 5).contains(minRating) {
         throw ValidationError("--min-rating must be between 1 and 5.")
@@ -289,6 +350,19 @@ private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, catego
 
     if categories.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
         throw ValidationError("--category must not be empty.")
+    }
+}
+
+private func validateRecipeIngredientOptions(_ ingredients: [String]) throws {
+    if ingredients.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        throw ValidationError("--ingredient must not be empty.")
+    }
+
+    for term in ingredients {
+        let filter = RecipeIngredientFilter(rawTerms: [term])
+        if filter.normalizedTokens.isEmpty {
+            throw ValidationError("--ingredient must contain at least one queryable token after conservative normalization.")
+        }
     }
 }
 

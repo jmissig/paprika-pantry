@@ -105,6 +105,33 @@ public struct PantryDatabase {
             try db.create(index: "recipe_features_on_ingredient_line_count", on: "recipe_features", columns: ["ingredient_line_count"])
         }
 
+        migrator.registerMigration("recipe-ingredients-v1") { db in
+            try db.create(table: "recipe_ingredient_lines") { table in
+                table.column("recipe_uid", .text).notNull()
+                table.column("line_number", .integer).notNull()
+                table.column("source_text", .text).notNull()
+                table.column("normalized_text", .text)
+                table.column("source_remote_hash", .text)
+                table.column("derived_at", .text).notNull()
+                table.primaryKey(["recipe_uid", "line_number"])
+            }
+
+            try db.create(index: "recipe_ingredient_lines_on_recipe_uid", on: "recipe_ingredient_lines", columns: ["recipe_uid"])
+            try db.create(index: "recipe_ingredient_lines_on_derived_at", on: "recipe_ingredient_lines", columns: ["derived_at"])
+
+            try db.create(table: "recipe_ingredient_tokens") { table in
+                table.column("recipe_uid", .text).notNull()
+                table.column("line_number", .integer).notNull()
+                table.column("token", .text).notNull()
+                table.column("token_position", .integer).notNull()
+                table.primaryKey(["recipe_uid", "line_number", "token_position"])
+            }
+
+            try db.create(index: "recipe_ingredient_tokens_on_token", on: "recipe_ingredient_tokens", columns: ["token"])
+            try db.create(index: "recipe_ingredient_tokens_on_recipe_uid", on: "recipe_ingredient_tokens", columns: ["recipe_uid"])
+            try db.create(index: "recipe_ingredient_tokens_on_recipe_uid_token", on: "recipe_ingredient_tokens", columns: ["recipe_uid", "token"])
+        }
+
         return migrator
     }
 }
