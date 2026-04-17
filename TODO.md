@@ -77,7 +77,7 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase D — broaden direct read coverage
 
-- [ ] Add meals adapter/query support
+- [x] Add meals adapter/query support
 - [ ] Add groceries adapter/query support
 - [ ] Add pantry adapter/query support if it looks useful
 

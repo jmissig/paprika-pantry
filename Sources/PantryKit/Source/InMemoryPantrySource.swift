@@ -11,10 +11,11 @@ public enum InMemoryPantrySourceError: Error, LocalizedError, Equatable, Sendabl
     }
 }
 
-public final class InMemoryPantrySource: PantrySource, @unchecked Sendable {
+public final class InMemoryPantrySource: MealsReadablePantrySource, @unchecked Sendable {
     private let stubs: [SourceRecipeStub]
     private let categories: [SourceRecipeCategory]
     private let recipesByUID: [String: SourceRecipe]
+    private let meals: [SourceMeal]
     private let fetchErrorsByUID: [String: any Error]
 
     private let lock = NSLock()
@@ -24,11 +25,13 @@ public final class InMemoryPantrySource: PantrySource, @unchecked Sendable {
         stubs: [SourceRecipeStub],
         categories: [SourceRecipeCategory],
         recipesByUID: [String: SourceRecipe],
+        meals: [SourceMeal] = [],
         fetchErrorsByUID: [String: any Error] = [:]
     ) {
         self.stubs = stubs
         self.categories = categories
         self.recipesByUID = recipesByUID
+        self.meals = meals
         self.fetchErrorsByUID = fetchErrorsByUID
     }
 
@@ -54,5 +57,9 @@ public final class InMemoryPantrySource: PantrySource, @unchecked Sendable {
         }
 
         return recipe
+    }
+
+    public func listMeals() async throws -> [SourceMeal] {
+        meals
     }
 }

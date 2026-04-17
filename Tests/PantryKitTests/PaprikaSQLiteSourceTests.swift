@@ -18,6 +18,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
 
         let stubs = try await source.listRecipeStubs()
         let categories = try await source.listRecipeCategories()
+        let meals = try await source.listMeals()
         let recipe = try await source.fetchRecipe(uid: "AAA")
 
         XCTAssertEqual(
@@ -32,6 +33,36 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
             [
                 SourceRecipeCategory(uid: "CAT2", name: "Archive", isDeleted: true),
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
+            ]
+        )
+        XCTAssertEqual(
+            meals,
+            [
+                SourceMeal(
+                    uid: "MEAL2",
+                    name: "Pantry Pasta",
+                    scheduledAt: "2026-04-05 18:30:00",
+                    mealType: "Lunch",
+                    recipeUID: nil,
+                    recipeName: nil
+                ),
+                SourceMeal(
+                    uid: "MEAL1",
+                    name: "Weeknight Soup",
+                    scheduledAt: "2026-04-04 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup"
+                ),
+                SourceMeal(
+                    uid: "MEAL3",
+                    name: "Deleted Meal",
+                    scheduledAt: "2026-04-03 12:00:00",
+                    mealType: "Dinner",
+                    recipeUID: nil,
+                    recipeName: nil,
+                    isDeleted: true
+                ),
             ]
         )
 
@@ -144,6 +175,37 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.remoteHash, "hash-aaa")
     }
 
+    func testMealReadServiceListsMealsDirectlyFromPaprikaSQLiteSource() throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+        let service = try MealReadService(source: source)
+
+        let meals = try BlockingAsync.run {
+            try await service.listMeals()
+        }
+
+        XCTAssertEqual(
+            meals,
+            [
+                MealSummary(
+                    uid: "MEAL2",
+                    name: "Pantry Pasta",
+                    scheduledAt: "2026-04-05 18:30:00",
+                    mealType: "Lunch",
+                    recipeUID: nil,
+                    recipeName: nil
+                ),
+                MealSummary(
+                    uid: "MEAL1",
+                    name: "Weeknight Soup",
+                    scheduledAt: "2026-04-04 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup"
+                ),
+            ]
+        )
+    }
+
     private func makePaprikaSourceDatabase() throws -> URL {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("Paprika.sqlite")
@@ -200,6 +262,25 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     Z_12RECIPES INTEGER,
                     Z_13CATEGORIES INTEGER,
                     PRIMARY KEY (Z_12RECIPES, Z_13CATEGORIES)
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZMEALTYPE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZNAME VARCHAR,
+                    ZUID VARCHAR,
+                    ZSTATUS VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZMEAL (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZDATE TIMESTAMP,
+                    ZNAME VARCHAR,
+                    ZRECIPE INTEGER,
+                    ZSTATUS VARCHAR,
+                    ZTYPE INTEGER,
+                    ZUID VARCHAR
                 )
                 """)
 
@@ -278,6 +359,53 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ) VALUES (?, ?)
                     """,
                 arguments: [1, 1]
+            )
+            try db.execute(
+                sql: """
+                    INSERT INTO ZMEALTYPE (
+                        Z_PK,
+                        ZNAME,
+                        ZUID,
+                        ZSTATUS
+                    ) VALUES (?, ?, ?, ?), (?, ?, ?, ?)
+                    """,
+                arguments: [1, "Dinner", "TYPE1", "unmodified", 2, "Lunch", "TYPE2", "unmodified"]
+            )
+            try db.execute(
+                sql: """
+                    INSERT INTO ZMEAL (
+                        Z_PK,
+                        ZDATE,
+                        ZNAME,
+                        ZRECIPE,
+                        ZSTATUS,
+                        ZTYPE,
+                        ZUID
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    1,
+                    Self.appleReferenceSeconds(for: "2026-04-04 18:00:00"),
+                    "Weeknight Soup",
+                    1,
+                    "unmodified",
+                    1,
+                    "MEAL1",
+                    2,
+                    Self.appleReferenceSeconds(for: "2026-04-05 18:30:00"),
+                    "Pantry Pasta",
+                    nil,
+                    "unmodified",
+                    2,
+                    "MEAL2",
+                    3,
+                    Self.appleReferenceSeconds(for: "2026-04-03 12:00:00"),
+                    "Deleted Meal",
+                    nil,
+                    "deleted",
+                    1,
+                    "MEAL3",
+                ]
             )
         }
 

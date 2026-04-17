@@ -51,6 +51,12 @@ public struct CommandContext: Sendable {
     ) throws -> SourceStatsService {
         SourceStatsService(source: try makeSource(environment: environment))
     }
+
+    public func makeMealReadService(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> MealReadService {
+        try MealReadService(source: makeSource(environment: environment))
+    }
 }
 
 public protocol PantryLeafCommand: ParsableCommand {}

@@ -52,7 +52,7 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
     }
 }
 
-public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
+public final class PaprikaSQLiteSource: MealsReadablePantrySource, @unchecked Sendable {
     public let databaseURL: URL
     public let inspection: PaprikaSQLiteSourceInspection
 
@@ -132,6 +132,42 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
                 SourceRecipeCategory(
                     uid: row["uid"],
                     name: row["name"],
+                    isDeleted: Self.decodeBoolean(row["is_deleted"])
+                )
+            }
+        }
+    }
+
+    public func listMeals() async throws -> [SourceMeal] {
+        let sql = """
+            SELECT
+                meals.ZUID AS uid,
+                COALESCE(NULLIF(meals.ZNAME, ''), recipe.ZNAME) AS name,
+                \(self.schema.mealTimestampExpression) AS scheduled_at,
+                meal_type.ZNAME AS meal_type,
+                recipe.ZUID AS recipe_uid,
+                recipe.ZNAME AS recipe_name,
+                \(self.schema.mealDeletedExpression) AS is_deleted
+            FROM ZMEAL meals
+            LEFT JOIN ZMEALTYPE meal_type
+                ON meal_type.Z_PK = meals.ZTYPE
+            LEFT JOIN ZRECIPE recipe
+                ON recipe.Z_PK = meals.ZRECIPE
+            WHERE meals.ZUID IS NOT NULL
+              AND COALESCE(NULLIF(meals.ZNAME, ''), recipe.ZNAME) IS NOT NULL
+            ORDER BY scheduled_at DESC, name COLLATE NOCASE, uid
+            """
+
+        return try await dbQueue.read { db in
+            try self.schema.requireMealSupport()
+            return try Row.fetchAll(db, sql: sql).map { row in
+                SourceMeal(
+                    uid: row["uid"],
+                    name: row["name"],
+                    scheduledAt: row["scheduled_at"],
+                    mealType: row["meal_type"],
+                    recipeUID: row["recipe_uid"],
+                    recipeName: row["recipe_name"],
                     isDeleted: Self.decodeBoolean(row["is_deleted"])
                 )
             }
@@ -311,6 +347,8 @@ private struct PaprikaSQLiteSchema: Sendable {
     let recipeColumns: Set<String>
     let categoryColumns: Set<String>
     let recipeCategoryLinkColumns: Set<String>
+    let mealColumns: Set<String>?
+    let mealTypeColumns: Set<String>?
 
     static func inspect(_ db: Database) throws -> PaprikaSQLiteSchema {
         for table in requiredTables {
@@ -320,6 +358,8 @@ private struct PaprikaSQLiteSchema: Sendable {
         let recipeColumns = try Set(db.columns(in: "ZRECIPE").map(\.name))
         let categoryColumns = try Set(db.columns(in: "ZRECIPECATEGORY").map(\.name))
         let recipeCategoryLinkColumns = try Set(db.columns(in: "Z_12CATEGORIES").map(\.name))
+        let mealColumns = try db.tableExists("ZMEAL") ? Set(db.columns(in: "ZMEAL").map(\.name)) : nil
+        let mealTypeColumns = try db.tableExists("ZMEALTYPE") ? Set(db.columns(in: "ZMEALTYPE").map(\.name)) : nil
 
         try requireColumn("Z_PK", in: "ZRECIPE", availableColumns: recipeColumns)
         try requireColumn("ZUID", in: "ZRECIPE", availableColumns: recipeColumns)
@@ -332,10 +372,17 @@ private struct PaprikaSQLiteSchema: Sendable {
         try requireColumn("Z_12RECIPES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
         try requireColumn("Z_13CATEGORIES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
 
+        if let mealColumns {
+            try requireColumn("ZUID", in: "ZMEAL", availableColumns: mealColumns)
+            try requireColumn("ZNAME", in: "ZMEAL", availableColumns: mealColumns)
+        }
+
         return PaprikaSQLiteSchema(
             recipeColumns: recipeColumns,
             categoryColumns: categoryColumns,
-            recipeCategoryLinkColumns: recipeCategoryLinkColumns
+            recipeCategoryLinkColumns: recipeCategoryLinkColumns,
+            mealColumns: mealColumns,
+            mealTypeColumns: mealTypeColumns
         )
     }
 
@@ -374,14 +421,43 @@ private struct PaprikaSQLiteSchema: Sendable {
         recipeColumns.contains("ZONFAVORITES") ? "COALESCE(ZONFAVORITES, 0)" : "0"
     }
 
+    var mealDeletedExpression: String {
+        guard let mealColumns, mealColumns.contains("ZSTATUS") else {
+            return "0"
+        }
+
+        return "CASE WHEN lower(COALESCE(meals.ZSTATUS, '')) = 'deleted' THEN 1 ELSE 0 END"
+    }
+
+    var mealTimestampExpression: String {
+        timestampExpression(column: "ZDATE", from: mealColumns, tableAlias: "meals")
+    }
+
     func optionalTextExpression(column: String) -> String {
         recipeColumns.contains(column) ? column : "NULL"
     }
 
     func coreDataTimestampExpression(column: String) -> String {
-        recipeColumns.contains(column)
-            ? "CASE WHEN \(column) IS NULL THEN NULL ELSE datetime(\(column) + 978307200, 'unixepoch') END"
-            : "NULL"
+        timestampExpression(column: column, from: recipeColumns)
+    }
+
+    func timestampExpression(
+        column: String,
+        from availableColumns: Set<String>?,
+        tableAlias: String? = nil
+    ) -> String {
+        guard let availableColumns, availableColumns.contains(column) else {
+            return "NULL"
+        }
+
+        let qualifiedColumn = tableAlias.map { "\($0).\(column)" } ?? column
+        return "CASE WHEN \(qualifiedColumn) IS NULL THEN NULL ELSE datetime(\(qualifiedColumn) + 978307200, 'unixepoch') END"
+    }
+
+    func requireMealSupport() throws {
+        guard mealColumns != nil else {
+            throw PaprikaSQLiteSourceError.missingTable("ZMEAL")
+        }
     }
 
     func makeInspection(

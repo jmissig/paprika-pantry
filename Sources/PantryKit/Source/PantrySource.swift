@@ -84,8 +84,40 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     }
 }
 
+public struct SourceMeal: Codable, Equatable, Sendable {
+    public let uid: String
+    public let name: String
+    public let scheduledAt: String?
+    public let mealType: String?
+    public let recipeUID: String?
+    public let recipeName: String?
+    public let isDeleted: Bool
+
+    public init(
+        uid: String,
+        name: String,
+        scheduledAt: String?,
+        mealType: String?,
+        recipeUID: String?,
+        recipeName: String?,
+        isDeleted: Bool = false
+    ) {
+        self.uid = uid
+        self.name = name
+        self.scheduledAt = scheduledAt
+        self.mealType = mealType
+        self.recipeUID = recipeUID
+        self.recipeName = recipeName
+        self.isDeleted = isDeleted
+    }
+}
+
 public protocol PantrySource: Sendable {
     func listRecipeStubs() async throws -> [SourceRecipeStub]
     func listRecipeCategories() async throws -> [SourceRecipeCategory]
     func fetchRecipe(uid: String) async throws -> SourceRecipe
+}
+
+public protocol MealsReadablePantrySource: PantrySource {
+    func listMeals() async throws -> [SourceMeal]
 }
