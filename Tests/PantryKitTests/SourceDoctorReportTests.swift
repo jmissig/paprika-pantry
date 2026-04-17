@@ -3,16 +3,21 @@ import XCTest
 @testable import PantryKit
 
 final class SourceDoctorReportTests: XCTestCase {
-    func testSourceDoctorReportIncludesKindAndCredentialSource() {
+    func testSourceDoctorReportIncludesReadOnlySQLiteDetails() {
         let report = SourceDoctorReport(
             snapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
-                message: "The configured pantry source is ready.",
-                sourceKind: .paprikaToken,
-                displayName: "legacy token",
-                implementation: "direct Paprika token source",
-                credentialSource: "env:PAPRIKA_PANTRY_SOURCE_TOKEN",
-                sourceLocation: nil
+                message: "The configured pantry source is ready for direct read-only Paprika access.",
+                sourceKind: .paprikaSQLite,
+                displayName: "default Paprika SQLite",
+                implementation: "direct Paprika SQLite source",
+                credentialSource: nil,
+                sourceLocation: "/Users/test/Library/Group Containers/.../Paprika.sqlite",
+                schemaFlavor: "paprika-3-core-data",
+                accessMode: "read-only",
+                queryOnly: true,
+                journalMode: "wal",
+                hasWriteAheadLogFiles: true
             ),
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
@@ -22,8 +27,12 @@ final class SourceDoctorReportTests: XCTestCase {
         )
 
         XCTAssertEqual(report.status, "ready")
-        XCTAssertTrue(report.humanDescription.contains("kind: paprika-token"))
-        XCTAssertTrue(report.humanDescription.contains("credential_source: env:PAPRIKA_PANTRY_SOURCE_TOKEN"))
+        XCTAssertTrue(report.humanDescription.contains("kind: paprika-sqlite"))
+        XCTAssertTrue(report.humanDescription.contains("schema: paprika-3-core-data"))
+        XCTAssertTrue(report.humanDescription.contains("access_mode: read-only"))
+        XCTAssertTrue(report.humanDescription.contains("query_only: yes"))
+        XCTAssertTrue(report.humanDescription.contains("journal_mode: wal"))
+        XCTAssertTrue(report.humanDescription.contains("wal_files: present"))
         XCTAssertTrue(report.humanDescription.contains("database: /tmp/pantry/pantry.sqlite"))
     }
 }

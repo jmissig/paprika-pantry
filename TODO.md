@@ -2,15 +2,15 @@
 
 ## Current direction
 
-`paprika-pantry` remains a local-first mirror and query CLI.
+`paprika-pantry` is no longer primarily a mirror/sync tool.
 
-What changed is the architectural reset:
+Current architecture direction:
 
-- the local mirror work was worth doing and should stay
-- the owned direct-auth / direct-Paprika-HTTP path is no longer the product direction
-- next step is to introduce a `PantrySource` seam
-- only after that seam exists should we decide the first real source backend
-- kappari is currently best treated as reference/protocol knowledge, not yet assumed to be the runtime backend
+- read canonical data directly from the local Paprika 3 SQLite database
+- never write to the real `Paprika.sqlite`
+- keep Paprika-specific Core Data weirdness behind a narrow adapter layer
+- use a sidecar SQLite database only for things we own: indexing, denormalized helper tables, derived facts, and analysis artifacts
+- remove now-stale mirror-first and kappari-cutover planning
 
 ## Already landed
 
@@ -28,83 +28,64 @@ What changed is the architectural reset:
 - [x] Add root CLI and initial command tree
 - [x] Add managed path plumbing
 - [x] Add shared JSON output support
-- [x] Stub intentionally-later commands:
-  - [x] `meals list`
-  - [x] `groceries list`
-  - [x] `doctor`
 
-### Local recipe mirror core
+### Source seam and local-store groundwork
 
-- [x] Add first SQLite migration(s)
-- [x] Add recipe/category/sync-run store layer
-- [x] Add recipe sync engine behavior for:
-  - [x] stub listing
-  - [x] changed/new hydration
-  - [x] tombstoning missing recipes
-  - [x] sync-run recording
-- [x] Add local commands:
-  - [x] `sync run`
-  - [x] `sync status`
-  - [x] `recipes list`
-  - [x] `recipes show`
-  - [x] `db stats`
-- [x] Add tests for store, sync engine, reports, and command resolution
+- [x] Introduce `PantrySource` and source model types
+- [x] Add source-provider plumbing
+- [x] Add a `paprika-sqlite` source kind
+- [x] Add sidecar SQLite migration/store groundwork
+- [x] Add recipe/category/sync-style store and report code that may be partially reusable for sidecar/index work
 
-### Experimental path now considered non-strategic
+## Remove / reshape
 
-These landed, but are now on the chopping block rather than future foundation:
+These are now legacy direction and should be removed or reshaped around the new architecture:
 
-- [x] direct auth/session/config flow
-- [x] direct Paprika HTTP clients
-- [x] `auth login`
-- [x] `auth status`
-- [x] `auth logout`
+- [ ] Delete remaining direct Paprika HTTP client code
+- [ ] Delete or rewrite mirror-first sync logic that assumes canonical duplication is the default
+- [ ] Delete or rewrite tests that assume the old simplified Paprika SQLite schema
+- [ ] Rewrite docs/help text that still describes the product as a remote-auth or full-mirror tool
 
 ## Next implementation slice
 
-### Phase A — source seam
+### Phase A — real read-only Paprika adapter
 
-- [x] Introduce `PantrySource` and source model types
-- [x] Reframe current remote abstraction around `PantrySource`
-- [x] Rewrite `RecipeMirrorSyncEngine` to depend on `PantrySource`
-- [x] Add fake/in-memory source for tests
-- [x] Move sync-engine tests onto the source abstraction
+- [ ] Detect the real Paprika 3 Core Data schema (`ZRECIPE`, `ZRECIPECATEGORY`, `Z_12CATEGORIES`, etc.)
+- [ ] Open the real Paprika DB read-only via GRDB
+- [ ] Make the default database-path discovery point at the Group Containers location
+- [ ] Add hard guards against opening the source DB through migration-writing code paths
+- [ ] Map recipes and categories from the real schema into stable internal source/domain models
+- [ ] Handle Paprika/Core Data timestamp conversion cleanly
 
-### Phase B — source-oriented CLI plumbing
+### Phase B — direct query surfaces over canonical data
 
-- [x] Rewrite `sync run` to use a source provider instead of session/token loading
-- [x] Add `source doctor`
-- [x] Update CLI help/discussion text to describe source-oriented architecture
-- [x] Update path/config plumbing so it no longer assumes owned auth/session files
+- [ ] Make `source doctor` confirm read-only access, schema shape, and WAL conditions
+- [ ] Make `recipes list` read directly from the Paprika adapter
+- [ ] Make `recipes show <uid|name>` read directly from the Paprika adapter
+- [ ] Add a safe verification/report command for raw source counts and sample coverage
 
-### Phase C — remove owned auth path
+### Phase C — sidecar, only where it helps
 
-- [x] Delete auth commands
-- [x] Delete auth/session/config model/store code
-- [ ] Delete direct Paprika HTTP clients
-- [x] Delete auth/direct-HTTP tests
-- [x] Remove stale references to direct auth from docs/help/tests
+- [ ] Define a sidecar schema for owned data only:
+  - [ ] search/FTS indexes
+  - [ ] derived fact tables
+  - [ ] clustering/pattern tables
+  - [ ] index/update bookkeeping
+- [ ] Add `index stats`
+- [ ] Add `index rebuild`
+- [ ] Add the first worthwhile sidecar-backed feature, probably recipe search
 
-## Decision to make after the seam exists
+### Phase D — broaden direct read coverage
 
-- [ ] Choose the first real source backend:
-  - [ ] thin kappari wrapper
-  - [ ] local source implementation informed by kappari
+- [ ] Add meals adapter/query support
+- [ ] Add groceries adapter/query support
+- [ ] Add pantry adapter/query support if it looks useful
 
-Do not make this call before the source seam is in place.
+## Explicitly not now
 
-## Later
-
-- [ ] Add stale/fresh reporting improvements where still needed
-- [ ] Add `recipes search`
-- [ ] Add meals mirror and queries
-- [ ] Add groceries mirror and queries
-- [ ] Revisit category model/schema if source integration reveals needed changes
-- [ ] Consider photos/attachments only if they become important to real usage
-
-## Explicitly not yet
-
-- [ ] No upstream writes
+- [ ] No writes to the real Paprika DB
+- [ ] No remote-auth resurrection as product direction
+- [ ] No blind full duplication of Paprika canonical rows into our sidecar
 - [ ] No background daemon/scheduler
 - [ ] No multi-account support
 - [ ] No generic Paprika SDK extraction

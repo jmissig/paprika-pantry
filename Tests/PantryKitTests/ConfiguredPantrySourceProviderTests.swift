@@ -4,13 +4,13 @@ import XCTest
 @testable import PantryKit
 
 final class ConfiguredPantrySourceProviderTests: XCTestCase {
-    private var temporaryDirectoryURL: URL?
+    private var temporaryDirectories = [URL]()
 
     override func tearDownWithError() throws {
-        if let temporaryDirectoryURL {
-            try? FileManager.default.removeItem(at: temporaryDirectoryURL)
+        for directory in temporaryDirectories {
+            try? FileManager.default.removeItem(at: directory)
         }
-        temporaryDirectoryURL = nil
+        temporaryDirectories.removeAll()
     }
 
     func testEnvironmentTokenProvidesReadyPaprikaSource() throws {
@@ -60,7 +60,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
 
     func testConfiguredPaprikaSQLiteSourceUsesConfiguredDatabasePath() throws {
         let paths = try makePaths()
-        let sourceDatabaseURL = try makePaprikaSourceDatabase()
+        let sourceDatabaseURL = try makePaprikaSourceDatabase(at: "Paprika.sqlite")
         try PantryConfigStore(paths: paths).saveConfig(
             PantryConfig(
                 source: PantrySourceConfiguration(
@@ -86,7 +86,38 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
         XCTAssertEqual(snapshot.displayName, "local paprika")
         XCTAssertEqual(snapshot.sourceLocation, sourceDatabaseURL.path)
+        XCTAssertEqual(snapshot.schemaFlavor, "paprika-3-core-data")
+        XCTAssertEqual(snapshot.accessMode, "read-only")
+        XCTAssertEqual(snapshot.queryOnly, true)
+        XCTAssertEqual(snapshot.journalMode, "wal")
         XCTAssertNotNil(source as? PaprikaSQLiteSource)
+    }
+
+    func testDefaultPaprikaSQLiteDiscoveryPrefersGroupContainerPath() throws {
+        let paths = try makePaths()
+        let providerFileManager = try makeProviderFileManager()
+        let homeDirectory = providerFileManager.homeDirectoryForCurrentUser
+
+        let groupContainerDatabaseURL = homeDirectory
+            .appendingPathComponent("Library/Group Containers/72KVKW69K8.com.hindsightlabs.paprika.mac.v3/Data/Database/Paprika.sqlite")
+        let legacyDatabaseURL = homeDirectory
+            .appendingPathComponent("Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite")
+
+        try makePaprikaSourceDatabase(at: groupContainerDatabaseURL.path)
+        try makePaprikaSourceDatabase(at: legacyDatabaseURL.path)
+
+        let provider = ConfiguredPantrySourceProvider(
+            paths: paths,
+            environment: [:],
+            fileManager: providerFileManager
+        )
+
+        let snapshot = try provider.diagnose()
+
+        XCTAssertEqual(snapshot.status, .ready)
+        XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(snapshot.displayName, "default Paprika SQLite")
+        XCTAssertEqual(snapshot.sourceLocation, groupContainerDatabaseURL.path)
     }
 
     func testMissingSourceConfigurationReportsNotConfigured() throws {
@@ -132,10 +163,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
     }
 
     private func makePaths() throws -> PantryPaths {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        temporaryDirectoryURL = root
+        let root = try makeTemporaryDirectory()
         return PantryPaths(
             homeDirectory: root,
             configFile: root.appendingPathComponent("config.json"),
@@ -144,41 +172,64 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
     }
 
     private func makeProviderFileManager() throws -> FileManager {
-        ProviderTestFileManager(homeDirectory: try XCTUnwrap(temporaryDirectoryURL))
+        ProviderTestFileManager(homeDirectory: try makeTemporaryDirectory())
     }
 
-    private func makePaprikaSourceDatabase() throws -> URL {
-        let root = try XCTUnwrap(temporaryDirectoryURL)
-        let databaseURL = root.appendingPathComponent("Paprika.sqlite")
+    @discardableResult
+    private func makePaprikaSourceDatabase(at path: String) throws -> URL {
+        let databaseURL = URL(fileURLWithPath: path)
+        try FileManager.default.createDirectory(
+            at: databaseURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         let queue = try DatabaseQueue(path: databaseURL.path)
+
+        try queue.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        }
 
         try queue.write { db in
             try db.execute(sql: """
-                CREATE TABLE recipes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    sync_hash TEXT,
-                    in_trash INTEGER NOT NULL DEFAULT 0
+                CREATE TABLE IF NOT EXISTS Z_METADATA (
+                    Z_VERSION INTEGER PRIMARY KEY,
+                    Z_UUID TEXT,
+                    Z_PLIST BLOB
                 )
                 """)
             try db.execute(sql: """
-                CREATE TABLE categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    in_trash INTEGER NOT NULL DEFAULT 0
+                CREATE TABLE ZRECIPE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZUID TEXT,
+                    ZNAME TEXT,
+                    ZSYNCHASH TEXT
                 )
                 """)
             try db.execute(sql: """
-                CREATE TABLE recipe_categories (
-                    recipe_id INTEGER NOT NULL,
-                    category_id INTEGER NOT NULL
+                CREATE TABLE ZRECIPECATEGORY (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZUID TEXT,
+                    ZNAME TEXT,
+                    ZSTATUS TEXT
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE Z_12CATEGORIES (
+                    Z_12RECIPES INTEGER,
+                    Z_13CATEGORIES INTEGER,
+                    PRIMARY KEY (Z_12RECIPES, Z_13CATEGORIES)
                 )
                 """)
         }
 
         return databaseURL
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        temporaryDirectories.append(root)
+        return root
     }
 }
 

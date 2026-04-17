@@ -117,6 +117,11 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
     public let implementation: String?
     public let credentialSource: String?
     public let sourceLocation: String?
+    public let schemaFlavor: String?
+    public let accessMode: String?
+    public let queryOnly: Bool?
+    public let journalMode: String?
+    public let hasWriteAheadLogFiles: Bool?
 
     public init(
         status: PantrySourceDoctorStatus,
@@ -125,7 +130,12 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         displayName: String?,
         implementation: String?,
         credentialSource: String?,
-        sourceLocation: String?
+        sourceLocation: String?,
+        schemaFlavor: String? = nil,
+        accessMode: String? = nil,
+        queryOnly: Bool? = nil,
+        journalMode: String? = nil,
+        hasWriteAheadLogFiles: Bool? = nil
     ) {
         self.status = status
         self.message = message
@@ -134,6 +144,11 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         self.implementation = implementation
         self.credentialSource = credentialSource
         self.sourceLocation = sourceLocation
+        self.schemaFlavor = schemaFlavor
+        self.accessMode = accessMode
+        self.queryOnly = queryOnly
+        self.journalMode = journalMode
+        self.hasWriteAheadLogFiles = hasWriteAheadLogFiles
     }
 }
 
@@ -183,15 +198,20 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider, @unchecked S
         switch try resolvedSourceReference() {
         case .paprikaSQLite(let databaseURL, let displayName, _):
             do {
-                _ = try PaprikaSQLiteSource(databaseURL: databaseURL, fileManager: fileManager)
+                let source = try PaprikaSQLiteSource(databaseURL: databaseURL, fileManager: fileManager)
                 return PantrySourceDoctorSnapshot(
                     status: .ready,
-                    message: "The configured pantry source is ready.",
+                    message: "The configured pantry source is ready for direct read-only Paprika access.",
                     sourceKind: .paprikaSQLite,
                     displayName: displayName,
                     implementation: "direct Paprika SQLite source",
                     credentialSource: nil,
-                    sourceLocation: databaseURL.path
+                    sourceLocation: databaseURL.path,
+                    schemaFlavor: source.inspection.schemaFlavor,
+                    accessMode: source.inspection.accessMode,
+                    queryOnly: source.inspection.queryOnly,
+                    journalMode: source.inspection.journalMode,
+                    hasWriteAheadLogFiles: source.inspection.hasWriteAheadLogFiles
                 )
             } catch let error as PaprikaSQLiteSourceError {
                 return PantrySourceDoctorSnapshot(
@@ -384,11 +404,21 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider, @unchecked S
     }
 
     private static func defaultPaprikaSQLiteURL(fileManager: FileManager) -> URL? {
-        let databaseURL = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite")
-            .standardizedFileURL
+        let candidatePaths = [
+            "Library/Group Containers/72KVKW69K8.com.hindsightlabs.paprika.mac.v3/Data/Database/Paprika.sqlite",
+            "Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite",
+        ]
 
-        return fileManager.fileExists(atPath: databaseURL.path) ? databaseURL : nil
+        for relativePath in candidatePaths {
+            let databaseURL = fileManager.homeDirectoryForCurrentUser
+                .appendingPathComponent(relativePath)
+                .standardizedFileURL
+            if fileManager.fileExists(atPath: databaseURL.path) {
+                return databaseURL
+            }
+        }
+
+        return nil
     }
 
     private func implementationDescription(for kind: PantrySourceKind) -> String {

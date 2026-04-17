@@ -6,6 +6,7 @@ public enum PaprikaSQLiteSourceError: Error, LocalizedError, Equatable {
     case unreadableDatabase(String)
     case missingTable(String)
     case missingColumn(table: String, column: String)
+    case readOnlyGuardFailed(String)
     case recipeNotFound(String)
 
     public var errorDescription: String? {
@@ -18,14 +19,42 @@ public enum PaprikaSQLiteSourceError: Error, LocalizedError, Equatable {
             return "Paprika.sqlite is missing the \(table) table."
         case .missingColumn(let table, let column):
             return "Paprika.sqlite is missing the \(column) column in \(table)."
+        case .readOnlyGuardFailed(let message):
+            return "Paprika.sqlite did not open with the required read-only guard: \(message)"
         case .recipeNotFound(let uid):
             return "Paprika.sqlite does not contain recipe \(uid)."
         }
     }
 }
 
+public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
+    public let schemaFlavor: String
+    public let requiredTables: [String]
+    public let accessMode: String
+    public let queryOnly: Bool
+    public let journalMode: String
+    public let hasWriteAheadLogFiles: Bool
+
+    public init(
+        schemaFlavor: String,
+        requiredTables: [String],
+        accessMode: String,
+        queryOnly: Bool,
+        journalMode: String,
+        hasWriteAheadLogFiles: Bool
+    ) {
+        self.schemaFlavor = schemaFlavor
+        self.requiredTables = requiredTables
+        self.accessMode = accessMode
+        self.queryOnly = queryOnly
+        self.journalMode = journalMode
+        self.hasWriteAheadLogFiles = hasWriteAheadLogFiles
+    }
+}
+
 public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
     public let databaseURL: URL
+    public let inspection: PaprikaSQLiteSourceInspection
 
     private let dbQueue: DatabaseQueue
     private let schema: PaprikaSQLiteSchema
@@ -40,11 +69,20 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
         }
 
         do {
-            var configuration = Configuration()
-            configuration.readonly = true
-            self.dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: configuration)
-            self.schema = try dbQueue.read(PaprikaSQLiteSchema.inspect)
+            let dbQueue = try Self.openReadOnlyQueue(databaseURL: databaseURL)
+            let schema = try dbQueue.read(PaprikaSQLiteSchema.inspect)
+            let inspection = try dbQueue.read { db in
+                try schema.makeInspection(
+                    db: db,
+                    databaseURL: databaseURL,
+                    fileManager: fileManager
+                )
+            }
+
+            self.dbQueue = dbQueue
+            self.schema = schema
             self.databaseURL = databaseURL
+            self.inspection = inspection
         } catch let error as PaprikaSQLiteSourceError {
             throw error
         } catch {
@@ -55,19 +93,18 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
     public func listRecipeStubs() async throws -> [SourceRecipeStub] {
         let sql = """
             SELECT
-                uid,
-                name,
+                ZUID AS uid,
+                ZNAME AS name,
                 \(self.schema.recipeSyncHashExpression) AS remote_hash,
                 \(self.schema.recipeDeletedExpression) AS is_deleted
-            FROM recipes
-            ORDER BY name COLLATE NOCASE, uid
+            FROM ZRECIPE
+            WHERE ZUID IS NOT NULL
+              AND ZNAME IS NOT NULL
+            ORDER BY ZNAME COLLATE NOCASE, ZUID
             """
 
         return try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """
-                \(sql)
-                """
-            ).map { row in
+            try Row.fetchAll(db, sql: sql).map { row in
                 SourceRecipeStub(
                     uid: row["uid"],
                     name: row["name"],
@@ -81,18 +118,17 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
     public func listRecipeCategories() async throws -> [SourceRecipeCategory] {
         let sql = """
             SELECT
-                uid,
-                name,
+                ZUID AS uid,
+                ZNAME AS name,
                 \(self.schema.categoryDeletedExpression) AS is_deleted
-            FROM categories
-            ORDER BY name COLLATE NOCASE, uid
+            FROM ZRECIPECATEGORY
+            WHERE ZUID IS NOT NULL
+              AND ZNAME IS NOT NULL
+            ORDER BY ZNAME COLLATE NOCASE, ZUID
             """
 
         return try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """
-                \(sql)
-                """
-            ).map { row in
+            try Row.fetchAll(db, sql: sql).map { row in
                 SourceRecipeCategory(
                     uid: row["uid"],
                     name: row["name"],
@@ -105,25 +141,26 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
     public func fetchRecipe(uid: String) async throws -> SourceRecipe {
         let sql = """
             SELECT
-                id,
-                uid,
-                name,
-                \(self.schema.optionalTextExpression(column: "source")) AS source_name,
-                \(self.schema.optionalTextExpression(column: "ingredients")) AS ingredients,
-                \(self.schema.optionalTextExpression(column: "directions")) AS directions,
+                Z_PK AS id,
+                ZUID AS uid,
+                ZNAME AS name,
+                \(self.schema.optionalTextExpression(column: "ZSOURCE")) AS source_name,
+                \(self.schema.optionalTextExpression(column: "ZINGREDIENTS")) AS ingredients,
+                \(self.schema.optionalTextExpression(column: "ZDIRECTIONS")) AS directions,
                 \(self.schema.notesExpression) AS notes,
                 \(self.schema.ratingExpression) AS star_rating,
                 \(self.schema.favoriteExpression) AS is_favorite,
-                \(self.schema.optionalTextExpression(column: "prep_time")) AS prep_time,
-                \(self.schema.optionalTextExpression(column: "cook_time")) AS cook_time,
-                \(self.schema.optionalTextExpression(column: "total_time")) AS total_time,
-                \(self.schema.optionalTextExpression(column: "servings")) AS servings,
-                \(self.schema.timestampExpression(column: "created")) AS created_at,
-                \(self.schema.timestampExpression(column: "updated")) AS updated_at,
+                \(self.schema.optionalTextExpression(column: "ZPREPTIME")) AS prep_time,
+                \(self.schema.optionalTextExpression(column: "ZCOOKTIME")) AS cook_time,
+                \(self.schema.optionalTextExpression(column: "ZTOTALTIME")) AS total_time,
+                \(self.schema.optionalTextExpression(column: "ZSERVINGS")) AS servings,
+                \(self.schema.coreDataTimestampExpression(column: "ZCREATED")) AS created_at,
+                NULL AS updated_at,
                 \(self.schema.recipeSyncHashExpression) AS remote_hash,
                 \(self.schema.recipeDeletedExpression) AS is_deleted
-            FROM recipes
-            WHERE uid = ?
+            FROM ZRECIPE
+            WHERE ZUID = ?
+            LIMIT 1
             """
 
         return try await dbQueue.read { db in
@@ -161,15 +198,27 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
         }
     }
 
+    private static func openReadOnlyQueue(databaseURL: URL) throws -> DatabaseQueue {
+        var configuration = Configuration()
+        configuration.readonly = true
+        configuration.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA query_only = 1")
+        }
+
+        return try DatabaseQueue(path: databaseURL.path, configuration: configuration)
+    }
+
     private func fetchCategoryReferences(recipeID: Int64, db: Database) throws -> [String] {
         try String.fetchAll(
             db,
             sql: """
-                SELECT categories.uid
-                FROM recipe_categories
-                INNER JOIN categories ON categories.id = recipe_categories.category_id
-                WHERE recipe_categories.recipe_id = ?
-                ORDER BY categories.name COLLATE NOCASE, categories.uid
+                SELECT categories.ZUID
+                FROM Z_12CATEGORIES links
+                INNER JOIN ZRECIPECATEGORY categories
+                    ON categories.Z_PK = links.Z_13CATEGORIES
+                WHERE links.Z_12RECIPES = ?
+                  AND categories.ZUID IS NOT NULL
+                ORDER BY categories.ZNAME COLLATE NOCASE, categories.ZUID
                 """,
             arguments: [recipeID]
         )
@@ -251,76 +300,116 @@ public final class PaprikaSQLiteSource: PantrySource, @unchecked Sendable {
 }
 
 private struct PaprikaSQLiteSchema: Sendable {
+    static let schemaFlavor = "paprika-3-core-data"
+    static let requiredTables = [
+        "ZRECIPE",
+        "ZRECIPECATEGORY",
+        "Z_12CATEGORIES",
+        "Z_METADATA",
+    ]
+
     let recipeColumns: Set<String>
     let categoryColumns: Set<String>
+    let recipeCategoryLinkColumns: Set<String>
 
     static func inspect(_ db: Database) throws -> PaprikaSQLiteSchema {
-        try requireTable("recipes", in: db)
-        try requireTable("categories", in: db)
-        try requireTable("recipe_categories", in: db)
+        for table in requiredTables {
+            try requireTable(table, in: db)
+        }
 
-        let recipeColumns = try Set(db.columns(in: "recipes").map(\.name))
-        let categoryColumns = try Set(db.columns(in: "categories").map(\.name))
-        let recipeCategoryColumns = try Set(db.columns(in: "recipe_categories").map(\.name))
+        let recipeColumns = try Set(db.columns(in: "ZRECIPE").map(\.name))
+        let categoryColumns = try Set(db.columns(in: "ZRECIPECATEGORY").map(\.name))
+        let recipeCategoryLinkColumns = try Set(db.columns(in: "Z_12CATEGORIES").map(\.name))
 
-        try requireColumn("id", in: "recipes", availableColumns: recipeColumns)
-        try requireColumn("uid", in: "recipes", availableColumns: recipeColumns)
-        try requireColumn("name", in: "recipes", availableColumns: recipeColumns)
+        try requireColumn("Z_PK", in: "ZRECIPE", availableColumns: recipeColumns)
+        try requireColumn("ZUID", in: "ZRECIPE", availableColumns: recipeColumns)
+        try requireColumn("ZNAME", in: "ZRECIPE", availableColumns: recipeColumns)
 
-        try requireColumn("id", in: "categories", availableColumns: categoryColumns)
-        try requireColumn("uid", in: "categories", availableColumns: categoryColumns)
-        try requireColumn("name", in: "categories", availableColumns: categoryColumns)
+        try requireColumn("Z_PK", in: "ZRECIPECATEGORY", availableColumns: categoryColumns)
+        try requireColumn("ZUID", in: "ZRECIPECATEGORY", availableColumns: categoryColumns)
+        try requireColumn("ZNAME", in: "ZRECIPECATEGORY", availableColumns: categoryColumns)
 
-        try requireColumn("recipe_id", in: "recipe_categories", availableColumns: recipeCategoryColumns)
-        try requireColumn("category_id", in: "recipe_categories", availableColumns: recipeCategoryColumns)
+        try requireColumn("Z_12RECIPES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
+        try requireColumn("Z_13CATEGORIES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
 
         return PaprikaSQLiteSchema(
             recipeColumns: recipeColumns,
-            categoryColumns: categoryColumns
+            categoryColumns: categoryColumns,
+            recipeCategoryLinkColumns: recipeCategoryLinkColumns
         )
     }
 
     var recipeSyncHashExpression: String {
-        recipeColumns.contains("sync_hash") ? "sync_hash" : "NULL"
+        recipeColumns.contains("ZSYNCHASH") ? "ZSYNCHASH" : "NULL"
     }
 
     var recipeDeletedExpression: String {
-        recipeColumns.contains("in_trash") ? "COALESCE(in_trash, 0)" : "0"
+        recipeColumns.contains("ZINTRASH") ? "COALESCE(ZINTRASH, 0)" : "0"
     }
 
     var categoryDeletedExpression: String {
-        categoryColumns.contains("in_trash") ? "COALESCE(in_trash, 0)" : "0"
+        categoryColumns.contains("ZSTATUS")
+            ? "CASE WHEN lower(COALESCE(ZSTATUS, '')) = 'deleted' THEN 1 ELSE 0 END"
+            : "0"
     }
 
     var notesExpression: String {
-        switch (recipeColumns.contains("notes"), recipeColumns.contains("description")) {
+        switch (recipeColumns.contains("ZNOTES"), recipeColumns.contains("ZDESCRIPTIONTEXT")) {
         case (true, true):
-            return "COALESCE(NULLIF(notes, ''), description)"
+            return "COALESCE(NULLIF(ZNOTES, ''), ZDESCRIPTIONTEXT)"
         case (true, false):
-            return "notes"
+            return "ZNOTES"
         case (false, true):
-            return "description"
+            return "ZDESCRIPTIONTEXT"
         case (false, false):
             return "NULL"
         }
     }
 
     var ratingExpression: String {
-        recipeColumns.contains("rating") ? "rating" : "NULL"
+        recipeColumns.contains("ZRATING") ? "ZRATING" : "NULL"
     }
 
     var favoriteExpression: String {
-        recipeColumns.contains("on_favorites") ? "COALESCE(on_favorites, 0)" : "0"
+        recipeColumns.contains("ZONFAVORITES") ? "COALESCE(ZONFAVORITES, 0)" : "0"
     }
 
     func optionalTextExpression(column: String) -> String {
         recipeColumns.contains(column) ? column : "NULL"
     }
 
-    func timestampExpression(column: String) -> String {
+    func coreDataTimestampExpression(column: String) -> String {
         recipeColumns.contains(column)
-            ? "CASE WHEN \(column) IS NULL THEN NULL ELSE strftime('%Y-%m-%d %H:%M:%S', \(column)) END"
+            ? "CASE WHEN \(column) IS NULL THEN NULL ELSE datetime(\(column) + 978307200, 'unixepoch') END"
             : "NULL"
+    }
+
+    func makeInspection(
+        db: Database,
+        databaseURL: URL,
+        fileManager: FileManager
+    ) throws -> PaprikaSQLiteSourceInspection {
+        let queryOnly = try Bool.fetchOne(db, sql: "PRAGMA query_only") ?? false
+        guard queryOnly else {
+            throw PaprikaSQLiteSourceError.readOnlyGuardFailed("PRAGMA query_only returned 0.")
+        }
+
+        let journalMode = try String.fetchOne(db, sql: "PRAGMA journal_mode") ?? "unknown"
+        let hasWriteAheadLogFiles = fileManager.fileExists(
+            atPath: databaseURL
+                .deletingPathExtension()
+                .appendingPathExtension("sqlite-wal")
+                .path
+        ) || fileManager.fileExists(atPath: databaseURL.path + "-wal")
+
+        return PaprikaSQLiteSourceInspection(
+            schemaFlavor: Self.schemaFlavor,
+            requiredTables: Self.requiredTables,
+            accessMode: "read-only",
+            queryOnly: queryOnly,
+            journalMode: journalMode,
+            hasWriteAheadLogFiles: hasWriteAheadLogFiles
+        )
     }
 
     private static func requireTable(_ name: String, in db: Database) throws {

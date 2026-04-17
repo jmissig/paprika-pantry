@@ -13,7 +13,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         temporaryDirectoryURL = nil
     }
 
-    func testPaprikaSQLiteSourceReadsRecipeStubsCategoriesAndDetails() async throws {
+    func testPaprikaSQLiteSourceReadsRealSchemaRecipesCategoriesAndInspection() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
 
         let stubs = try await source.listRecipeStubs()
@@ -34,6 +34,16 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
             ]
         )
+
+        XCTAssertEqual(source.inspection.schemaFlavor, "paprika-3-core-data")
+        XCTAssertEqual(source.inspection.accessMode, "read-only")
+        XCTAssertTrue(source.inspection.queryOnly)
+        XCTAssertEqual(source.inspection.journalMode, "wal")
+        XCTAssertEqual(
+            source.inspection.requiredTables,
+            ["ZRECIPE", "ZRECIPECATEGORY", "Z_12CATEGORIES", "Z_METADATA"]
+        )
+
         XCTAssertEqual(recipe.uid, "AAA")
         XCTAssertEqual(recipe.name, "Weeknight Soup")
         XCTAssertEqual(recipe.categoryReferences, ["CAT1"])
@@ -44,31 +54,33 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.starRating, 4)
         XCTAssertTrue(recipe.isFavorite)
         XCTAssertEqual(recipe.prepTime, "10 min")
+        XCTAssertEqual(recipe.cookTime, "30 min")
         XCTAssertEqual(recipe.totalTime, "40 min")
         XCTAssertEqual(recipe.servings, "4")
         XCTAssertEqual(recipe.createdAt, "2026-04-01 10:00:00")
-        XCTAssertEqual(recipe.updatedAt, "2026-04-02 11:00:00")
+        XCTAssertNil(recipe.updatedAt)
         XCTAssertEqual(recipe.remoteHash, "hash-aaa")
         XCTAssertTrue(recipe.rawJSON.contains("\"category_uids\":[\"CAT1\"]"))
+        XCTAssertTrue(recipe.rawJSON.contains("\"created\":\"2026-04-01 10:00:00\""))
     }
 
-    func testPaprikaSQLiteSourceRejectsIncompleteSchema() throws {
+    func testPaprikaSQLiteSourceRejectsIncompleteRealSchema() throws {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("Paprika.sqlite")
         let queue = try DatabaseQueue(path: databaseURL.path)
 
         try queue.write { db in
             try db.execute(sql: """
-                CREATE TABLE recipes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT NOT NULL,
-                    name TEXT NOT NULL
+                CREATE TABLE ZRECIPE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZUID TEXT,
+                    ZNAME TEXT
                 )
                 """)
         }
 
         XCTAssertThrowsError(try PaprikaSQLiteSource(databaseURL: databaseURL)) { error in
-            XCTAssertEqual(error as? PaprikaSQLiteSourceError, .missingTable("categories"))
+            XCTAssertEqual(error as? PaprikaSQLiteSourceError, .missingTable("ZRECIPECATEGORY"))
         }
     }
 
@@ -93,6 +105,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.sourceName, "Serious Eats")
         XCTAssertEqual(recipe.starRating, 4)
         XCTAssertTrue(recipe.isFavorite)
+        XCTAssertEqual(recipe.createdAt, "2026-04-01 10:00:00")
+        XCTAssertNil(recipe.updatedAt)
     }
 
     private func makePaprikaSourceDatabase() throws -> URL {
@@ -100,131 +114,135 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let databaseURL = root.appendingPathComponent("Paprika.sqlite")
         let queue = try DatabaseQueue(path: databaseURL.path)
 
+        try queue.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        }
+
         try queue.write { db in
             try db.execute(sql: """
-                CREATE TABLE recipes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    ingredients TEXT,
-                    directions TEXT,
-                    notes TEXT,
-                    source TEXT,
-                    prep_time TEXT,
-                    cook_time TEXT,
-                    total_time TEXT,
-                    servings TEXT,
-                    rating INTEGER,
-                    on_favorites INTEGER NOT NULL DEFAULT 0,
-                    sync_hash TEXT,
-                    in_trash INTEGER NOT NULL DEFAULT 0,
-                    created REAL,
-                    updated REAL
+                CREATE TABLE Z_METADATA (
+                    Z_VERSION INTEGER PRIMARY KEY,
+                    Z_UUID TEXT,
+                    Z_PLIST BLOB
                 )
                 """)
             try db.execute(sql: """
-                CREATE TABLE categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    in_trash INTEGER NOT NULL DEFAULT 0
+                CREATE TABLE ZRECIPE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    Z_ENT INTEGER,
+                    Z_OPT INTEGER,
+                    ZINTRASH INTEGER,
+                    ZONFAVORITES INTEGER,
+                    ZRATING INTEGER,
+                    ZCREATED TIMESTAMP,
+                    ZCOOKTIME VARCHAR,
+                    ZDESCRIPTIONTEXT VARCHAR,
+                    ZDIRECTIONS VARCHAR,
+                    ZINGREDIENTS VARCHAR,
+                    ZNAME VARCHAR,
+                    ZNOTES VARCHAR,
+                    ZPREPTIME VARCHAR,
+                    ZSERVINGS VARCHAR,
+                    ZSOURCE VARCHAR,
+                    ZSYNCHASH VARCHAR,
+                    ZTOTALTIME VARCHAR,
+                    ZUID VARCHAR
                 )
                 """)
             try db.execute(sql: """
-                CREATE TABLE recipe_categories (
-                    recipe_id INTEGER NOT NULL,
-                    category_id INTEGER NOT NULL
+                CREATE TABLE ZRECIPECATEGORY (
+                    Z_PK INTEGER PRIMARY KEY,
+                    Z_ENT INTEGER,
+                    Z_OPT INTEGER,
+                    ZPARENT INTEGER,
+                    ZNAME VARCHAR,
+                    ZSTATUS VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE Z_12CATEGORIES (
+                    Z_12RECIPES INTEGER,
+                    Z_13CATEGORIES INTEGER,
+                    PRIMARY KEY (Z_12RECIPES, Z_13CATEGORIES)
                 )
                 """)
 
             try db.execute(
                 sql: """
-                    INSERT INTO recipes (
-                        uid,
-                        name,
-                        ingredients,
-                        directions,
-                        notes,
-                        source,
-                        prep_time,
-                        cook_time,
-                        total_time,
-                        servings,
-                        rating,
-                        on_favorites,
-                        sync_hash,
-                        in_trash,
-                        created,
-                        updated
-                    ) VALUES (
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        julianday(?),
-                        julianday(?)
-                    )
+                    INSERT INTO ZRECIPE (
+                        Z_PK,
+                        ZINTRASH,
+                        ZONFAVORITES,
+                        ZRATING,
+                        ZCREATED,
+                        ZCOOKTIME,
+                        ZDESCRIPTIONTEXT,
+                        ZDIRECTIONS,
+                        ZINGREDIENTS,
+                        ZNAME,
+                        ZNOTES,
+                        ZPREPTIME,
+                        ZSERVINGS,
+                        ZSOURCE,
+                        ZSYNCHASH,
+                        ZTOTALTIME,
+                        ZUID
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
-                    "AAA",
-                    "Weeknight Soup",
-                    "Broth\nBeans",
-                    "Simmer.",
-                    "Finish with lemon.",
-                    "Serious Eats",
-                    "10 min",
-                    "30 min",
-                    "40 min",
-                    "4",
-                    4,
                     1,
-                    "hash-aaa",
                     0,
-                    "2026-04-01 10:00:00",
-                    "2026-04-02 11:00:00",
+                    1,
+                    4,
+                    Self.appleReferenceSeconds(for: "2026-04-01 10:00:00"),
+                    "30 min",
+                    "",
+                    "Simmer.",
+                    "Broth\nBeans",
+                    "Weeknight Soup",
+                    "Finish with lemon.",
+                    "10 min",
+                    "4",
+                    "Serious Eats",
+                    "hash-aaa",
+                    "40 min",
+                    "AAA",
                 ]
             )
             try db.execute(
                 sql: """
-                    INSERT INTO recipes (
-                        uid,
-                        name,
-                        sync_hash,
-                        in_trash
-                    ) VALUES (?, ?, ?, ?)
+                    INSERT INTO ZRECIPE (
+                        Z_PK,
+                        ZINTRASH,
+                        ZONFAVORITES,
+                        ZRATING,
+                        ZNAME,
+                        ZSYNCHASH,
+                        ZUID
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                arguments: ["BBB", "Deleted Recipe", "hash-bbb", 1]
+                arguments: [2, 1, 0, 0, "Deleted Recipe", "hash-bbb", "BBB"]
             )
             try db.execute(
                 sql: """
-                    INSERT INTO categories (
-                        uid,
-                        name,
-                        in_trash
-                    ) VALUES (?, ?, ?), (?, ?, ?)
+                    INSERT INTO ZRECIPECATEGORY (
+                        Z_PK,
+                        ZNAME,
+                        ZSTATUS,
+                        ZUID
+                    ) VALUES (?, ?, ?, ?), (?, ?, ?, ?)
                     """,
-                arguments: ["CAT1", "Dinner", 0, "CAT2", "Archive", 1]
+                arguments: [1, "Dinner", "unmodified", "CAT1", 2, "Archive", "deleted", "CAT2"]
             )
             try db.execute(
                 sql: """
-                    INSERT INTO recipe_categories (
-                        recipe_id,
-                        category_id
-                    ) VALUES (
-                        (SELECT id FROM recipes WHERE uid = 'AAA'),
-                        (SELECT id FROM categories WHERE uid = 'CAT1')
-                    )
-                    """
+                    INSERT INTO Z_12CATEGORIES (
+                        Z_12RECIPES,
+                        Z_13CATEGORIES
+                    ) VALUES (?, ?)
+                    """,
+                arguments: [1, 1]
             )
         }
 
@@ -243,5 +261,15 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         temporaryDirectoryURL = root
         return root
+    }
+
+    private static func appleReferenceSeconds(for timestamp: String) -> TimeInterval {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let date = formatter.date(from: timestamp)!
+        return date.timeIntervalSinceReferenceDate
     }
 }

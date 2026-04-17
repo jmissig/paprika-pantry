@@ -3,7 +3,7 @@ import ArgumentParser
 public struct DBCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "db",
-        abstract: "Inspect the local SQLite mirror.",
+        abstract: "Inspect the local owned SQLite database.",
         subcommands: [
             DBStatsCommand.self,
         ]

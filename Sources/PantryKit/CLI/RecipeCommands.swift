@@ -4,7 +4,7 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query the local recipe mirror.",
+        abstract: "Query locally cached recipe data.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
@@ -18,7 +18,7 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List locally mirrored recipes."
+        abstract: "List locally cached recipes."
     )
 
     public init() {}
@@ -50,7 +50,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search locally mirrored recipes."
+        abstract: "Search recipes once sidecar indexing is available."
     )
 
     @Argument(help: "Search query.")
@@ -61,7 +61,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         try emitStub(
             command: "recipes search",
             plannedPhase: "Later",
-            message: "Recipe search is intentionally deferred until after the first trustworthy local mirror slice.",
+            message: "Recipe search is intentionally deferred until the first owned sidecar index slice lands.",
             details: ["query": query]
         )
     }

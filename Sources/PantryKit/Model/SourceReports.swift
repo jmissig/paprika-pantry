@@ -9,6 +9,11 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let implementation: String?
     public let credentialSource: String?
     public let sourceLocation: String?
+    public let schemaFlavor: String?
+    public let accessMode: String?
+    public let queryOnly: Bool?
+    public let journalMode: String?
+    public let hasWriteAheadLogFiles: Bool?
     public let paths: PantryPathReport
 
     public init(snapshot: PantrySourceDoctorSnapshot, paths: PantryPaths) {
@@ -20,6 +25,11 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.implementation = snapshot.implementation
         self.credentialSource = snapshot.credentialSource
         self.sourceLocation = snapshot.sourceLocation
+        self.schemaFlavor = snapshot.schemaFlavor
+        self.accessMode = snapshot.accessMode
+        self.queryOnly = snapshot.queryOnly
+        self.journalMode = snapshot.journalMode
+        self.hasWriteAheadLogFiles = snapshot.hasWriteAheadLogFiles
         self.paths = paths.report
     }
 
@@ -47,6 +57,26 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
 
         if let sourceLocation, !sourceLocation.isEmpty {
             lines.append("source_location: \(sourceLocation)")
+        }
+
+        if let schemaFlavor, !schemaFlavor.isEmpty {
+            lines.append("schema: \(schemaFlavor)")
+        }
+
+        if let accessMode, !accessMode.isEmpty {
+            lines.append("access_mode: \(accessMode)")
+        }
+
+        if let queryOnly {
+            lines.append("query_only: \(queryOnly ? "yes" : "no")")
+        }
+
+        if let journalMode, !journalMode.isEmpty {
+            lines.append("journal_mode: \(journalMode)")
+        }
+
+        if let hasWriteAheadLogFiles {
+            lines.append("wal_files: \(hasWriteAheadLogFiles ? "present" : "absent")")
         }
 
         lines.append(renderedPaths(paths))

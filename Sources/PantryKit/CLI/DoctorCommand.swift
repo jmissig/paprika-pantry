@@ -3,7 +3,7 @@ import ArgumentParser
 public struct DoctorCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "doctor",
-        abstract: "Diagnose local cache health."
+        abstract: "Diagnose local pantry state."
     )
 
     public init() {}
@@ -11,7 +11,7 @@ public struct DoctorCommand: PantryLeafCommand {
         try emitStub(
             command: "doctor",
             plannedPhase: "Later",
-            message: "Local mirror doctor is still deferred; use `source doctor` for source readiness today."
+            message: "Broader doctor output is still deferred; use `source doctor` for direct Paprika source readiness today."
         )
     }
 }

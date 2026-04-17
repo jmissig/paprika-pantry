@@ -4,7 +4,7 @@ import Foundation
 public struct SyncCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sync",
-        abstract: "Inspect or refresh the local mirror from a configured source.",
+        abstract: "Inspect or refresh the transitional local cache from a configured source.",
         subcommands: [
             SyncRunCommand.self,
             SyncStatusCommand.self,
@@ -17,7 +17,7 @@ public struct SyncCommand: ParsableCommand {
 public struct SyncRunCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "run",
-        abstract: "Run a sync against the configured pantry source."
+        abstract: "Refresh the transitional local cache from the configured pantry source."
     )
 
     public init() {}
@@ -40,7 +40,7 @@ public struct SyncRunCommand: PantryLeafCommand {
 public struct SyncStatusCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "status",
-        abstract: "Show local sync freshness and status."
+        abstract: "Show transitional local cache freshness and status."
     )
 
     public init() {}

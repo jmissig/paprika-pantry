@@ -3,7 +3,7 @@ import ArgumentParser
 public struct MealsCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "meals",
-        abstract: "Query the local meals mirror.",
+        abstract: "Query local meal data.",
         subcommands: [
             MealsListCommand.self,
         ]
@@ -15,7 +15,7 @@ public struct MealsCommand: ParsableCommand {
 public struct MealsListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List locally mirrored meals."
+        abstract: "List meals once direct Paprika meal reads land."
     )
 
     public init() {}
@@ -23,7 +23,7 @@ public struct MealsListCommand: PantryLeafCommand {
         try emitStub(
             command: "meals list",
             plannedPhase: "Later",
-            message: "Meals mirror support is intentionally deferred until after the first recipe mirror slice."
+            message: "Direct meal reads are intentionally deferred until after the first recipe read slice."
         )
     }
 }

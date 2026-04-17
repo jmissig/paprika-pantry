@@ -2,20 +2,20 @@
 
 ## Purpose
 
-`paprika-pantry` is a local-first Paprika mirror and query CLI.
+`paprika-pantry` is a local-first Paprika query and analysis CLI.
 
 Its job is to:
-- authenticate to Paprika
-- pull down remote recipe data into a durable local cache
-- expose fast local search and query commands
-- make freshness, sync state, and cache health legible to humans and agents
+- read Paprika data safely from the local Paprika 3 SQLite database
+- expose fast local query commands over canonical Paprika data
+- maintain an optional sidecar SQLite database for indexing, derived facts, and agent-oriented analysis
+- make source health, freshness, and sidecar state legible to humans and agents
 
-It is not just a thin remote API wrapper.
+It is not just a thin database browser.
 It is not a general Paprika app replacement.
 It is not a kitchen UI.
 
-The center of gravity should be the local mirror.
-The CLI is attached to that mirror.
+The center of gravity should be the local Paprika database plus our sidecar.
+The CLI is attached to those read models.
 
 ## Project shape
 
@@ -28,26 +28,26 @@ This project should feel temperamentally similar to `protect-cadence` and `clime
 - simple install/build/test flow
 - clear diagnostic commands
 
-But unlike those tools, `paprika-pantry` is more explicitly a sync-and-cache tool.
+But unlike those tools, `paprika-pantry` is more explicitly a read-adapter plus derived-index tool.
 
 A useful framing:
 - `protect-cadence` is a local observation pipeline with query commands
 - `clime` is a local evidence store with import and query commands
-- `paprika-pantry` should be a local mirror with sync, freshness, and query commands
+- `paprika-pantry` should be a local Paprika adapter with query, indexing, and analysis commands
 
 ## Primary goals
 
 The tool should make it easy to:
-- sync Paprika data into a local cache
-- search recipes quickly without hitting the network every time
-- inspect meals, groceries, and categories locally
-- understand whether local data is fresh or stale
+- read recipes, meals, groceries, and categories directly from Paprika's local DB
+- search and analyze that data quickly without mutating the source DB
+- build and query derived local indexes when useful
+- understand whether the local source is available and whether sidecar indexes are current
 - give OpenClaw and other local tools a fast, trustworthy local source of truth
 
 The system should produce:
-- durable local storage
-- incremental refresh when practical
-- clear sync metadata
+- safe read-only source access
+- durable local derived storage where it adds value
+- clear source and index metadata
 - query surfaces optimized for extraction, not narration
 - outputs that keep evidence separate from judgment
 
@@ -58,7 +58,7 @@ Avoid building, at least initially:
 - a full Paprika replacement app
 - a broad Paprika SDK meant for every possible integration
 - background daemons before there is a clear need
-- heavy sync conflict machinery unless real write support appears
+- any write path into the real Paprika database
 - embedded recommendations or cooking judgment in the CLI
 
 The CLI should expose evidence.
@@ -66,58 +66,39 @@ OpenClaw or downstream tools can do interpretation.
 
 ## Read-only first
 
-Be conservative about touching the real Paprika account.
+Be conservative about touching the real Paprika database.
 
 Implementation priority should be:
-1. read-only auth
-2. read-only remote fetches
-3. durable local database sync
+1. read-only local DB access
+2. stable internal domain mapping
+3. sidecar index / derived-data storage
 4. fast local search and query
-5. freshness / doctor / sync-health reporting
-6. only then, consider any operation that could modify the upstream account
+5. source doctor / index-health reporting
+6. only then, consider whether any local mirror of canonical rows is actually needed
 
-Until the local mirror is trustworthy, do not rush into writes.
-Anything that could modify the original Paprika data should be treated as a later phase, after read sync is solid and easy to inspect.
+Do not write to the real `Paprika.sqlite`.
+Anything that could modify original Paprika data should be treated as out of scope unless Julian explicitly changes that requirement.
 
 ## Architectural direction
 
 Preferred high-level flow:
 
 ```text
-Paprika cloud API
-    -> auth client
-    -> sync engine
-    -> local SQLite mirror
-    -> query/search CLI
+Paprika 3 local SQLite (read-only)
+    -> read adapter / mapper
+    -> internal domain model
+    -> optional sidecar SQLite for indexes and derived facts
+    -> query/search/report CLI
     -> local agent / OpenClaw
 ```
 
 Keep the system split into four legible layers:
-1. remote client
-2. sync engine
-3. local store/index
+1. Paprika read adapter
+2. domain/query layer
+3. sidecar store/index
 4. CLI presentation
 
-That separation matters here more than in simpler local-data tools because auth and sync behavior may need to change independently from the cache and query surface.
-
-## Auth direction
-
-Current expected direction:
-- start with the simpler account-login API shape proven by `paprika-recipe-cli`
-- do not make `paprika-recipe-cli` a runtime dependency
-- reimplement the necessary HTTP client logic directly in this project
-- keep auth behind a narrow interface so a stricter licensed-client flow can be swapped in later if needed
-
-Rationale:
-- the read-oriented API surface appears small enough to reimplement cleanly
-- the real project value is the local mirror, not shelling out to another CLI
-- the simpler auth path may be relying on an older or compatibility endpoint, so the rest of the project should not be tightly coupled to it
-
-Preferred auth abstraction shape:
-- `SimpleAccountAuth`
-- `LicensedClientAuth`
-
-The rest of the sync engine should not care which one is active.
+That separation matters because Paprika's Core Data schema is ugly and unstable-looking, while our internal domain and sidecar should stay legible.
 
 ## Technology preferences
 
@@ -129,7 +110,7 @@ Preferred stack unless a strong reason appears otherwise:
 - SQLite layer: GRDB, used lightly
 
 Use GRDB for:
-- opening the database
+- opening the databases
 - migrations
 - parameterized queries
 - straightforward row decoding
@@ -143,49 +124,43 @@ Avoid:
 
 ## Local store guidance
 
-SQLite is the canonical local cache.
+SQLite sidecar storage is for things we own.
 
-The database should store:
-- recipes
-- recipe stub metadata and remote hashes where available
-- categories
-- meals
-- groceries
-- sync runs / sync state
-- deletion or tombstone state when needed
+The sidecar should store only data that adds value beyond direct Paprika reads, for example:
+- FTS/search indexes
+- denormalized helper tables
+- embeddings or clustering artifacts
+- pattern-detection outputs
+- cached derived facts
+- index/update bookkeeping
 
-The local store should also make these questions easy to answer:
-- when was the last successful sync?
-- what data is stale?
-- what changed since the last sync?
-- which entities failed to hydrate?
-- which remote items disappeared and should be marked deleted?
+The system should make these questions easy to answer:
+- can I read the source DB right now?
+- what schema flavor did we detect?
+- when was the sidecar last rebuilt or refreshed?
+- which indexes are present and usable?
+- what derived facts are based on stale source reads?
 
 Prefer explicit, inspectable tables over opaque blobs.
-If raw payload storage is useful for debugging or trust, keep it clearly secondary to normalized columns.
+Do not duplicate whole canonical Paprika entities into the sidecar unless a concrete need proves that duplication is worth the drift risk.
 
-## Sync model guidance
+## Source model guidance
 
-This project is offline-first for reads.
+This project is read-only against Paprika.
 
 That means users should be able to trust:
-- show me what you know
-- tell me how fresh it is
-- refresh now if I ask
+- show me the canonical Paprika facts
+- tell me whether they came directly from Paprika or from sidecar-derived analysis
+- rebuild or refresh indexes if I ask
 
-Preferred sync strategy for v0:
-- fetch recipe stubs or equivalent lightweight remote listing
-- track stable IDs plus remote change hashes where available
-- only re-fetch full entities when their hash changed or the entity is new
-- mark local rows deleted when a previously-known remote ID disappears
-- do occasional full reconciliation if needed
+Preferred read strategy for v0:
+- open Paprika.sqlite read-only
+- map `Z...` tables into stable internal models
+- keep direct queries direct when possible
+- build sidecar indexes only for capabilities that need them
 
-This is probably the sweet spot between:
-- naive full refresh, which is simple but wasteful
-- full desktop-app sync emulation, which is much more complex
-
-The hard part is not talking to the API.
-The hard part is maintaining a sane, trustworthy local mirror.
+The hard part is not opening SQLite.
+The hard part is maintaining a sane boundary between Paprika's Core Data schema and our own stable internal model.
 
 ## Query and search guidance
 
@@ -199,7 +174,7 @@ Support should eventually include:
 - ingredient-oriented search
 - meals lookup
 - groceries lookup
-- freshness and sync status reporting
+- source doctor and index status reporting
 
 Prefer a coherent command grammar over a pile of one-off verbs.
 
@@ -209,8 +184,8 @@ Compact human-readable output should remain pleasant by default.
 ## CLI direction
 
 Likely command families:
-- `auth`
-- `sync`
+- `source`
+- `index`
 - `recipes`
 - `meals`
 - `groceries`
@@ -218,15 +193,14 @@ Likely command families:
 - `doctor`
 
 Plausible early command surface:
-- `paprika-pantry auth login`
-- `paprika-pantry auth status`
-- `paprika-pantry sync run`
-- `paprika-pantry sync status`
+- `paprika-pantry source doctor`
 - `paprika-pantry recipes list`
 - `paprika-pantry recipes show <uid|name>`
 - `paprika-pantry recipes search <query>`
 - `paprika-pantry meals list`
 - `paprika-pantry groceries list`
+- `paprika-pantry index stats`
+- `paprika-pantry index rebuild`
 - `paprika-pantry db stats`
 - `paprika-pantry doctor`
 
@@ -238,13 +212,8 @@ Do not explode it prematurely.
 Borrow the good habits from sibling tools:
 - compact default output
 - JSON output where structured downstream use matters
-- clear freshness/staleness indicators
 - diagnostics that explain what is wrong without drama
 - defaults optimized for local use, not cloud-hosted multi-user deployments
-
-For stale data, prefer the `clime` pattern:
-- still show the normal report
-- include a clear warning that the data is old
 
 For config and docs, carry forward these established preferences:
 - config files should optimize for humans
@@ -254,42 +223,41 @@ For config and docs, carry forward these established preferences:
 
 ## Working style for contributors and agents
 
-- Prefer the smallest real slice that yields a useful local mirror.
+- Prefer the smallest real slice that yields useful direct reads.
 - Be suspicious of architecture that is impressive but unnecessary.
-- Keep the remote boundary thin and replaceable.
+- Keep the Paprika-specific boundary narrow and replaceable.
 - Keep SQL legible.
 - Keep command shapes coherent across subcommands.
-- Preserve a clear distinction between evidence, freshness, and judgment.
+- Preserve a clear distinction between evidence, source health, and judgment.
 - Do not let this turn into a generic sync framework.
 
 Success looks like:
-- a small tool that syncs quickly enough
+- a small tool that reads Paprika data safely and directly
 - local search that feels fast
-- easy-to-understand freshness and sync health
+- derived indexes that are clearly secondary, useful, and inspectable
 - a query surface that agents can use reliably
 
 Failure signals:
-- the project becomes mostly about auth plumbing
-- the CLI becomes a mirror of the raw API surface
-- local cache semantics are hard to explain
-- schema growth outruns actual use cases
-- the tool requires the network for common queries that should be local
+- the project becomes mostly about Paprika schema archaeology leaking everywhere
+- the CLI becomes a mirror of raw `Z...` tables
+- sidecar duplication outruns actual use cases
+- index state is hard to explain
+- direct reads from Paprika become unsafe or accidental writes slip in
 
 ## Initial implementation priorities
 
 Suggested sequence:
 1. create the Swift package and basic CLI skeleton
-2. implement simple account auth behind a protocol
-3. create SQLite schema and migrations
-4. sync and cache recipe stubs plus full recipes
-5. add recipe search and lookup
-6. add sync status and freshness reporting
-7. add meals, groceries, and categories
-8. add `doctor`
-9. consider alternate auth if the simple login path proves fragile
+2. implement read-only Paprika DB adapter and schema detection
+3. map recipes and categories into stable internal models
+4. add direct recipe search and lookup
+5. add sidecar schema and indexing only where it adds clear value
+6. add meals, groceries, and categories
+7. add source / index / doctor reporting
+8. consider heavier caching only if direct-read performance or stability proves inadequate
 
 ## Final rule
 
-Build a small, quiet, trustworthy pantry mirror.
+Build a small, quiet, trustworthy pantry reader with a useful sidecar.
 
 Do not build a Paprika empire.
