@@ -83,3 +83,71 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         return lines.joined(separator: "\n")
     }
 }
+
+public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
+    public let command: String
+    public let status: String
+    public let message: String
+    public let recipeStubCount: Int
+    public let activeRecipeCount: Int
+    public let deletedRecipeCount: Int
+    public let categoryCount: Int
+    public let activeCategoryCount: Int
+    public let deletedCategoryCount: Int
+    public let sampleLimit: Int
+    public let sampledRecipeCount: Int
+    public let sampleFailureCount: Int
+    public let sampledRecipes: [SourceRecipeSample]
+    public let sampleFailures: [SourceRecipeSampleFailure]
+    public let paths: PantryPathReport
+
+    public init(snapshot: SourceStatsSnapshot, paths: PantryPaths) {
+        self.command = "source stats"
+        self.status = snapshot.sampleFailureCount == 0 ? "ok" : "partial"
+        self.message = snapshot.sampleFailureCount == 0
+            ? "Direct source counts loaded and sampled recipe coverage succeeded."
+            : "Direct source counts loaded, but sampled recipe coverage had failures."
+        self.recipeStubCount = snapshot.recipeStubCount
+        self.activeRecipeCount = snapshot.activeRecipeCount
+        self.deletedRecipeCount = snapshot.deletedRecipeCount
+        self.categoryCount = snapshot.categoryCount
+        self.activeCategoryCount = snapshot.activeCategoryCount
+        self.deletedCategoryCount = snapshot.deletedCategoryCount
+        self.sampleLimit = snapshot.sampleLimit
+        self.sampledRecipeCount = snapshot.sampledRecipeCount
+        self.sampleFailureCount = snapshot.sampleFailureCount
+        self.sampledRecipes = snapshot.sampledRecipes
+        self.sampleFailures = snapshot.sampleFailures
+        self.paths = paths.report
+    }
+
+    public var humanDescription: String {
+        var lines = [
+            "\(command): \(message)",
+            "status: \(status)",
+            "recipes_total: \(recipeStubCount)",
+            "recipes_active: \(activeRecipeCount)",
+            "recipes_deleted: \(deletedRecipeCount)",
+            "categories_total: \(categoryCount)",
+            "categories_active: \(activeCategoryCount)",
+            "categories_deleted: \(deletedCategoryCount)",
+            "sample_limit: \(sampleLimit)",
+            "sampled_recipes: \(sampledRecipeCount)",
+            "sample_failures: \(sampleFailureCount)",
+        ]
+
+        for sample in sampledRecipes {
+            let categories = sample.categories.isEmpty
+                ? "-"
+                : sample.categories.joined(separator: ", ")
+            lines.append("sample_recipe: \(sample.name) [\(sample.uid)] categories=\(categories)")
+        }
+
+        for failure in sampleFailures {
+            lines.append("sample_failure: \(failure.name) [\(failure.uid)] error=\(failure.message)")
+        }
+
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
+    }
+}

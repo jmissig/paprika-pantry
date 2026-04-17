@@ -177,7 +177,14 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
 
     @discardableResult
     private func makePaprikaSourceDatabase(at path: String) throws -> URL {
-        let databaseURL = URL(fileURLWithPath: path)
+        let databaseURL: URL
+
+        if path.hasPrefix("/") {
+            databaseURL = URL(fileURLWithPath: path)
+        } else {
+            databaseURL = try makeTemporaryDirectory().appendingPathComponent(path)
+        }
+
         try FileManager.default.createDirectory(
             at: databaseURL.deletingLastPathComponent(),
             withIntermediateDirectories: true

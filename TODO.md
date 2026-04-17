@@ -59,10 +59,10 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase B — direct query surfaces over canonical data
 
-- [ ] Make `source doctor` confirm read-only access, schema shape, and WAL conditions
-- [ ] Make `recipes list` read directly from the Paprika adapter
-- [ ] Make `recipes show <uid|name>` read directly from the Paprika adapter
-- [ ] Add a safe verification/report command for raw source counts and sample coverage
+- [x] Make `source doctor` confirm read-only access, schema shape, and WAL conditions
+- [x] Make `recipes list` read directly from the Paprika adapter
+- [x] Make `recipes show <uid|name>` read directly from the Paprika adapter
+- [x] Add a safe verification/report command for raw source counts and sample coverage
 
 ### Phase C — sidecar, only where it helps
 

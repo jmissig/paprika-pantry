@@ -35,4 +35,41 @@ final class SourceDoctorReportTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("wal_files: present"))
         XCTAssertTrue(report.humanDescription.contains("database: /tmp/pantry/pantry.sqlite"))
     }
+
+    func testSourceStatsReportIncludesCountsAndSampleCoverage() {
+        let report = SourceStatsReport(
+            snapshot: SourceStatsSnapshot(
+                recipeStubCount: 3,
+                activeRecipeCount: 2,
+                deletedRecipeCount: 1,
+                categoryCount: 2,
+                activeCategoryCount: 1,
+                deletedCategoryCount: 1,
+                sampleLimit: 5,
+                sampledRecipeCount: 2,
+                sampleFailureCount: 1,
+                sampledRecipes: [
+                    SourceRecipeSample(uid: "AAA", name: "Apple Cake", categories: ["Dessert"]),
+                ],
+                sampleFailures: [
+                    SourceRecipeSampleFailure(
+                        uid: "BBB",
+                        name: "Broken Recipe",
+                        message: "Missing recipe fixture for BBB."
+                    ),
+                ]
+            ),
+            paths: PantryPaths(
+                homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
+                configFile: URL(fileURLWithPath: "/tmp/pantry/config.json"),
+                databaseFile: URL(fileURLWithPath: "/tmp/pantry/pantry.sqlite")
+            )
+        )
+
+        XCTAssertEqual(report.status, "partial")
+        XCTAssertTrue(report.humanDescription.contains("recipes_total: 3"))
+        XCTAssertTrue(report.humanDescription.contains("categories_deleted: 1"))
+        XCTAssertTrue(report.humanDescription.contains("sample_recipe: Apple Cake [AAA] categories=Dessert"))
+        XCTAssertTrue(report.humanDescription.contains("sample_failure: Broken Recipe [BBB] error=Missing recipe fixture for BBB."))
+    }
 }
