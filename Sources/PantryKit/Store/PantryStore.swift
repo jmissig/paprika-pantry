@@ -330,22 +330,12 @@ public struct PantryStore: @unchecked Sendable {
             let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty
 
             if !ingredientFilter.isDefault {
-                let ingredientPlaceholders = Self.sqlPlaceholders(count: ingredientFilter.normalizedTokens.count)
-                conditions.append(
-                    """
-                    recipe_search_documents.uid IN (
-                        SELECT recipe_uid
-                        FROM recipe_ingredient_tokens
-                        WHERE token IN (\(ingredientPlaceholders))
-                        GROUP BY recipe_uid
-                        HAVING COUNT(DISTINCT token) = ?
-                    )
-                    """
+                Self.appendIngredientFilterSQL(
+                    ingredientFilter,
+                    recipeUIDColumn: "recipe_search_documents.uid",
+                    conditions: &conditions,
+                    arguments: &arguments
                 )
-                for token in ingredientFilter.normalizedTokens {
-                    arguments += [token]
-                }
-                arguments += [ingredientFilter.normalizedTokens.count]
             }
 
             if filters.favoritesOnly {
@@ -667,20 +657,23 @@ public struct PantryStore: @unchecked Sendable {
         }
 
         return try dbQueue.read { db in
-            let placeholders = Self.sqlPlaceholders(count: ingredientFilter.normalizedTokens.count)
+            var conditions = [String]()
             var arguments = StatementArguments()
-            for token in ingredientFilter.normalizedTokens {
-                arguments += [token]
-            }
-            arguments += [ingredientFilter.normalizedTokens.count]
+            Self.appendIngredientFilterSQL(
+                ingredientFilter,
+                recipeUIDColumn: "recipe_search_documents.uid",
+                conditions: &conditions,
+                arguments: &arguments
+            )
+            let whereClause = conditions.isEmpty
+                ? ""
+                : "WHERE \(conditions.joined(separator: " AND "))"
             let recipeUIDs = try String.fetchAll(
                 db,
                 sql: """
-                SELECT recipe_uid
-                FROM recipe_ingredient_tokens
-                WHERE token IN (\(placeholders))
-                GROUP BY recipe_uid
-                HAVING COUNT(DISTINCT token) = ?
+                SELECT recipe_search_documents.uid
+                FROM recipe_search_documents
+                \(whereClause)
                 """,
                 arguments: arguments
             )
@@ -1234,6 +1227,52 @@ public struct PantryStore: @unchecked Sendable {
 
     private static func sqlPlaceholders(count: Int) -> String {
         Array(repeating: "?", count: max(1, count)).joined(separator: ", ")
+    }
+
+    private static func appendIngredientFilterSQL(
+        _ filter: RecipeIngredientFilter,
+        recipeUIDColumn: String,
+        conditions: inout [String],
+        arguments: inout StatementArguments
+    ) {
+        let includeClauses = filter.queryableIncludeTerms.map { term in
+            for token in term.normalizedTokens {
+                arguments += [token]
+            }
+            arguments += [term.normalizedTokens.count]
+            return ingredientTermExistsClause(tokenCount: term.normalizedTokens.count, recipeUIDColumn: recipeUIDColumn)
+        }
+
+        switch filter.includeMode {
+        case .all:
+            conditions.append(contentsOf: includeClauses)
+        case .any:
+            if !includeClauses.isEmpty {
+                conditions.append("(\(includeClauses.joined(separator: " OR ")))")
+            }
+        }
+
+        for term in filter.queryableExcludeTerms {
+            for token in term.normalizedTokens {
+                arguments += [token]
+            }
+            arguments += [term.normalizedTokens.count]
+            conditions.append("NOT \(ingredientTermExistsClause(tokenCount: term.normalizedTokens.count, recipeUIDColumn: recipeUIDColumn))")
+        }
+    }
+
+    private static func ingredientTermExistsClause(tokenCount: Int, recipeUIDColumn: String) -> String {
+        let placeholders = sqlPlaceholders(count: tokenCount)
+        return """
+        EXISTS (
+            SELECT 1
+            FROM recipe_ingredient_tokens
+            WHERE recipe_ingredient_tokens.recipe_uid = \(recipeUIDColumn)
+                AND recipe_ingredient_tokens.token IN (\(placeholders))
+            GROUP BY recipe_ingredient_tokens.recipe_uid
+            HAVING COUNT(DISTINCT recipe_ingredient_tokens.token) = ?
+        )
+        """
     }
 
     private static func encodeCategories(_ categories: [String]) -> String {

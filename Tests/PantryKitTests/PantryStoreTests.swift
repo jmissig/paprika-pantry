@@ -643,6 +643,33 @@ final class PantryStoreTests: XCTestCase {
             for: RecipeIngredientFilter(rawTerms: ["pasta", "tomato"])
         )
         XCTAssertEqual(pastaAndTomatoUIDs, Set(["AAA"]))
+
+        let pastaOrTomatoUIDs = try store.matchingRecipeUIDs(
+            for: RecipeIngredientFilter(
+                rawTerms: ["pasta", "tomato"],
+                includeMode: .any
+            )
+        )
+        XCTAssertEqual(pastaOrTomatoUIDs, Set(["AAA", "BBB", "CCC"]))
+
+        let pastaResults = try store.searchRecipes(
+            query: "pasta",
+            ingredientFilter: RecipeIngredientFilter(
+                rawTerms: ["pasta", "tomato"],
+                includeMode: .any
+            ),
+            sort: .rating,
+            limit: 20
+        )
+        XCTAssertEqual(pastaResults.map(\.uid), ["AAA", "BBB"])
+
+        let tomatoWithoutPastaUIDs = try store.matchingRecipeUIDs(
+            for: RecipeIngredientFilter(
+                rawTerms: ["tomato"],
+                excludeRawTerms: ["pasta"]
+            )
+        )
+        XCTAssertEqual(tomatoWithoutPastaUIDs, Set(["CCC"]))
     }
 
     func testDerivedFeaturesPreferSourceTotalTimeWhenAvailable() async throws {

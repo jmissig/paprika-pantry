@@ -51,6 +51,11 @@ final class JSONOutputTests: XCTestCase {
                 ),
             ],
             canonicalFilters: RecipeQueryFilters(favoritesOnly: true, minRating: 4, categoryNames: ["Dinner"]),
+            ingredientFilter: RecipeIngredientFilter(
+                rawTerms: ["green onions", "basil"],
+                excludeRawTerms: ["anchovy"],
+                includeMode: .any
+            ),
             derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
             sort: .fewestIngredients,
             derivedReadPath: "sidecar-derived"
@@ -62,6 +67,10 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"derivedReadPath\""))
         XCTAssertTrue(recipesRendered.contains("\"sidecar-derived\""))
         XCTAssertTrue(recipesRendered.contains("\"canonicalFilters\""))
+        XCTAssertTrue(recipesRendered.contains("\"ingredientFilter\""))
+        XCTAssertTrue(recipesRendered.contains("\"includeMode\" : \"any\""))
+        XCTAssertTrue(recipesRendered.contains("\"includeTerms\""))
+        XCTAssertTrue(recipesRendered.contains("\"excludeTerms\""))
         XCTAssertTrue(recipesRendered.contains("\"derivedConstraints\""))
         XCTAssertTrue(recipesRendered.contains("\"favoritesOnly\" : true"))
         XCTAssertTrue(recipesRendered.contains("\"minRating\" : 4"))

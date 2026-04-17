@@ -280,12 +280,36 @@ final class RecipeCommandResolutionTests: XCTestCase {
         )
 
         XCTAssertThrowsError(
+            try RecipesSearchCommand.parseAsRoot(["risotto", "--exclude-ingredient", "  "])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesSearchCommand.parseAsRoot(["risotto", "--exclude-ingredient", "1 cup"])
+        )
+
+        XCTAssertThrowsError(
             try RecipesListCommand.parseAsRoot(["--min-total-time-minutes", "40", "--max-total-time-minutes", "30"])
         )
 
         XCTAssertThrowsError(
             try RecipesSearchCommand.parseAsRoot(["risotto", "--max-ingredient-lines", "0"])
         )
+    }
+
+    func testRecipeQueryCommandParsingCapturesIngredientMatchAndExclusions() throws {
+        let parsed = try RecipesSearchCommand.parseAsRoot([
+            "risotto",
+            "--ingredient", "green onions",
+            "--ingredient", "basil",
+            "--ingredient-match", "any",
+            "--exclude-ingredient", "anchovy"
+        ])
+        let command = try XCTUnwrap(parsed as? RecipesSearchCommand)
+
+        XCTAssertEqual(command.query, "risotto")
+        XCTAssertEqual(command.ingredient, ["green onions", "basil"])
+        XCTAssertEqual(command.excludeIngredient, ["anchovy"])
+        XCTAssertEqual(command.ingredientMatch, .any)
     }
 
     private func makeRecipeReadService(

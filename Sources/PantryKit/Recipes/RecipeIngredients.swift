@@ -1,22 +1,96 @@
+import ArgumentParser
 import Foundation
 
-public struct RecipeIngredientFilter: Codable, Equatable, Sendable {
-    public let rawTerms: [String]
+public enum RecipeIngredientMatchMode: String, Codable, CaseIterable, ExpressibleByArgument, Sendable {
+    case all
+    case any
+}
+
+public struct RecipeIngredientQueryTerm: Codable, Equatable, Sendable {
+    public let rawTerm: String
     public let normalizedTokens: [String]
 
-    public init(rawTerms: [String] = [], normalizedTokens: [String]? = nil) {
-        let sanitizedTerms = Self.sanitizedTerms(rawTerms)
-        self.rawTerms = sanitizedTerms
-        self.normalizedTokens = normalizedTokens ?? IngredientNormalizer.normalizedQueryTokens(from: sanitizedTerms)
+    public init(rawTerm: String, normalizedTokens: [String]? = nil) {
+        let trimmed = rawTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.rawTerm = trimmed
+        self.normalizedTokens = normalizedTokens ?? IngredientNormalizer.normalizedQueryTokens(from: [trimmed])
+    }
+
+    public var isQueryable: Bool {
+        !normalizedTokens.isEmpty
+    }
+}
+
+public struct RecipeIngredientFilter: Codable, Equatable, Sendable {
+    public let includeMode: RecipeIngredientMatchMode
+    public let includeTerms: [RecipeIngredientQueryTerm]
+    public let excludeTerms: [RecipeIngredientQueryTerm]
+
+    public init(
+        rawTerms: [String] = [],
+        excludeRawTerms: [String] = [],
+        includeMode: RecipeIngredientMatchMode = .all,
+        includeTerms: [RecipeIngredientQueryTerm]? = nil,
+        excludeTerms: [RecipeIngredientQueryTerm]? = nil
+    ) {
+        self.includeMode = includeMode
+        self.includeTerms = includeTerms ?? Self.sanitizedTerms(rawTerms)
+        self.excludeTerms = excludeTerms ?? Self.sanitizedTerms(excludeRawTerms)
     }
 
     public var isDefault: Bool {
-        normalizedTokens.isEmpty
+        queryableIncludeTerms.isEmpty && queryableExcludeTerms.isEmpty
     }
 
-    private static func sanitizedTerms(_ values: [String]) -> [String] {
+    public var rawTerms: [String] {
+        includeTerms.map(\.rawTerm)
+    }
+
+    public var normalizedTokens: [String] {
+        Self.deduplicated(includeTerms.flatMap(\.normalizedTokens))
+    }
+
+    public var excludedRawTerms: [String] {
+        excludeTerms.map(\.rawTerm)
+    }
+
+    public var excludedNormalizedTokens: [String] {
+        Self.deduplicated(excludeTerms.flatMap(\.normalizedTokens))
+    }
+
+    public var queryableIncludeTerms: [RecipeIngredientQueryTerm] {
+        includeTerms.filter(\.isQueryable)
+    }
+
+    public var queryableExcludeTerms: [RecipeIngredientQueryTerm] {
+        excludeTerms.filter(\.isQueryable)
+    }
+
+    public func matches(normalizedIngredientTokens: Set<String>) -> Bool {
+        let includeMatches: Bool
+        switch includeMode {
+        case .all:
+            includeMatches = queryableIncludeTerms.allSatisfy { term in
+                Self.termMatches(term, normalizedIngredientTokens: normalizedIngredientTokens)
+            }
+        case .any:
+            includeMatches = queryableIncludeTerms.isEmpty || queryableIncludeTerms.contains { term in
+                Self.termMatches(term, normalizedIngredientTokens: normalizedIngredientTokens)
+            }
+        }
+
+        guard includeMatches else {
+            return false
+        }
+
+        return !queryableExcludeTerms.contains { term in
+            Self.termMatches(term, normalizedIngredientTokens: normalizedIngredientTokens)
+        }
+    }
+
+    private static func sanitizedTerms(_ values: [String]) -> [RecipeIngredientQueryTerm] {
         var seen = Set<String>()
-        var result = [String]()
+        var result = [RecipeIngredientQueryTerm]()
 
         for value in values {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,7 +103,29 @@ public struct RecipeIngredientFilter: Codable, Equatable, Sendable {
                 continue
             }
 
-            result.append(trimmed)
+            result.append(RecipeIngredientQueryTerm(rawTerm: trimmed))
+        }
+
+        return result
+    }
+
+    private static func termMatches(
+        _ term: RecipeIngredientQueryTerm,
+        normalizedIngredientTokens: Set<String>
+    ) -> Bool {
+        !term.normalizedTokens.isEmpty && term.normalizedTokens.allSatisfy(normalizedIngredientTokens.contains)
+    }
+
+    private static func deduplicated(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result = [String]()
+
+        for value in values {
+            guard seen.insert(value).inserted else {
+                continue
+            }
+
+            result.append(value)
         }
 
         return result

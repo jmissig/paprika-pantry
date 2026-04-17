@@ -122,8 +122,8 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Parse and normalize ingredient lines into queryable tokens
 - [x] Add ingredient-oriented helper tables and indexes
 - [x] Support ingredient-based filtering through recipe query surfaces
-- [ ] Support use-up queries
-- [ ] Support questions like "what can use up our avocados?"
+- [x] Broaden ingredient query primitives to support include, exclude, and include-match semantics
+- [ ] Consider whether higher-level task phrasing should emerge naturally from the general ingredient query surface rather than become a first-class command
 
 ### Phase H — pattern tables and household evidence mining
 

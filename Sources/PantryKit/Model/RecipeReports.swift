@@ -660,11 +660,29 @@ func renderedRecipeIngredientFilter(_ filter: RecipeIngredientFilter) -> [String
     }
 
     var lines = [String]()
-    if !filter.rawTerms.isEmpty {
-        lines.append("ingredient.terms_all: \(filter.rawTerms.joined(separator: ", "))")
+    if !filter.includeTerms.isEmpty {
+        lines.append("ingredient.include_terms_\(filter.includeMode.rawValue): \(filter.rawTerms.joined(separator: ", "))")
+        lines.append(
+            "ingredient.include_term_tokens_\(filter.includeMode.rawValue): \(renderedIngredientQueryTerms(filter.includeTerms))"
+        )
     }
-    lines.append("ingredient.normalized_tokens_all: \(filter.normalizedTokens.joined(separator: ", "))")
+
+    if !filter.excludeTerms.isEmpty {
+        lines.append("ingredient.exclude_terms_any: \(filter.excludedRawTerms.joined(separator: ", "))")
+        lines.append("ingredient.exclude_term_tokens_any: \(renderedIngredientQueryTerms(filter.excludeTerms))")
+    }
+
     return lines
+}
+
+private func renderedIngredientQueryTerms(_ terms: [RecipeIngredientQueryTerm]) -> String {
+    terms.map { term in
+        let renderedTokens = term.normalizedTokens.isEmpty
+            ? "(no queryable tokens)"
+            : term.normalizedTokens.joined(separator: ", ")
+        return "\(term.rawTerm)=\(renderedTokens)"
+    }
+    .joined(separator: "; ")
 }
 
 func renderedRecipeDerivedEvidence(_ features: RecipeDerivedFeatures?) -> [String] {

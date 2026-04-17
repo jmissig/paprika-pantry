@@ -41,8 +41,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.min_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Side"))
-        XCTAssertTrue(report.humanDescription.contains("ingredient.terms_all: tomatoes, basil leaves"))
-        XCTAssertTrue(report.humanDescription.contains("ingredient.normalized_tokens_all: tomato, basil, leaves"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_terms_all: tomatoes, basil leaves"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_term_tokens_all: tomatoes=tomato; basil leaves=basil, leaves"))
         XCTAssertTrue(report.humanDescription.contains("derived.max_total_time_minutes: 30"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
@@ -191,14 +191,30 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.max_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Soup"))
-        XCTAssertTrue(report.humanDescription.contains("ingredient.terms_all: green onions"))
-        XCTAssertTrue(report.humanDescription.contains("ingredient.normalized_tokens_all: green, onion"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_terms_all: green onions"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_term_tokens_all: green onions=green, onion"))
         XCTAssertTrue(report.humanDescription.contains("derived.max_ingredient_line_count: 6"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("AAA  Weeknight Soup"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
+    }
+
+    func testRecipeReportsRenderIngredientAnyAndExcludeSemantics() {
+        let report = RecipesListReport(
+            recipes: [],
+            ingredientFilter: RecipeIngredientFilter(
+                rawTerms: ["green onions", "basil"],
+                excludeRawTerms: ["anchovy"],
+                includeMode: .any
+            )
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_terms_any: green onions, basil"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.include_term_tokens_any: green onions=green, onion; basil=basil"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.exclude_terms_any: anchovy"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient.exclude_term_tokens_any: anchovy=anchovy"))
     }
 
     func testRecipeFeaturesReportIncludesSourceEvidenceAndDerivedMetrics() {

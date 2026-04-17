@@ -20,7 +20,7 @@ public struct RecipesCommand: ParsableCommand {
 public struct RecipesListCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List recipes from the configured pantry source with canonical filters plus optional sidecar-derived ingredient/time constraints."
+        abstract: "List recipes from the configured pantry source with canonical filters plus optional sidecar ingredient include/exclude filters and derived time constraints."
     )
 
     @Flag(name: .long, help: "Only include recipes marked favorite in Paprika.")
@@ -35,8 +35,14 @@ public struct RecipesListCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
 
-    @Option(name: .long, help: "Require this normalized ingredient term from the sidecar ingredient index. Repeat to require multiple terms.")
+    @Option(name: .long, help: "Require this ingredient term from the sidecar ingredient index. Repeat to combine multiple included terms.")
     public var ingredient: [String] = []
+
+    @Option(name: .long, help: "Exclude recipes matching this ingredient term from the sidecar ingredient index. Repeat to exclude multiple terms.")
+    public var excludeIngredient: [String] = []
+
+    @Option(name: .long, help: "How repeated --ingredient terms combine: \(RecipeIngredientMatchMode.allCases.map(\.rawValue).joined(separator: ", ")). Default: all.")
+    public var ingredientMatch: RecipeIngredientMatchMode = .all
 
     @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
     public var minTotalTimeMinutes: Int?
@@ -57,7 +63,7 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
-        try validateRecipeIngredientOptions(ingredient)
+        try validateRecipeIngredientOptions(includedIngredients: ingredient, excludedIngredients: excludeIngredient)
         try validateRecipeDerivedQueryOptions(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -76,7 +82,11 @@ public struct RecipesListCommand: PantryLeafCommand {
             maxRating: maxRating,
             categoryNames: category
         )
-        let ingredientFilter = RecipeIngredientFilter(rawTerms: ingredient)
+        let ingredientFilter = RecipeIngredientFilter(
+            rawTerms: ingredient,
+            excludeRawTerms: excludeIngredient,
+            includeMode: ingredientMatch
+        )
         let derivedConstraints = RecipeDerivedConstraints(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -161,7 +171,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 public struct RecipesSearchCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "Search recipes through the owned sidecar index with canonical filters plus optional ingredient-token and derived time constraints."
+        abstract: "Search recipes through the owned sidecar index with canonical filters plus optional sidecar ingredient include/exclude filters and derived time constraints."
     )
 
     @Argument(help: "Search query.")
@@ -179,8 +189,14 @@ public struct RecipesSearchCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes rated at most this many stars (1-5).")
     public var maxRating: Int?
 
-    @Option(name: .long, help: "Require this normalized ingredient term from the sidecar ingredient index. Repeat to require multiple terms.")
+    @Option(name: .long, help: "Require this ingredient term from the sidecar ingredient index. Repeat to combine multiple included terms.")
     public var ingredient: [String] = []
+
+    @Option(name: .long, help: "Exclude recipes matching this ingredient term from the sidecar ingredient index. Repeat to exclude multiple terms.")
+    public var excludeIngredient: [String] = []
+
+    @Option(name: .long, help: "How repeated --ingredient terms combine: \(RecipeIngredientMatchMode.allCases.map(\.rawValue).joined(separator: ", ")). Default: all.")
+    public var ingredientMatch: RecipeIngredientMatchMode = .all
 
     @Option(name: .long, help: "Only include recipes whose derived total time is at least this many minutes.")
     public var minTotalTimeMinutes: Int?
@@ -204,7 +220,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 
     public mutating func validate() throws {
         try validateRecipeQueryOptions(minRating: minRating, maxRating: maxRating, categories: category)
-        try validateRecipeIngredientOptions(ingredient)
+        try validateRecipeIngredientOptions(includedIngredients: ingredient, excludedIngredients: excludeIngredient)
         try validateRecipeDerivedQueryOptions(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -235,7 +251,11 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             maxRating: maxRating,
             categoryNames: category
         )
-        let ingredientFilter = RecipeIngredientFilter(rawTerms: ingredient)
+        let ingredientFilter = RecipeIngredientFilter(
+            rawTerms: ingredient,
+            excludeRawTerms: excludeIngredient,
+            includeMode: ingredientMatch
+        )
         let derivedConstraints = RecipeDerivedConstraints(
             minTotalTimeMinutes: minTotalTimeMinutes,
             maxTotalTimeMinutes: maxTotalTimeMinutes,
@@ -353,15 +373,29 @@ private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, catego
     }
 }
 
-private func validateRecipeIngredientOptions(_ ingredients: [String]) throws {
-    if ingredients.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+private func validateRecipeIngredientOptions(
+    includedIngredients: [String],
+    excludedIngredients: [String]
+) throws {
+    if includedIngredients.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
         throw ValidationError("--ingredient must not be empty.")
     }
 
-    for term in ingredients {
+    if excludedIngredients.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        throw ValidationError("--exclude-ingredient must not be empty.")
+    }
+
+    for term in includedIngredients {
         let filter = RecipeIngredientFilter(rawTerms: [term])
-        if filter.normalizedTokens.isEmpty {
+        if filter.queryableIncludeTerms.isEmpty {
             throw ValidationError("--ingredient must contain at least one queryable token after conservative normalization.")
+        }
+    }
+
+    for term in excludedIngredients {
+        let filter = RecipeIngredientFilter(excludeRawTerms: [term])
+        if filter.queryableExcludeTerms.isEmpty {
+            throw ValidationError("--exclude-ingredient must contain at least one queryable token after conservative normalization.")
         }
     }
 }
