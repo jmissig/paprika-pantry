@@ -144,7 +144,7 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 - [x] Add meals adapter/query support
 - [x] Add groceries adapter/query support
-- [ ] Add pantry adapter/query support if it looks useful
+- [x] Add pantry adapter/query support from the direct Paprika SQLite source
 
 ### Phase J — linked meal history and recipe usage stats
 
@@ -163,7 +163,7 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase L — CLI surface polish
 
-- [ ] Add a first-class `doctor` command for discovery/runtime/source/sidecar diagnostics
+- [x] Add a first-class `doctor` command for discovery/runtime/source/sidecar diagnostics
 - [ ] Later, consider explicit `--columns` support for table/csv-like outputs where scan shape matters
 
 ## Explicitly not now

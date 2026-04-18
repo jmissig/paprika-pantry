@@ -21,6 +21,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let categories = try await source.listRecipeCategories()
         let meals = try await source.listMeals()
         let groceryItems = try await source.listGroceryItems()
+        let pantryItems = try await source.listPantryItems()
         let recipe = try await source.fetchRecipe(uid: "AAA")
 
         XCTAssertEqual(
@@ -103,6 +104,46 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ingredientName: "pasta",
                     recipeName: "Pantry Pasta",
                     isPurchased: true
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            pantryItems,
+            [
+                SourcePantryItem(
+                    uid: "PANTRY3",
+                    name: "Old Rice",
+                    quantity: "1 bag",
+                    aisleName: nil,
+                    ingredientName: "Old Rice",
+                    purchaseDate: nil,
+                    expirationDate: nil,
+                    hasExpiration: false,
+                    isInStock: true,
+                    isDeleted: true
+                ),
+                SourcePantryItem(
+                    uid: "PANTRY1",
+                    name: "Black Beans",
+                    quantity: "2 cans",
+                    aisleName: "Pantry",
+                    ingredientName: "Black Beans",
+                    purchaseDate: "2025-04-10 12:00:00",
+                    expirationDate: "2025-04-24 00:00:00",
+                    hasExpiration: true,
+                    isInStock: true
+                ),
+                SourcePantryItem(
+                    uid: "PANTRY2",
+                    name: "Paprika",
+                    quantity: "1 jar",
+                    aisleName: "Spices",
+                    ingredientName: "Paprika",
+                    purchaseDate: "2025-04-09 12:00:00",
+                    expirationDate: nil,
+                    hasExpiration: false,
+                    isInStock: false
                 ),
             ]
         )
@@ -270,6 +311,43 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         )
     }
 
+    func testPantryItemReadServiceListsPantryItemsDirectlyFromPaprikaSQLiteSource() throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+        let service = try PantryItemReadService(source: source)
+
+        let pantryItems = try BlockingAsync.run {
+            try await service.listPantryItems()
+        }
+
+        XCTAssertEqual(
+            pantryItems,
+            [
+                PantryItemSummary(
+                    uid: "PANTRY1",
+                    name: "Black Beans",
+                    quantity: "2 cans",
+                    aisleName: "Pantry",
+                    ingredientName: "Black Beans",
+                    purchaseDate: "2025-04-10 12:00:00",
+                    expirationDate: "2025-04-24 00:00:00",
+                    hasExpiration: true,
+                    isInStock: true
+                ),
+                PantryItemSummary(
+                    uid: "PANTRY2",
+                    name: "Paprika",
+                    quantity: "1 jar",
+                    aisleName: "Spices",
+                    ingredientName: "Paprika",
+                    purchaseDate: "2025-04-09 12:00:00",
+                    expirationDate: nil,
+                    hasExpiration: false,
+                    isInStock: false
+                ),
+            ]
+        )
+    }
+
     func testRecipeIndexesRebuildUsesDirectPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let store = try makeStore()
@@ -421,6 +499,21 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ZUID VARCHAR
                 )
                 """)
+            try db.execute(sql: """
+                CREATE TABLE ZPANTRYITEM (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZHASEXPIRATION INTEGER,
+                    ZINSTOCK INTEGER,
+                    ZAISLE INTEGER,
+                    ZEXPIRATIONDATE TIMESTAMP,
+                    ZPURCHASEDATE TIMESTAMP,
+                    ZAISLENAME VARCHAR,
+                    ZINGREDIENT VARCHAR,
+                    ZQUANTITY VARCHAR,
+                    ZSTATUS VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
 
             try db.execute(sql: """
                 INSERT INTO ZRECIPECATEGORY (Z_PK, ZNAME, ZSTATUS, ZUID)
@@ -464,7 +557,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                 INSERT INTO ZGROCERYAISLE (Z_PK, ZNAME, ZSTATUS, ZUID)
                 VALUES
                     (1, 'Produce', '', 'AISLE1'),
-                    (2, 'Pantry', '', 'AISLE2')
+                    (2, 'Pantry', '', 'AISLE2'),
+                    (3, 'Spices', '', 'AISLE3')
                 """)
             try db.execute(sql: """
                 INSERT INTO ZGROCERYITEM (Z_PK, ZPURCHASED, ZAISLE, ZLIST, ZAISLENAME, ZINGREDIENT, ZINSTRUCTION, ZNAME, ZQUANTITY, ZRECIPENAME, ZSTATUS, ZUID)
@@ -472,6 +566,13 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     (1, 0, 1, 1, '', 'avocado', 'ripe', 'Avocados', '2', NULL, '', 'GROC1'),
                     (2, 1, 2, 1, '', 'pasta', NULL, '', '1 box', 'Pantry Pasta', '', 'GROC2'),
                     (3, 0, NULL, 1, NULL, NULL, NULL, 'Deleted Item', NULL, NULL, 'deleted', 'GROC3')
+                """)
+            try db.execute(sql: """
+                INSERT INTO ZPANTRYITEM (Z_PK, ZHASEXPIRATION, ZINSTOCK, ZAISLE, ZEXPIRATIONDATE, ZPURCHASEDATE, ZAISLENAME, ZINGREDIENT, ZQUANTITY, ZSTATUS, ZUID)
+                VALUES
+                    (1, 1, 1, 2, 767145600, 765979200, '', 'Black Beans', '2 cans', '', 'PANTRY1'),
+                    (2, 0, 0, 3, NULL, 765892800, '', 'Paprika', '1 jar', '', 'PANTRY2'),
+                    (3, 0, 1, NULL, NULL, NULL, NULL, 'Old Rice', '1 bag', 'deleted', 'PANTRY3')
                 """)
         }
 

@@ -58,7 +58,7 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
     }
 }
 
-public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesReadablePantrySource, @unchecked Sendable {
+public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesReadablePantrySource, PantryItemsReadablePantrySource, @unchecked Sendable {
     public let databaseURL: URL
     public let inspection: PaprikaSQLiteSourceInspection
 
@@ -216,6 +216,46 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                     ingredientName: row["ingredient_name"],
                     recipeName: row["recipe_name"],
                     isPurchased: Self.decodeBoolean(row["is_purchased"]),
+                    isDeleted: Self.decodeBoolean(row["is_deleted"])
+                )
+            }
+        }
+    }
+
+    public func listPantryItems() async throws -> [SourcePantryItem] {
+        let sql = """
+            SELECT
+                items.ZUID AS uid,
+                COALESCE(NULLIF(items.ZINGREDIENT, ''), NULLIF(items.ZQUANTITY, '')) AS name,
+                \(self.schema.optionalTextExpression(column: "ZQUANTITY", from: self.schema.pantryItemColumns, tableAlias: "items")) AS quantity,
+                \(self.schema.pantryAisleNameExpression) AS aisle_name,
+                \(self.schema.optionalTextExpression(column: "ZINGREDIENT", from: self.schema.pantryItemColumns, tableAlias: "items")) AS ingredient_name,
+                \(self.schema.timestampExpression(column: "ZPURCHASEDATE", from: self.schema.pantryItemColumns, tableAlias: "items")) AS purchase_date,
+                \(self.schema.timestampExpression(column: "ZEXPIRATIONDATE", from: self.schema.pantryItemColumns, tableAlias: "items")) AS expiration_date,
+                \(self.schema.pantryHasExpirationExpression) AS has_expiration,
+                \(self.schema.pantryInStockExpression) AS is_in_stock,
+                \(self.schema.pantryDeletedExpression) AS is_deleted
+            FROM ZPANTRYITEM items
+            LEFT JOIN ZGROCERYAISLE grocery_aisle
+                ON grocery_aisle.Z_PK = items.ZAISLE
+            WHERE items.ZUID IS NOT NULL
+              AND COALESCE(NULLIF(items.ZINGREDIENT, ''), NULLIF(items.ZQUANTITY, '')) IS NOT NULL
+            ORDER BY is_in_stock DESC, aisle_name COLLATE NOCASE, name COLLATE NOCASE, uid
+            """
+
+        return try await dbQueue.read { db in
+            try self.schema.requirePantrySupport()
+            return try Row.fetchAll(db, sql: sql).map { row in
+                SourcePantryItem(
+                    uid: row["uid"],
+                    name: row["name"],
+                    quantity: row["quantity"],
+                    aisleName: row["aisle_name"],
+                    ingredientName: row["ingredient_name"],
+                    purchaseDate: row["purchase_date"],
+                    expirationDate: row["expiration_date"],
+                    hasExpiration: Self.decodeBoolean(row["has_expiration"]),
+                    isInStock: Self.decodeBoolean(row["is_in_stock"]),
                     isDeleted: Self.decodeBoolean(row["is_deleted"])
                 )
             }
@@ -400,6 +440,7 @@ private struct PaprikaSQLiteSchema: Sendable {
     let groceryItemColumns: Set<String>?
     let groceryListColumns: Set<String>?
     let groceryAisleColumns: Set<String>?
+    let pantryItemColumns: Set<String>?
 
     static func inspect(_ db: Database) throws -> PaprikaSQLiteSchema {
         for table in requiredTables {
@@ -414,6 +455,7 @@ private struct PaprikaSQLiteSchema: Sendable {
         let groceryItemColumns = try db.tableExists("ZGROCERYITEM") ? Set(db.columns(in: "ZGROCERYITEM").map(\.name)) : nil
         let groceryListColumns = try db.tableExists("ZGROCERYLIST") ? Set(db.columns(in: "ZGROCERYLIST").map(\.name)) : nil
         let groceryAisleColumns = try db.tableExists("ZGROCERYAISLE") ? Set(db.columns(in: "ZGROCERYAISLE").map(\.name)) : nil
+        let pantryItemColumns = try db.tableExists("ZPANTRYITEM") ? Set(db.columns(in: "ZPANTRYITEM").map(\.name)) : nil
 
         try requireColumn("Z_PK", in: "ZRECIPE", availableColumns: recipeColumns)
         try requireColumn("ZUID", in: "ZRECIPE", availableColumns: recipeColumns)
@@ -436,6 +478,11 @@ private struct PaprikaSQLiteSchema: Sendable {
             try requireColumn("ZNAME", in: "ZGROCERYITEM", availableColumns: groceryItemColumns)
         }
 
+        if let pantryItemColumns {
+            try requireColumn("ZUID", in: "ZPANTRYITEM", availableColumns: pantryItemColumns)
+            try requireColumn("ZINGREDIENT", in: "ZPANTRYITEM", availableColumns: pantryItemColumns)
+        }
+
         return PaprikaSQLiteSchema(
             recipeColumns: recipeColumns,
             categoryColumns: categoryColumns,
@@ -444,7 +491,8 @@ private struct PaprikaSQLiteSchema: Sendable {
             mealTypeColumns: mealTypeColumns,
             groceryItemColumns: groceryItemColumns,
             groceryListColumns: groceryListColumns,
-            groceryAisleColumns: groceryAisleColumns
+            groceryAisleColumns: groceryAisleColumns,
+            pantryItemColumns: pantryItemColumns
         )
     }
 
@@ -512,6 +560,28 @@ private struct PaprikaSQLiteSchema: Sendable {
         return joinedListName
     }
 
+    var pantryInStockExpression: String {
+        pantryItemColumns?.contains("ZINSTOCK") == true ? "COALESCE(items.ZINSTOCK, 0)" : "0"
+    }
+
+    var pantryHasExpirationExpression: String {
+        pantryItemColumns?.contains("ZHASEXPIRATION") == true ? "COALESCE(items.ZHASEXPIRATION, 0)" : "0"
+    }
+
+    var pantryDeletedExpression: String {
+        guard let pantryItemColumns, pantryItemColumns.contains("ZSTATUS") else {
+            return "0"
+        }
+
+        return "CASE WHEN lower(COALESCE(items.ZSTATUS, '')) = 'deleted' THEN 1 ELSE 0 END"
+    }
+
+    var pantryAisleNameExpression: String {
+        let itemAisleName = optionalTextExpression(column: "ZAISLENAME", from: pantryItemColumns, tableAlias: "items")
+        let joinedAisleName = optionalTextExpression(column: "ZNAME", from: groceryAisleColumns, tableAlias: "grocery_aisle")
+        return "COALESCE(\(itemAisleName), \(joinedAisleName))"
+    }
+
     var groceryAisleNameExpression: String {
         let itemAisleName = optionalTextExpression(column: "ZAISLENAME", from: groceryItemColumns, tableAlias: "items")
         let joinedAisleName = optionalTextExpression(column: "ZNAME", from: groceryAisleColumns, tableAlias: "grocery_aisle")
@@ -561,6 +631,12 @@ private struct PaprikaSQLiteSchema: Sendable {
     func requireGrocerySupport() throws {
         guard groceryItemColumns != nil else {
             throw PaprikaSQLiteSourceError.missingTable("ZGROCERYITEM")
+        }
+    }
+
+    func requirePantrySupport() throws {
+        guard pantryItemColumns != nil else {
+            throw PaprikaSQLiteSourceError.missingTable("ZPANTRYITEM")
         }
     }
 
