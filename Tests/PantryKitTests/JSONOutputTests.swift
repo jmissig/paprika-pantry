@@ -58,7 +58,9 @@ final class JSONOutputTests: XCTestCase {
             ),
             derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
             sort: .fewestIngredients,
-            derivedReadPath: "sidecar-derived"
+            derivedReadPath: "sidecar-derived",
+            derivedLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            derivedFreshnessSeconds: 60
         )
 
         let recipesRendered = try JSONOutput.render(recipesReport)
@@ -66,6 +68,7 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"direct-source\""))
         XCTAssertTrue(recipesRendered.contains("\"derivedReadPath\""))
         XCTAssertTrue(recipesRendered.contains("\"sidecar-derived\""))
+        XCTAssertTrue(recipesRendered.contains("\"derivedFreshnessSeconds\" : 60"))
         XCTAssertTrue(recipesRendered.contains("\"canonicalFilters\""))
         XCTAssertTrue(recipesRendered.contains("\"ingredientFilter\""))
         XCTAssertTrue(recipesRendered.contains("\"includeMode\" : \"any\""))

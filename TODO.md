@@ -91,7 +91,7 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Add `index rebuild`
 - [x] Add the first worthwhile sidecar-backed feature, recipe search
 - [x] Make direct-vs-derived provenance clearer in reports where it matters
-- [ ] Add staleness/freshness reporting for sidecar-derived answers
+- [x] Add staleness/freshness reporting for sidecar-derived answers
 
 ### Phase D — derived recipe features
 

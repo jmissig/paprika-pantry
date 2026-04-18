@@ -151,6 +151,7 @@ final class QueryReportsTests: XCTestCase {
     }
 
     func testRecipesSearchReportIncludesMatches() {
+        let searchLastSuccessAt = Date(timeIntervalSince1970: 1_712_736_120)
         let report = RecipesSearchReport(
             query: "lemon",
             canonicalFilters: RecipeQueryFilters(favoritesOnly: true, maxRating: 4, categoryNames: ["Soup"]),
@@ -180,14 +181,24 @@ final class QueryReportsTests: XCTestCase {
             ],
             paths: makePaths(),
             derivedReadPath: "sidecar-derived",
-            ingredientReadPath: "sidecar-ingredient-index"
+            ingredientReadPath: "sidecar-ingredient-index",
+            searchLastSuccessAt: searchLastSuccessAt,
+            searchFreshnessSeconds: 60,
+            derivedLastSuccessAt: searchLastSuccessAt,
+            derivedFreshnessSeconds: 60,
+            ingredientLastSuccessAt: searchLastSuccessAt,
+            ingredientFreshnessSeconds: 60
         )
 
         XCTAssertTrue(report.humanDescription.contains("recipes search: 1 matches"))
         XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
         XCTAssertTrue(report.humanDescription.contains("query: lemon"))
+        XCTAssertTrue(report.humanDescription.contains("search_index_last_success_at: 2024-04-10T08:02:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("search_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("derived_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.max_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Soup"))
@@ -208,9 +219,13 @@ final class QueryReportsTests: XCTestCase {
                 rawTerms: ["green onions", "basil"],
                 excludeRawTerms: ["anchovy"],
                 includeMode: .any
-            )
+            ),
+            ingredientReadPath: "sidecar-ingredient-index",
+            ingredientLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            ingredientFreshnessSeconds: 60
         )
 
+        XCTAssertTrue(report.humanDescription.contains("ingredient_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("ingredient.include_terms_any: green onions, basil"))
         XCTAssertTrue(report.humanDescription.contains("ingredient.include_term_tokens_any: green onions=green, onion; basil=basil"))
         XCTAssertTrue(report.humanDescription.contains("ingredient.exclude_terms_any: anchovy"))
@@ -249,11 +264,14 @@ final class QueryReportsTests: XCTestCase {
                 ingredientLineCount: 2,
                 ingredientLineCountBasis: .nonEmptyLines
             ),
-            paths: makePaths()
+            paths: makePaths(),
+            derivedLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            derivedFreshnessSeconds: 60
         )
 
         XCTAssertTrue(report.humanDescription.contains("source_read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("derived_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("source_prep_time: 10 min"))
         XCTAssertTrue(report.humanDescription.contains("total_time_basis: prep-plus-cook"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_line_count: 2"))
@@ -299,11 +317,14 @@ final class QueryReportsTests: XCTestCase {
                     ),
                 ]
             ),
-            paths: makePaths()
+            paths: makePaths(),
+            ingredientLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            ingredientFreshnessSeconds: 60
         )
 
         XCTAssertTrue(report.humanDescription.contains("source_read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("source_ingredients:"))
         XCTAssertTrue(report.humanDescription.contains("indexed_ingredient_lines: 2"))
         XCTAssertTrue(report.humanDescription.contains("1: source=\"1 can tomatoes\" | normalized_text=tomato | normalized_tokens=tomato"))

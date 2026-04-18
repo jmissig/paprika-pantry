@@ -5,6 +5,10 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let derivedReadPath: String?
     public let ingredientReadPath: String?
+    public let derivedLastSuccessAt: Date?
+    public let derivedFreshnessSeconds: Int?
+    public let ingredientLastSuccessAt: Date?
+    public let ingredientFreshnessSeconds: Int?
     public let recipeCount: Int
     public let canonicalFilters: RecipeQueryFilters
     public let ingredientFilter: RecipeIngredientFilter
@@ -20,12 +24,20 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
         sort: RecipeListSort = .name,
         readPath: String = "direct-source",
         derivedReadPath: String? = nil,
-        ingredientReadPath: String? = nil
+        ingredientReadPath: String? = nil,
+        derivedLastSuccessAt: Date? = nil,
+        derivedFreshnessSeconds: Int? = nil,
+        ingredientLastSuccessAt: Date? = nil,
+        ingredientFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes list"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
         self.ingredientReadPath = ingredientReadPath
+        self.derivedLastSuccessAt = derivedLastSuccessAt
+        self.derivedFreshnessSeconds = derivedFreshnessSeconds
+        self.ingredientLastSuccessAt = ingredientLastSuccessAt
+        self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
         self.recipeCount = recipes.count
         self.canonicalFilters = canonicalFilters
         self.ingredientFilter = ingredientFilter
@@ -38,9 +50,19 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
         var lines = ["\(command): \(recipeCount) recipes", "read_path: \(readPath)"]
         if let derivedReadPath {
             lines.append("derived_read_path: \(derivedReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "derived_index",
+                lastSuccessAt: derivedLastSuccessAt,
+                freshnessSeconds: derivedFreshnessSeconds
+            ))
         }
         if let ingredientReadPath {
             lines.append("ingredient_read_path: \(ingredientReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "ingredient_index",
+                lastSuccessAt: ingredientLastSuccessAt,
+                freshnessSeconds: ingredientFreshnessSeconds
+            ))
         }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
         lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
@@ -84,16 +106,22 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let recipe: RecipeDetail
     public let derivedFeatures: RecipeDerivedFeatures?
+    public let derivedLastSuccessAt: Date?
+    public let derivedFreshnessSeconds: Int?
 
     public init(
         recipe: RecipeDetail,
         derivedFeatures: RecipeDerivedFeatures? = nil,
-        readPath: String = "direct-source"
+        readPath: String = "direct-source",
+        derivedLastSuccessAt: Date? = nil,
+        derivedFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes show"
         self.readPath = readPath
         self.recipe = recipe
         self.derivedFeatures = derivedFeatures
+        self.derivedLastSuccessAt = derivedLastSuccessAt
+        self.derivedFreshnessSeconds = derivedFreshnessSeconds
     }
 
     public var humanDescription: String {
@@ -141,6 +169,11 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
 
         if let derivedFeatures {
             lines.append("derived_read_path: sidecar-derived")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "derived_index",
+                lastSuccessAt: derivedLastSuccessAt,
+                freshnessSeconds: derivedFreshnessSeconds
+            ))
             lines.append("derived_at: \(renderedTimestamp(derivedFeatures.derivedAt))")
 
             switch derivedFeatures.sourceHashMatches(recipe.remoteHash) {
@@ -317,6 +350,12 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let derivedReadPath: String?
     public let ingredientReadPath: String?
+    public let searchLastSuccessAt: Date?
+    public let searchFreshnessSeconds: Int?
+    public let derivedLastSuccessAt: Date?
+    public let derivedFreshnessSeconds: Int?
+    public let ingredientLastSuccessAt: Date?
+    public let ingredientFreshnessSeconds: Int?
     public let query: String
     public let resultCount: Int
     public let canonicalFilters: RecipeQueryFilters
@@ -336,12 +375,24 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
         paths: PantryPaths,
         readPath: String = "sidecar-search-index",
         derivedReadPath: String? = nil,
-        ingredientReadPath: String? = nil
+        ingredientReadPath: String? = nil,
+        searchLastSuccessAt: Date? = nil,
+        searchFreshnessSeconds: Int? = nil,
+        derivedLastSuccessAt: Date? = nil,
+        derivedFreshnessSeconds: Int? = nil,
+        ingredientLastSuccessAt: Date? = nil,
+        ingredientFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes search"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
         self.ingredientReadPath = ingredientReadPath
+        self.searchLastSuccessAt = searchLastSuccessAt
+        self.searchFreshnessSeconds = searchFreshnessSeconds
+        self.derivedLastSuccessAt = derivedLastSuccessAt
+        self.derivedFreshnessSeconds = derivedFreshnessSeconds
+        self.ingredientLastSuccessAt = ingredientLastSuccessAt
+        self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
         self.query = query
         self.resultCount = results.count
         self.canonicalFilters = canonicalFilters
@@ -358,11 +409,26 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
             "read_path: \(readPath)",
             "query: \(query)",
         ]
+        lines.append(contentsOf: renderedIndexFreshnessLines(
+            prefix: "search_index",
+            lastSuccessAt: searchLastSuccessAt,
+            freshnessSeconds: searchFreshnessSeconds
+        ))
         if let derivedReadPath {
             lines.append("derived_read_path: \(derivedReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "derived_index",
+                lastSuccessAt: derivedLastSuccessAt,
+                freshnessSeconds: derivedFreshnessSeconds
+            ))
         }
         if let ingredientReadPath {
             lines.append("ingredient_read_path: \(ingredientReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "ingredient_index",
+                lastSuccessAt: ingredientLastSuccessAt,
+                freshnessSeconds: ingredientFreshnessSeconds
+            ))
         }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
         lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
@@ -409,6 +475,8 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
     public let derivedReadPath: String
     public let recipe: RecipeDetail
     public let features: RecipeDerivedFeatures
+    public let derivedLastSuccessAt: Date?
+    public let derivedFreshnessSeconds: Int?
     public let paths: PantryPathReport
 
     public init(
@@ -416,13 +484,17 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
         features: RecipeDerivedFeatures,
         paths: PantryPaths,
         sourceReadPath: String = "direct-source",
-        derivedReadPath: String = "sidecar-derived"
+        derivedReadPath: String = "sidecar-derived",
+        derivedLastSuccessAt: Date? = nil,
+        derivedFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes features"
         self.sourceReadPath = sourceReadPath
         self.derivedReadPath = derivedReadPath
         self.recipe = recipe
         self.features = features
+        self.derivedLastSuccessAt = derivedLastSuccessAt
+        self.derivedFreshnessSeconds = derivedFreshnessSeconds
         self.paths = paths.report
     }
 
@@ -433,6 +505,11 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
             "derived_read_path: \(derivedReadPath)",
             "uid: \(recipe.uid)",
         ]
+        lines.append(contentsOf: renderedIndexFreshnessLines(
+            prefix: "derived_index",
+            lastSuccessAt: derivedLastSuccessAt,
+            freshnessSeconds: derivedFreshnessSeconds
+        ))
 
         if !recipe.categories.isEmpty {
             lines.append("categories: \(recipe.categories.joined(separator: ", "))")
@@ -500,6 +577,8 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
     public let ingredientReadPath: String
     public let recipe: RecipeDetail
     public let ingredientIndex: RecipeIngredientIndex?
+    public let ingredientLastSuccessAt: Date?
+    public let ingredientFreshnessSeconds: Int?
     public let paths: PantryPathReport
 
     public init(
@@ -507,13 +586,17 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
         ingredientIndex: RecipeIngredientIndex?,
         paths: PantryPaths,
         sourceReadPath: String = "direct-source",
-        ingredientReadPath: String = "sidecar-ingredient-index"
+        ingredientReadPath: String = "sidecar-ingredient-index",
+        ingredientLastSuccessAt: Date? = nil,
+        ingredientFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes ingredients"
         self.sourceReadPath = sourceReadPath
         self.ingredientReadPath = ingredientReadPath
         self.recipe = recipe
         self.ingredientIndex = ingredientIndex
+        self.ingredientLastSuccessAt = ingredientLastSuccessAt
+        self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
         self.paths = paths.report
     }
 
@@ -524,6 +607,11 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
             "ingredient_read_path: \(ingredientReadPath)",
             "uid: \(recipe.uid)",
         ]
+        lines.append(contentsOf: renderedIndexFreshnessLines(
+            prefix: "ingredient_index",
+            lastSuccessAt: ingredientLastSuccessAt,
+            freshnessSeconds: ingredientFreshnessSeconds
+        ))
 
         if !recipe.categories.isEmpty {
             lines.append("categories: \(recipe.categories.joined(separator: ", "))")
@@ -608,6 +696,20 @@ func renderedDuration(seconds: Int) -> String {
     let days = hours / 24
     let remainingHours = hours % 24
     return remainingHours == 0 ? "\(days)d" : "\(days)d \(remainingHours)h"
+}
+
+func renderedIndexFreshnessLines(prefix: String, lastSuccessAt: Date?, freshnessSeconds: Int?) -> [String] {
+    var lines = [String]()
+
+    if let lastSuccessAt {
+        lines.append("\(prefix)_last_success_at: \(renderedTimestamp(lastSuccessAt))")
+    }
+
+    if let freshnessSeconds {
+        lines.append("\(prefix)_freshness: \(renderedDuration(seconds: freshnessSeconds)) old")
+    }
+
+    return lines
 }
 
 func renderedCanonicalRecipeFilters(_ filters: RecipeQueryFilters) -> [String] {

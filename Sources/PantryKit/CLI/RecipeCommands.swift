@@ -95,12 +95,14 @@ public struct RecipesListCommand: PantryLeafCommand {
         )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
         let store = try context.makeStore()
+        let indexStats = try store.indexStats()
+        let now = Date()
         let matchingRecipeUIDs: Set<String>?
         let derivedFeaturesByUID: [String: RecipeDerivedFeatures]
         let derivedReadPath: String?
 
         if requiresDerivedFeatures {
-            guard try store.indexStats().recipeFeaturesReady else {
+            guard indexStats.recipeFeaturesReady else {
                 throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
             }
 
@@ -114,7 +116,7 @@ public struct RecipesListCommand: PantryLeafCommand {
         if ingredientFilter.isDefault {
             matchingRecipeUIDs = nil
         } else {
-            guard try store.indexStats().recipeIngredientIndexReady else {
+            guard indexStats.recipeIngredientIndexReady else {
                 throw ValidationError("Recipe ingredient index is required for ingredient filters. Run `paprika-pantry index rebuild` first.")
             }
 
@@ -140,7 +142,11 @@ public struct RecipesListCommand: PantryLeafCommand {
                 derivedConstraints: derivedConstraints,
                 sort: sort,
                 derivedReadPath: derivedReadPath,
-                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index"
+                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
+                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
+                ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now)
             )
         )
     }
@@ -163,8 +169,18 @@ public struct RecipesShowCommand: PantryLeafCommand {
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
-        let derivedFeatures = try context.makeStore().fetchRecipeFeatures(uid: recipe.uid)
-        try context.write(RecipeShowReport(recipe: recipe, derivedFeatures: derivedFeatures))
+        let store = try context.makeStore()
+        let derivedFeatures = try store.fetchRecipeFeatures(uid: recipe.uid)
+        let indexStats = try store.indexStats()
+        let now = Date()
+        try context.write(
+            RecipeShowReport(
+                recipe: recipe,
+                derivedFeatures: derivedFeatures,
+                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedFreshnessSeconds: derivedFeatures == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now)
+            )
+        )
     }
 }
 
@@ -281,6 +297,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             sort: sort,
             limit: limit
         )
+        let now = Date()
         try context.write(
             RecipesSearchReport(
                 query: query,
@@ -291,7 +308,13 @@ public struct RecipesSearchCommand: PantryLeafCommand {
                 results: results,
                 paths: context.paths,
                 derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil,
-                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index"
+                ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
+                searchLastSuccessAt: indexStats.lastSuccessfulRecipeSearchRun.map { $0.finishedAt ?? $0.startedAt },
+                searchFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeSearchRun, now: now),
+                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
+                ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now)
             )
         )
     }
@@ -324,7 +347,17 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
             throw ValidationError("No derived feature row exists for recipe `\(recipe.uid)`. Run `paprika-pantry index rebuild` first.")
         }
 
-        try context.write(RecipeFeaturesReport(recipe: recipe, features: features, paths: context.paths))
+        let indexStats = try store.indexStats()
+        let now = Date()
+        try context.write(
+            RecipeFeaturesReport(
+                recipe: recipe,
+                features: features,
+                paths: context.paths,
+                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now)
+            )
+        )
     }
 }
 
@@ -351,8 +384,26 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
         let ingredientIndex = try store.fetchRecipeIngredientIndex(uid: recipe.uid)
-        try context.write(RecipeIngredientsReport(recipe: recipe, ingredientIndex: ingredientIndex, paths: context.paths))
+        let indexStats = try store.indexStats()
+        let now = Date()
+        try context.write(
+            RecipeIngredientsReport(
+                recipe: recipe,
+                ingredientIndex: ingredientIndex,
+                paths: context.paths,
+                ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now)
+            )
+        )
     }
+}
+
+private func renderedFreshnessSeconds(since run: PantryIndexRun?, now: Date) -> Int? {
+    guard let run else {
+        return nil
+    }
+
+    return max(0, Int(now.timeIntervalSince(run.finishedAt ?? run.startedAt)))
 }
 
 private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, categories: [String]) throws {
