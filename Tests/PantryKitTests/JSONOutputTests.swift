@@ -116,10 +116,22 @@ final class JSONOutputTests: XCTestCase {
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Paprika.sqlite",
+                schemaFlavor: "paprika-3-core-data",
+                accessMode: "read-only",
+                queryOnly: true,
+                journalMode: "wal",
+                hasWriteAheadLogFiles: true,
                 paprikaSync: PaprikaSyncDetails(
                     lastSyncAt: Date(timeIntervalSince1970: 1_712_736_060),
                     signalSource: "group-container-preferences",
                     signalLocation: "/Users/test/Library/Preferences/test.plist"
+                ),
+                appInstallation: PaprikaAppInstallation(
+                    appBundlePath: "/Applications/Paprika Recipe Manager 3.app",
+                    bundleIdentifier: "com.hindsightlabs.paprika.mac.v3",
+                    executablePath: "/Applications/Paprika Recipe Manager 3.app/Contents/MacOS/Paprika Recipe Manager 3",
+                    executablePresent: true,
+                    customURLSchemes: []
                 )
             ),
             indexStats: PantryIndexStats(
@@ -198,6 +210,10 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(rendered.contains("\"sourceStatus\" : \"ready\""))
         XCTAssertTrue(rendered.contains("\"indexStatus\" : \"ready\""))
         XCTAssertTrue(rendered.contains("\"recipeSearchDocumentCount\" : 6"))
+        XCTAssertTrue(rendered.contains("\"displayName\" : \"default Paprika SQLite\""))
+        XCTAssertTrue(rendered.contains("\"schemaFlavor\" : \"paprika-3-core-data\""))
+        XCTAssertTrue(rendered.contains("\"queryOnly\" : true"))
+        XCTAssertTrue(rendered.contains("\"appInstallation\""))
         XCTAssertTrue(rendered.contains("\"paprikaSyncFreshnessSeconds\" : 60"))
         XCTAssertTrue(rendered.contains("\"recipeSearchFreshnessSeconds\" : 60"))
     }

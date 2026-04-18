@@ -417,10 +417,10 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
     }
 
     public var humanDescription: String {
+        let rebuildDurationMilliseconds = max(0, Int((summary.finishedAt.timeIntervalSince(summary.startedAt) * 1_000).rounded()))
         var lines = [
             "\(command): Rebuilt owned recipe search, feature, and ingredient indexes.",
-            "started_at: \(renderedTimestamp(summary.startedAt))",
-            "finished_at: \(renderedTimestamp(summary.finishedAt))",
+            "duration_ms: \(rebuildDurationMilliseconds)",
             "recipe_search_documents: \(summary.recipeSearchDocumentCount)",
             "recipe_feature_rows: \(summary.recipeFeatureCount)",
             "recipe_features_with_total_time: \(summary.recipeFeaturesWithTotalTimeCount)",

@@ -302,9 +302,17 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let sourceStatus: String
     public let indexStatus: String
     public let sourceKind: PantrySourceKind?
+    public let displayName: String?
+    public let implementation: String?
     public let sourceLocation: String?
+    public let schemaFlavor: String?
+    public let accessMode: String?
+    public let queryOnly: Bool?
+    public let journalMode: String?
+    public let hasWriteAheadLogFiles: Bool?
     public let paprikaSync: PaprikaSyncDetails?
     public let paprikaSyncFreshnessSeconds: Int?
+    public let appInstallation: PaprikaAppInstallation?
     public let recipeSearchDocumentCount: Int
     public let recipeSearchFreshnessSeconds: Int?
     public let lastRecipeSearchRunStatus: String?
@@ -359,11 +367,19 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.sourceStatus = sourceSnapshot.status.rawValue
         self.indexStatus = indexStatus
         self.sourceKind = sourceSnapshot.sourceKind
+        self.displayName = sourceSnapshot.displayName
+        self.implementation = sourceSnapshot.implementation
         self.sourceLocation = sourceSnapshot.sourceLocation
+        self.schemaFlavor = sourceSnapshot.schemaFlavor
+        self.accessMode = sourceSnapshot.accessMode
+        self.queryOnly = sourceSnapshot.queryOnly
+        self.journalMode = sourceSnapshot.journalMode
+        self.hasWriteAheadLogFiles = sourceSnapshot.hasWriteAheadLogFiles
         self.paprikaSync = sourceSnapshot.paprikaSync
         self.paprikaSyncFreshnessSeconds = sourceSnapshot.paprikaSync.map {
             max(0, Int(now.timeIntervalSince($0.lastSyncAt)))
         }
+        self.appInstallation = sourceSnapshot.appInstallation
         self.recipeSearchDocumentCount = indexStats.recipeSearchDocumentCount
         self.recipeSearchFreshnessSeconds = indexFreshnessSeconds
         self.lastRecipeSearchRunStatus = indexStats.lastRecipeSearchRun?.status.rawValue
@@ -384,8 +400,36 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("source_kind: \(sourceKind.rawValue)")
         }
 
+        if let displayName, !displayName.isEmpty {
+            lines.append("display_name: \(displayName)")
+        }
+
+        if let implementation, !implementation.isEmpty {
+            lines.append("implementation: \(implementation)")
+        }
+
         if let sourceLocation, !sourceLocation.isEmpty {
             lines.append("source_location: \(sourceLocation)")
+        }
+
+        if let schemaFlavor, !schemaFlavor.isEmpty {
+            lines.append("schema: \(schemaFlavor)")
+        }
+
+        if let accessMode, !accessMode.isEmpty {
+            lines.append("access_mode: \(accessMode)")
+        }
+
+        if let queryOnly {
+            lines.append("query_only: \(queryOnly ? "yes" : "no")")
+        }
+
+        if let journalMode, !journalMode.isEmpty {
+            lines.append("journal_mode: \(journalMode)")
+        }
+
+        if let hasWriteAheadLogFiles {
+            lines.append("wal_files: \(hasWriteAheadLogFiles ? "present" : "absent")")
         }
 
         if let lastRecipeSearchRunStatus, !lastRecipeSearchRunStatus.isEmpty {
@@ -397,6 +441,7 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             prefix: "paprika",
             freshnessSeconds: paprikaSyncFreshnessSeconds
         ))
+        lines.append(contentsOf: renderedPaprikaAppInstallationLines(appInstallation))
 
         if let recipeSearchFreshnessSeconds {
             lines.append("recipe_search_freshness: \(renderedDuration(seconds: recipeSearchFreshnessSeconds)) old")

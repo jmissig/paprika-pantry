@@ -6,7 +6,7 @@ It is built around a few normal tasks:
 
 - inspect whether the local Paprika source is readable and current
 - read recipes, meals, groceries, and pantry items directly from canonical Paprika data
-- build and query a small owned sidecar index for search and derived recipe facts
+- build and query paprika-pantry's local index for recipe search and derived cooking patterns
 - inspect cookbook/source rollups and source freshness without writing to the real Paprika DB
 
 It also has a practical sync-adjacent helper:
@@ -36,29 +36,26 @@ sudo make install PREFIX="/usr/local"
 The normal first check is:
 
 ```bash
-paprika-pantry source doctor
+paprika-pantry doctor
 ```
 
-On a machine with Paprika 3 installed in the normal place, this should tell you:
+That checks that Paprika 3 is installed, its local database was found, and the database looks like the format `paprika-pantry` expects.
 
-- whether the real `Paprika.sqlite` was found
-- whether it is readable in read-only mode
-- which schema flavor was detected
-- when Paprika last appears to have completed a sync
-- where the managed config and sidecar database live
+## Update Index
 
-The default managed paths are:
-
-- config: `~/Library/Application Support/paprika-pantry/config.json`
-- database: `~/Library/Application Support/paprika-pantry/pantry.sqlite`
-
-If the direct source is readable, a useful next step is:
+To refresh paprika-pantry's local index after Paprika has synced, do:
 
 ```bash
+paprika-pantry source last-sync-time
 paprika-pantry index rebuild
 ```
 
-That builds the owned sidecar search and derived-data tables from the canonical local Paprika source.
+On Macs where Paprika is not being actively used, you can nudge a sync first, then rebuild:
+
+```bash
+paprika-pantry source launch-app --wait-for-sync
+paprika-pantry index rebuild
+```
 
 After that, the usual commands are things like:
 
@@ -97,7 +94,7 @@ Not every command flattens honestly to CSV. Detail and diagnostic commands conti
 Most people will use these:
 
 ```bash
-paprika-pantry source doctor
+paprika-pantry doctor
 paprika-pantry source last-sync-time
 paprika-pantry source stats
 paprika-pantry source cookbooks
@@ -139,12 +136,11 @@ paprika-pantry doctor --format json
 
 `paprika-pantry` is read-only against the real Paprika database.
 
-The source commands exist to make that legible:
+The source-related commands exist to make that legible:
 
 ```bash
-paprika-pantry source doctor
-paprika-pantry source last-sync-time
 paprika-pantry doctor
+paprika-pantry source last-sync-time
 ```
 
 The sync-related reporting is observational, not a real sync API.
@@ -162,7 +158,7 @@ This is useful because Paprika often syncs on launch, even though `paprika-pantr
 There are two main recipe paths:
 
 1. direct canonical reads from the local Paprika source
-2. sidecar-backed search and derived features built from that source
+2. local index-backed search and derived features built from that source
 
 Use direct reads when you want the canonical recipe record:
 
@@ -171,7 +167,7 @@ paprika-pantry recipes list
 paprika-pantry recipes show "Weeknight Pasta"
 ```
 
-Use sidecar-backed search when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
+Use paprika-pantry's local index when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
 
 ```bash
 paprika-pantry recipes search risotto --max-total-time-minutes 45
@@ -199,7 +195,7 @@ They are meant to be simple extraction commands, not a replacement UI for Paprik
 
 ## Cookbook / Source Rollups
 
-If the sidecar index has been built, you can inspect cookbook or source rollups from canonical recipe source fields:
+If paprika-pantry's local index has been built, you can inspect cookbook or source rollups from canonical recipe source fields:
 
 ```bash
 paprika-pantry source cookbooks
@@ -214,29 +210,13 @@ This is useful for questions like:
 - which sources have the best ratings?
 - which cookbook clusters are strong enough to trust?
 
-## Overrides
-
-You can override the managed paths when needed:
-
-```bash
-paprika-pantry --home /tmp/paprika-pantry source doctor
-paprika-pantry --config /path/to/config.json source doctor
-paprika-pantry --db-path /path/to/pantry.sqlite index stats
-```
-
-If the real Paprika database is not in the normal discovered path, you can point the source at it with the environment variable used by the source provider:
-
-```bash
-PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB=/path/to/Paprika.sqlite paprika-pantry source doctor
-```
-
 ## What This Tool Is And Is Not
 
 `paprika-pantry` is:
 
 - a local-first Paprika reader
 - a query CLI over canonical local Paprika data
-- an owned sidecar index for search and derived facts we actually use
+- a local index for search and derived facts we actually use
 - a tool for humans and local agents that need trustworthy evidence quickly
 
 It is not:
@@ -246,20 +226,5 @@ It is not:
 - a background sync service
 - a generic Paprika SDK
 - an opaque recommendation engine
-
-## Help
-
-For full command help:
-
-```bash
-paprika-pantry --help
-paprika-pantry help source
-paprika-pantry help recipes
-paprika-pantry help meals
-paprika-pantry help groceries
-paprika-pantry help pantry
-paprika-pantry help index
-paprika-pantry help doctor
-```
 
 Made with Codex and OpenClaw.

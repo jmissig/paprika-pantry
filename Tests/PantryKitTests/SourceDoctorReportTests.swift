@@ -100,10 +100,22 @@ final class SourceDoctorReportTests: XCTestCase {
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Paprika.sqlite",
+                schemaFlavor: "paprika-3-core-data",
+                accessMode: "read-only",
+                queryOnly: true,
+                journalMode: "wal",
+                hasWriteAheadLogFiles: true,
                 paprikaSync: PaprikaSyncDetails(
                     lastSyncAt: Date(timeIntervalSince1970: 1_712_736_060),
                     signalSource: "group-container-preferences",
                     signalLocation: "/Users/test/Library/Preferences/test.plist"
+                ),
+                appInstallation: PaprikaAppInstallation(
+                    appBundlePath: "/Applications/Paprika Recipe Manager 3.app",
+                    bundleIdentifier: "com.hindsightlabs.paprika.mac.v3",
+                    executablePath: "/Applications/Paprika Recipe Manager 3.app/Contents/MacOS/Paprika Recipe Manager 3",
+                    executablePresent: true,
+                    customURLSchemes: []
                 )
             ),
             indexStats: PantryIndexStats(
@@ -126,7 +138,15 @@ final class SourceDoctorReportTests: XCTestCase {
 
         XCTAssertEqual(report.status, "needs-index")
         XCTAssertTrue(report.humanDescription.contains("index_status: missing"))
+        XCTAssertTrue(report.humanDescription.contains("display_name: default Paprika SQLite"))
+        XCTAssertTrue(report.humanDescription.contains("implementation: direct Paprika SQLite source"))
+        XCTAssertTrue(report.humanDescription.contains("schema: paprika-3-core-data"))
+        XCTAssertTrue(report.humanDescription.contains("access_mode: read-only"))
+        XCTAssertTrue(report.humanDescription.contains("query_only: yes"))
+        XCTAssertTrue(report.humanDescription.contains("journal_mode: wal"))
+        XCTAssertTrue(report.humanDescription.contains("wal_files: present"))
         XCTAssertTrue(report.humanDescription.contains("paprika_sync_freshness: 2m old"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_app_bundle: /Applications/Paprika Recipe Manager 3.app"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: never-built"))
         XCTAssertTrue(report.humanDescription.contains("next_action: Run `paprika-pantry index rebuild`"))
     }
