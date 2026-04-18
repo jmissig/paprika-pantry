@@ -1,9 +1,8 @@
 import Foundation
-import GRDB
 import XCTest
 @testable import PantryKit
 
-final class PantryStoreTests: XCTestCase {
+final class PantrySidecarStoreTests: XCTestCase {
     private var temporaryDirectoryURL: URL?
 
     override func tearDownWithError() throws {
@@ -11,81 +10,6 @@ final class PantryStoreTests: XCTestCase {
             try? FileManager.default.removeItem(at: temporaryDirectoryURL)
         }
         temporaryDirectoryURL = nil
-    }
-
-    func testMigrationCreatesExpectedTablesAndIndexes() throws {
-        let queue = try makeDatabase().openQueue()
-
-        try queue.read { db in
-            let indexes = try String.fetchAll(
-                db,
-                sql: """
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'index'
-                ORDER BY name
-                """
-            )
-
-            XCTAssertTrue(indexes.contains("recipe_search_documents_on_name"))
-            XCTAssertTrue(indexes.contains("recipe_search_documents_on_indexed_at"))
-            XCTAssertTrue(indexes.contains("recipe_features_on_derived_at"))
-            XCTAssertTrue(indexes.contains("recipe_features_on_total_time_minutes"))
-            XCTAssertTrue(indexes.contains("recipe_features_on_ingredient_line_count"))
-            XCTAssertTrue(indexes.contains("recipe_ingredient_lines_on_recipe_uid"))
-            XCTAssertTrue(indexes.contains("recipe_ingredient_lines_on_derived_at"))
-            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_token"))
-            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid"))
-            XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid_token"))
-            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_derived_at"))
-            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_times_cooked"))
-            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_last_cooked_at"))
-            XCTAssertTrue(indexes.contains("source_state_on_observed_at"))
-            XCTAssertTrue(indexes.contains("index_runs_on_started_at"))
-            XCTAssertTrue(indexes.contains("index_runs_on_status"))
-            XCTAssertTrue(indexes.contains("index_runs_on_index_name"))
-            XCTAssertTrue(try db.tableExists("recipe_search_documents"))
-            XCTAssertTrue(try db.tableExists("recipe_search_fts"))
-            XCTAssertTrue(try db.tableExists("recipe_features"))
-            XCTAssertTrue(try db.tableExists("recipe_ingredient_lines"))
-            XCTAssertTrue(try db.tableExists("recipe_ingredient_tokens"))
-            XCTAssertTrue(try db.tableExists("recipe_usage_stats"))
-            XCTAssertTrue(try db.tableExists("source_state"))
-            XCTAssertTrue(try db.tableExists("index_runs"))
-            XCTAssertFalse(try db.tableExists("recipes"))
-            XCTAssertFalse(try db.tableExists("recipe_categories"))
-            XCTAssertFalse(try db.tableExists("sync_runs"))
-        }
-    }
-
-    func testMigrationCleansUpLegacyMirrorTables() throws {
-        let database = try makeDatabase()
-        try FileManager.default.createDirectory(
-            at: database.path.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let queue = try DatabaseQueue(path: database.path.path)
-
-        try queue.write { db in
-            try db.execute(sql: "CREATE TABLE recipes (uid TEXT PRIMARY KEY)")
-            try db.execute(sql: "CREATE TABLE recipe_categories (recipe_uid TEXT, category_name TEXT)")
-            try db.execute(sql: "CREATE TABLE sync_runs (id INTEGER PRIMARY KEY)")
-        }
-
-        let migratedQueue = try database.openQueue()
-        try migratedQueue.read { db in
-            XCTAssertFalse(try db.tableExists("recipes"))
-            XCTAssertFalse(try db.tableExists("recipe_categories"))
-            XCTAssertFalse(try db.tableExists("sync_runs"))
-            XCTAssertTrue(try db.tableExists("recipe_search_documents"))
-            XCTAssertTrue(try db.tableExists("source_state"))
-        }
-    }
-
-    func testMigrationIsIdempotent() throws {
-        let database = try makeDatabase()
-        _ = try database.openQueue()
-        _ = try database.openQueue()
     }
 
     func testRecipeIndexesRebuildSearchAndDerivedFeatures() async throws {

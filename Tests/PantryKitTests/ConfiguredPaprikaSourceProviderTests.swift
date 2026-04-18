@@ -3,7 +3,7 @@ import GRDB
 import XCTest
 @testable import PantryKit
 
-final class ConfiguredPantrySourceProviderTests: XCTestCase {
+final class ConfiguredPaprikaSourceProviderTests: XCTestCase {
     private var temporaryDirectories = [URL]()
 
     override func tearDownWithError() throws {
@@ -15,7 +15,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
 
     func testEnvironmentDatabasePathProvidesReadyPaprikaSQLiteSource() throws {
         let databaseURL = try makePaprikaSourceDatabase(at: "Paprika.sqlite")
-        let provider = ConfiguredPantrySourceProvider(
+        let provider = ConfiguredPaprikaSourceProvider(
             paths: try makePaths(),
             environment: ["PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB": databaseURL.path],
             fileManager: try makeProviderFileManager()
@@ -30,7 +30,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         XCTAssertNotNil(source as? PaprikaSQLiteSource)
     }
 
-    func testLegacySourceKindConfigurationReportsInvalid() throws {
+    func testUnsupportedLegacySourceKindReportsInvalidConfiguration() throws {
         let paths = try makePaths()
         let configData = """
             {
@@ -42,7 +42,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
             }
             """.data(using: .utf8)!
         try configData.write(to: paths.configFile)
-        let provider = ConfiguredPantrySourceProvider(
+        let provider = ConfiguredPaprikaSourceProvider(
             paths: paths,
             environment: [:],
             fileManager: try makeProviderFileManager()
@@ -74,7 +74,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
                 updatedAt: Date(timeIntervalSince1970: 1_712_736_000)
             )
         )
-        let provider = ConfiguredPantrySourceProvider(
+        let provider = ConfiguredPaprikaSourceProvider(
             paths: paths,
             environment: [:],
             fileManager: try makeProviderFileManager()
@@ -107,7 +107,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         try makePaprikaSourceDatabase(at: groupContainerDatabaseURL.path)
         try makePaprikaSourceDatabase(at: legacyDatabaseURL.path)
 
-        let provider = ConfiguredPantrySourceProvider(
+        let provider = ConfiguredPaprikaSourceProvider(
             paths: paths,
             environment: [:],
             fileManager: providerFileManager
@@ -122,7 +122,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
     }
 
     func testMissingSourceConfigurationReportsNotConfigured() throws {
-        let provider = ConfiguredPantrySourceProvider(
+        let provider = ConfiguredPaprikaSourceProvider(
             paths: try makePaths(),
             environment: [:],
             fileManager: try makeProviderFileManager()
