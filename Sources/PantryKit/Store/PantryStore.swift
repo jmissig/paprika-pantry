@@ -44,12 +44,16 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let recipeIngredientRecipeCount: Int
     public let recipeIngredientLineCount: Int
     public let recipeIngredientTokenCount: Int
+    public let recipeUsageStatsCount: Int
+    public let recipeUsageStatsWithLastCookedCount: Int
     public let lastRecipeSearchRun: PantryIndexRun?
     public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
     public let lastRecipeFeatureRun: PantryIndexRun?
     public let lastSuccessfulRecipeFeatureRun: PantryIndexRun?
     public let lastRecipeIngredientRun: PantryIndexRun?
     public let lastSuccessfulRecipeIngredientRun: PantryIndexRun?
+    public let lastRecipeUsageRun: PantryIndexRun?
+    public let lastSuccessfulRecipeUsageRun: PantryIndexRun?
 
     public init(
         recipeSearchDocumentCount: Int,
@@ -59,12 +63,16 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         recipeIngredientRecipeCount: Int = 0,
         recipeIngredientLineCount: Int = 0,
         recipeIngredientTokenCount: Int = 0,
+        recipeUsageStatsCount: Int = 0,
+        recipeUsageStatsWithLastCookedCount: Int = 0,
         lastRecipeSearchRun: PantryIndexRun?,
         lastSuccessfulRecipeSearchRun: PantryIndexRun?,
         lastRecipeFeatureRun: PantryIndexRun?,
         lastSuccessfulRecipeFeatureRun: PantryIndexRun?,
         lastRecipeIngredientRun: PantryIndexRun? = nil,
-        lastSuccessfulRecipeIngredientRun: PantryIndexRun? = nil
+        lastSuccessfulRecipeIngredientRun: PantryIndexRun? = nil,
+        lastRecipeUsageRun: PantryIndexRun? = nil,
+        lastSuccessfulRecipeUsageRun: PantryIndexRun? = nil
     ) {
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
         self.recipeFeatureCount = recipeFeatureCount
@@ -73,12 +81,16 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.recipeIngredientRecipeCount = recipeIngredientRecipeCount
         self.recipeIngredientLineCount = recipeIngredientLineCount
         self.recipeIngredientTokenCount = recipeIngredientTokenCount
+        self.recipeUsageStatsCount = recipeUsageStatsCount
+        self.recipeUsageStatsWithLastCookedCount = recipeUsageStatsWithLastCookedCount
         self.lastRecipeSearchRun = lastRecipeSearchRun
         self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
         self.lastRecipeFeatureRun = lastRecipeFeatureRun
         self.lastSuccessfulRecipeFeatureRun = lastSuccessfulRecipeFeatureRun
         self.lastRecipeIngredientRun = lastRecipeIngredientRun
         self.lastSuccessfulRecipeIngredientRun = lastSuccessfulRecipeIngredientRun
+        self.lastRecipeUsageRun = lastRecipeUsageRun
+        self.lastSuccessfulRecipeUsageRun = lastSuccessfulRecipeUsageRun
     }
 
     public var recipeSearchReady: Bool {
@@ -91,6 +103,10 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
 
     public var recipeIngredientIndexReady: Bool {
         lastSuccessfulRecipeIngredientRun != nil
+    }
+
+    public var recipeUsageStatsReady: Bool {
+        lastSuccessfulRecipeUsageRun != nil
     }
 }
 
@@ -170,6 +186,7 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
     public let isFavorite: Bool
     public let starRating: Int?
     public let derivedFeatures: RecipeDerivedFeatures?
+    public let usageStats: RecipeUsageStats?
 
     public init(
         uid: String,
@@ -178,7 +195,8 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
         sourceName: String?,
         isFavorite: Bool,
         starRating: Int?,
-        derivedFeatures: RecipeDerivedFeatures? = nil
+        derivedFeatures: RecipeDerivedFeatures? = nil,
+        usageStats: RecipeUsageStats? = nil
     ) {
         self.uid = uid
         self.name = name
@@ -187,6 +205,7 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
         self.isFavorite = isFavorite
         self.starRating = starRating
         self.derivedFeatures = derivedFeatures
+        self.usageStats = usageStats
     }
 }
 
@@ -200,6 +219,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let recipeIngredientRecipeCount: Int
     public let recipeIngredientLineCount: Int
     public let recipeIngredientTokenCount: Int
+    public let recipeUsageStatsCount: Int
+    public let linkedMealCount: Int
 
     public init(
         startedAt: Date,
@@ -210,7 +231,9 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         recipeFeaturesWithIngredientLineCountCount: Int,
         recipeIngredientRecipeCount: Int = 0,
         recipeIngredientLineCount: Int = 0,
-        recipeIngredientTokenCount: Int = 0
+        recipeIngredientTokenCount: Int = 0,
+        recipeUsageStatsCount: Int = 0,
+        linkedMealCount: Int = 0
     ) {
         self.startedAt = startedAt
         self.finishedAt = finishedAt
@@ -221,6 +244,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.recipeIngredientRecipeCount = recipeIngredientRecipeCount
         self.recipeIngredientLineCount = recipeIngredientLineCount
         self.recipeIngredientTokenCount = recipeIngredientTokenCount
+        self.recipeUsageStatsCount = recipeUsageStatsCount
+        self.linkedMealCount = linkedMealCount
     }
 }
 
@@ -275,6 +300,25 @@ public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
     }
 }
 
+public struct RecipeUsageStats: Codable, Equatable, Sendable {
+    public let uid: String
+    public let derivedAt: Date
+    public let timesCooked: Int
+    public let lastCookedAt: String?
+
+    public init(
+        uid: String,
+        derivedAt: Date,
+        timesCooked: Int,
+        lastCookedAt: String?
+    ) {
+        self.uid = uid
+        self.derivedAt = derivedAt
+        self.timesCooked = timesCooked
+        self.lastCookedAt = lastCookedAt
+    }
+}
+
 public struct PantryStore: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
 
@@ -301,12 +345,19 @@ public struct PantryStore: @unchecked Sendable {
                 ) ?? 0,
                 recipeIngredientLineCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_lines") ?? 0,
                 recipeIngredientTokenCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_tokens") ?? 0,
+                recipeUsageStatsCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_usage_stats") ?? 0,
+                recipeUsageStatsWithLastCookedCount: try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE last_cooked_at IS NOT NULL"
+                ) ?? 0,
                 lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastRecipeFeatureRun: try latestIndexRun(named: Self.recipeFeatureIndexName, db: db),
                 lastSuccessfulRecipeFeatureRun: try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db),
                 lastRecipeIngredientRun: try latestIndexRun(named: Self.recipeIngredientIndexName, db: db),
-                lastSuccessfulRecipeIngredientRun: try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db)
+                lastSuccessfulRecipeIngredientRun: try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db),
+                lastRecipeUsageRun: try latestIndexRun(named: Self.recipeUsageIndexName, db: db),
+                lastSuccessfulRecipeUsageRun: try latestSuccessfulIndexRun(named: Self.recipeUsageIndexName, db: db)
             )
         }
     }
@@ -400,12 +451,18 @@ public struct PantryStore: @unchecked Sendable {
                     recipe_features.total_time_minutes,
                     recipe_features.total_time_basis,
                     recipe_features.ingredient_line_count,
-                    recipe_features.ingredient_line_count_basis
+                    recipe_features.ingredient_line_count_basis,
+                    recipe_usage_stats.uid AS usage_uid,
+                    recipe_usage_stats.derived_at AS usage_derived_at,
+                    recipe_usage_stats.times_cooked,
+                    recipe_usage_stats.last_cooked_at
                 FROM recipe_search_fts
                 INNER JOIN recipe_search_documents
                     ON recipe_search_documents.uid = recipe_search_fts.uid
                 LEFT JOIN recipe_features
                     ON recipe_features.uid = recipe_search_documents.uid
+                LEFT JOIN recipe_usage_stats
+                    ON recipe_usage_stats.uid = recipe_search_documents.uid
                 WHERE \(conditions.joined(separator: " AND "))
                 ORDER BY \(Self.recipeSearchOrderClause(sort: sort))
                 \(limitClause)
@@ -421,7 +478,8 @@ public struct PantryStore: @unchecked Sendable {
                     sourceName: row["source_name"],
                     isFavorite: row["is_favorite"],
                     starRating: row["star_rating"],
-                    derivedFeatures: Self.decodeRecipeDerivedFeatures(row: row)
+                    derivedFeatures: Self.decodeRecipeDerivedFeatures(row: row),
+                    usageStats: Self.decodeRecipeUsageStats(row: row)
                 )
             }
 
@@ -551,6 +609,31 @@ public struct PantryStore: @unchecked Sendable {
         }
     }
 
+    public func fetchRecipeUsageStats(uid: String) throws -> RecipeUsageStats? {
+        try dbQueue.read { db in
+            guard
+                let row = try Row.fetchOne(
+                    db,
+                    sql: """
+                    SELECT
+                        uid,
+                        derived_at,
+                        times_cooked,
+                        last_cooked_at
+                    FROM recipe_usage_stats
+                    WHERE uid = ?
+                    LIMIT 1
+                    """,
+                    arguments: [uid]
+                )
+            else {
+                return nil
+            }
+
+            return Self.decodeRecipeUsageStats(row: row)
+        }
+    }
+
     public func fetchAllRecipeFeatures() throws -> [String: RecipeDerivedFeatures] {
         try dbQueue.read { db in
             let rows = try Row.fetchAll(
@@ -577,6 +660,32 @@ public struct PantryStore: @unchecked Sendable {
                     }
 
                     return (features.uid, features)
+                }
+            )
+        }
+    }
+
+    public func fetchAllRecipeUsageStats() throws -> [String: RecipeUsageStats] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT
+                    uid,
+                    derived_at,
+                    times_cooked,
+                    last_cooked_at
+                FROM recipe_usage_stats
+                """
+            )
+
+            return Dictionary(
+                uniqueKeysWithValues: rows.compactMap { row in
+                    guard let usageStats = Self.decodeRecipeUsageStats(row: row) else {
+                        return nil
+                    }
+
+                    return (usageStats.uid, usageStats)
                 }
             )
         }
@@ -690,15 +799,28 @@ public struct PantryStore: @unchecked Sendable {
         let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
         let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
         let ingredientRunID = try startIndexRun(named: Self.recipeIngredientIndexName, startedAt: startedAt)
+        let usageRunID = try startIndexRun(named: Self.recipeUsageIndexName, startedAt: startedAt)
 
         do {
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
             let stubs = try await source.listRecipeStubs()
             let activeStubs = stubs.filter { !$0.isDeleted }
+            let activeRecipeUIDs = Set(activeStubs.map(\.uid))
+            let meals: [SourceMeal]
+            if let mealsSource = source as? any MealsReadablePantrySource {
+                meals = try await mealsSource.listMeals()
+            } else {
+                meals = []
+            }
 
             var documents = [RecipeSearchDocument]()
             var features = [RecipeDerivedFeatures]()
             var ingredientIndexes = [RecipeIngredientIndex]()
+            let usageStats = Self.deriveUsageStats(
+                from: meals,
+                activeRecipeUIDs: activeRecipeUIDs,
+                derivedAt: startedAt
+            )
             documents.reserveCapacity(activeStubs.count)
             features.reserveCapacity(activeStubs.count)
             ingredientIndexes.reserveCapacity(activeStubs.count)
@@ -741,6 +863,7 @@ public struct PantryStore: @unchecked Sendable {
             let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
             let sortedFeatures = features.sorted { $0.uid < $1.uid }
             let sortedIngredientIndexes = ingredientIndexes.sorted { $0.uid < $1.uid }
+            let sortedUsageStats = usageStats.stats.sorted { $0.uid < $1.uid }
             let recipeSearchDocumentCount = sortedDocuments.count
             let recipeFeatureCount = sortedFeatures.count
             let recipeFeaturesWithTotalTimeCount = sortedFeatures.filter { $0.totalTimeMinutes != nil }.count
@@ -752,12 +875,15 @@ public struct PantryStore: @unchecked Sendable {
             let recipeIngredientTokenCount = sortedIngredientIndexes.reduce(into: 0) { partialResult, index in
                 partialResult += index.normalizedTokenCount
             }
+            let recipeUsageStatsCount = sortedUsageStats.count
+            let linkedMealCount = usageStats.linkedMealCount
             try await dbQueue.write { db in
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
                 try db.execute(sql: "DELETE FROM recipe_search_fts")
                 try db.execute(sql: "DELETE FROM recipe_features")
                 try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
                 try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
+                try db.execute(sql: "DELETE FROM recipe_usage_stats")
 
                 for document in sortedDocuments {
                     try db.execute(
@@ -884,6 +1010,25 @@ public struct PantryStore: @unchecked Sendable {
                     }
                 }
 
+                for usageStat in sortedUsageStats {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO recipe_usage_stats (
+                            uid,
+                            derived_at,
+                            times_cooked,
+                            last_cooked_at
+                        ) VALUES (?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            usageStat.uid,
+                            DatabaseTimestamp.encode(finishedAt),
+                            usageStat.timesCooked,
+                            usageStat.lastCookedAt,
+                        ]
+                    )
+                }
+
                 try finishIndexRun(
                     id: searchRunID,
                     status: .success,
@@ -908,6 +1053,14 @@ public struct PantryStore: @unchecked Sendable {
                     errorMessage: nil,
                     in: db
                 )
+                try finishIndexRun(
+                    id: usageRunID,
+                    status: .success,
+                    finishedAt: finishedAt,
+                    recipeCount: recipeUsageStatsCount,
+                    errorMessage: nil,
+                    in: db
+                )
             }
 
             return RecipeIndexesRebuildSummary(
@@ -919,7 +1072,9 @@ public struct PantryStore: @unchecked Sendable {
                 recipeFeaturesWithIngredientLineCountCount: recipeFeaturesWithIngredientLineCountCount,
                 recipeIngredientRecipeCount: recipeIngredientRecipeCount,
                 recipeIngredientLineCount: recipeIngredientLineCount,
-                recipeIngredientTokenCount: recipeIngredientTokenCount
+                recipeIngredientTokenCount: recipeIngredientTokenCount,
+                recipeUsageStatsCount: recipeUsageStatsCount,
+                linkedMealCount: linkedMealCount
             )
         } catch {
             try finishIndexRun(
@@ -938,6 +1093,13 @@ public struct PantryStore: @unchecked Sendable {
             )
             try finishIndexRun(
                 id: ingredientRunID,
+                status: .failed,
+                finishedAt: now(),
+                recipeCount: 0,
+                errorMessage: String(describing: error)
+            )
+            try finishIndexRun(
+                id: usageRunID,
                 status: .failed,
                 finishedAt: now(),
                 recipeCount: 0,
@@ -1080,6 +1242,7 @@ public struct PantryStore: @unchecked Sendable {
     private static let recipeSearchIndexName = "recipe-search"
     private static let recipeFeatureIndexName = "recipe-features"
     private static let recipeIngredientIndexName = "recipe-ingredients"
+    private static let recipeUsageIndexName = "recipe-usage"
 
     private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
         if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
@@ -1094,6 +1257,9 @@ public struct PantryStore: @unchecked Sendable {
         case .relevance:
             return """
             bm25(recipe_search_fts) ASC,
+            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_cooked_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1108,6 +1274,19 @@ public struct PantryStore: @unchecked Sendable {
             return """
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
+            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_cooked_at DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .timesCooked:
+            return """
+            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
             recipe_search_documents.uid ASC
             """
@@ -1117,6 +1296,9 @@ public struct PantryStore: @unchecked Sendable {
             recipe_features.total_time_minutes ASC,
             CASE WHEN recipe_features.ingredient_line_count IS NULL THEN 1 ELSE 0 END ASC,
             recipe_features.ingredient_line_count ASC,
+            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_cooked_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1128,6 +1310,9 @@ public struct PantryStore: @unchecked Sendable {
             recipe_features.ingredient_line_count ASC,
             CASE WHEN recipe_features.total_time_minutes IS NULL THEN 1 ELSE 0 END ASC,
             recipe_features.total_time_minutes ASC,
+            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_cooked_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1215,6 +1400,21 @@ public struct PantryStore: @unchecked Sendable {
             totalTimeBasis: totalTimeBasisRaw.flatMap(RecipeTotalTimeBasis.init(rawValue:)),
             ingredientLineCount: row["ingredient_line_count"],
             ingredientLineCountBasis: ingredientLineCountBasisRaw.flatMap(RecipeIngredientLineCountBasis.init(rawValue:))
+        )
+    }
+
+    private static func decodeRecipeUsageStats(row: Row) -> RecipeUsageStats? {
+        let derivedAtValue: String? = row["usage_derived_at"] ?? row["derived_at"]
+        let timesCooked: Int? = row["times_cooked"]
+        guard let derivedAtValue, let timesCooked else {
+            return nil
+        }
+
+        return RecipeUsageStats(
+            uid: row["usage_uid"] ?? row["uid"],
+            derivedAt: DatabaseTimestamp.decodeRequired(derivedAtValue),
+            timesCooked: timesCooked,
+            lastCookedAt: row["last_cooked_at"]
         )
     }
 
@@ -1313,6 +1513,50 @@ public struct PantryStore: @unchecked Sendable {
             totalTimeBasis: totalTimeBasis,
             ingredientLineCount: ingredientLineCount,
             ingredientLineCountBasis: ingredientLineCount == nil ? nil : .nonEmptyLines
+        )
+    }
+
+    private static func deriveUsageStats(
+        from meals: [SourceMeal],
+        activeRecipeUIDs: Set<String>,
+        derivedAt: Date
+    ) -> RecipeUsageDerivation {
+        var linkedMealCount = 0
+        var countsByRecipeUID = [String: Int]()
+        var lastCookedAtByRecipeUID = [String: String]()
+
+        for meal in meals where !meal.isDeleted {
+            guard let recipeUID = meal.recipeUID?.trimmingCharacters(in: .whitespacesAndNewlines), !recipeUID.isEmpty else {
+                continue
+            }
+
+            guard activeRecipeUIDs.contains(recipeUID) else {
+                continue
+            }
+
+            linkedMealCount += 1
+            countsByRecipeUID[recipeUID, default: 0] += 1
+
+            if let scheduledAt = meal.scheduledAt?.trimmingCharacters(in: .whitespacesAndNewlines), !scheduledAt.isEmpty {
+                let existing = lastCookedAtByRecipeUID[recipeUID]
+                if existing == nil || scheduledAt > existing! {
+                    lastCookedAtByRecipeUID[recipeUID] = scheduledAt
+                }
+            }
+        }
+
+        let stats = countsByRecipeUID.map { recipeUID, timesCooked in
+            RecipeUsageStats(
+                uid: recipeUID,
+                derivedAt: derivedAt,
+                timesCooked: timesCooked,
+                lastCookedAt: lastCookedAtByRecipeUID[recipeUID]
+            )
+        }
+
+        return RecipeUsageDerivation(
+            stats: stats,
+            linkedMealCount: linkedMealCount
         )
     }
 
@@ -1423,6 +1667,11 @@ private struct RecipeSearchDocument: Equatable, Sendable {
     let remoteHash: String?
     let isFavorite: Bool
     let starRating: Int?
+}
+
+private struct RecipeUsageDerivation: Equatable, Sendable {
+    let stats: [RecipeUsageStats]
+    let linkedMealCount: Int
 }
 
 enum DatabaseTimestamp {

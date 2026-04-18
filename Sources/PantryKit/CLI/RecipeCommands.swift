@@ -99,6 +99,7 @@ public struct RecipesListCommand: PantryLeafCommand {
         let now = Date()
         let matchingRecipeUIDs: Set<String>?
         let derivedFeaturesByUID: [String: RecipeDerivedFeatures]
+        let usageStatsByUID: [String: RecipeUsageStats]
         let derivedReadPath: String?
 
         if requiresDerivedFeatures {
@@ -111,6 +112,16 @@ public struct RecipesListCommand: PantryLeafCommand {
         } else {
             derivedFeaturesByUID = [:]
             derivedReadPath = nil
+        }
+
+        if sort.requiresUsageStats && !indexStats.recipeUsageStatsReady {
+            throw ValidationError("Recipe usage index is required for usage sort. Run `paprika-pantry index rebuild` first.")
+        }
+
+        if indexStats.recipeUsageStatsReady {
+            usageStatsByUID = try store.fetchAllRecipeUsageStats()
+        } else {
+            usageStatsByUID = [:]
         }
 
         if ingredientFilter.isDefault {
@@ -128,7 +139,8 @@ public struct RecipesListCommand: PantryLeafCommand {
                 filters: canonicalFilters,
                 derivedConstraints: derivedConstraints,
                 sort: sort,
-                derivedFeaturesByUID: derivedFeaturesByUID
+                derivedFeaturesByUID: derivedFeaturesByUID,
+                usageStatsByUID: usageStatsByUID
             )
         }
         let filteredRecipes = matchingRecipeUIDs.map { requiredUIDs in
@@ -143,10 +155,13 @@ public struct RecipesListCommand: PantryLeafCommand {
                 sort: sort,
                 derivedReadPath: derivedReadPath,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
+                usageReadPath: indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
                 ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
-                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now)
+                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now),
+                usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
+                usageFreshnessSeconds: indexStats.recipeUsageStatsReady ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
             )
         )
     }
@@ -171,14 +186,18 @@ public struct RecipesShowCommand: PantryLeafCommand {
         }
         let store = try context.makeStore()
         let derivedFeatures = try store.fetchRecipeFeatures(uid: recipe.uid)
+        let usageStats = try store.fetchRecipeUsageStats(uid: recipe.uid)
         let indexStats = try store.indexStats()
         let now = Date()
         try context.write(
             RecipeShowReport(
                 recipe: recipe,
                 derivedFeatures: derivedFeatures,
+                usageStats: usageStats,
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
-                derivedFreshnessSeconds: derivedFeatures == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now)
+                derivedFreshnessSeconds: derivedFeatures == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now),
+                usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
+                usageFreshnessSeconds: usageStats == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now)
             )
         )
     }
@@ -285,6 +304,10 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
+        if sort.requiresUsageStats && !indexStats.recipeUsageStatsReady {
+            throw ValidationError("Recipe usage index is required for usage sort. Run `paprika-pantry index rebuild` first.")
+        }
+
         if !ingredientFilter.isDefault && !indexStats.recipeIngredientIndexReady {
             throw ValidationError("Recipe ingredient index is required for ingredient filters. Run `paprika-pantry index rebuild` first.")
         }
@@ -309,12 +332,15 @@ public struct RecipesSearchCommand: PantryLeafCommand {
                 paths: context.paths,
                 derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
+                usageReadPath: indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
                 searchLastSuccessAt: indexStats.lastSuccessfulRecipeSearchRun.map { $0.finishedAt ?? $0.startedAt },
                 searchFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeSearchRun, now: now),
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
                 ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
-                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now)
+                ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now),
+                usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
+                usageFreshnessSeconds: indexStats.recipeUsageStatsReady ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
             )
         )
     }

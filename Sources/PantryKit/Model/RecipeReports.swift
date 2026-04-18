@@ -5,10 +5,13 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let derivedReadPath: String?
     public let ingredientReadPath: String?
+    public let usageReadPath: String?
     public let derivedLastSuccessAt: Date?
     public let derivedFreshnessSeconds: Int?
     public let ingredientLastSuccessAt: Date?
     public let ingredientFreshnessSeconds: Int?
+    public let usageLastSuccessAt: Date?
+    public let usageFreshnessSeconds: Int?
     public let recipeCount: Int
     public let canonicalFilters: RecipeQueryFilters
     public let ingredientFilter: RecipeIngredientFilter
@@ -25,19 +28,25 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
         readPath: String = "direct-source",
         derivedReadPath: String? = nil,
         ingredientReadPath: String? = nil,
+        usageReadPath: String? = nil,
         derivedLastSuccessAt: Date? = nil,
         derivedFreshnessSeconds: Int? = nil,
         ingredientLastSuccessAt: Date? = nil,
-        ingredientFreshnessSeconds: Int? = nil
+        ingredientFreshnessSeconds: Int? = nil,
+        usageLastSuccessAt: Date? = nil,
+        usageFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes list"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
         self.ingredientReadPath = ingredientReadPath
+        self.usageReadPath = usageReadPath
         self.derivedLastSuccessAt = derivedLastSuccessAt
         self.derivedFreshnessSeconds = derivedFreshnessSeconds
         self.ingredientLastSuccessAt = ingredientLastSuccessAt
         self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
+        self.usageLastSuccessAt = usageLastSuccessAt
+        self.usageFreshnessSeconds = usageFreshnessSeconds
         self.recipeCount = recipes.count
         self.canonicalFilters = canonicalFilters
         self.ingredientFilter = ingredientFilter
@@ -62,6 +71,14 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
                 prefix: "ingredient_index",
                 lastSuccessAt: ingredientLastSuccessAt,
                 freshnessSeconds: ingredientFreshnessSeconds
+            ))
+        }
+        if let usageReadPath {
+            lines.append("usage_read_path: \(usageReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "usage_index",
+                lastSuccessAt: usageLastSuccessAt,
+                freshnessSeconds: usageFreshnessSeconds
             ))
         }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
@@ -94,6 +111,7 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
             }
 
             parts.append(contentsOf: renderedRecipeDerivedEvidence(recipe.derivedFeatures))
+            parts.append(contentsOf: renderedRecipeUsageEvidence(recipe.usageStats))
             lines.append(parts.joined(separator: " | "))
         }
 
@@ -106,22 +124,31 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let recipe: RecipeDetail
     public let derivedFeatures: RecipeDerivedFeatures?
+    public let usageStats: RecipeUsageStats?
     public let derivedLastSuccessAt: Date?
     public let derivedFreshnessSeconds: Int?
+    public let usageLastSuccessAt: Date?
+    public let usageFreshnessSeconds: Int?
 
     public init(
         recipe: RecipeDetail,
         derivedFeatures: RecipeDerivedFeatures? = nil,
+        usageStats: RecipeUsageStats? = nil,
         readPath: String = "direct-source",
         derivedLastSuccessAt: Date? = nil,
-        derivedFreshnessSeconds: Int? = nil
+        derivedFreshnessSeconds: Int? = nil,
+        usageLastSuccessAt: Date? = nil,
+        usageFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes show"
         self.readPath = readPath
         self.recipe = recipe
         self.derivedFeatures = derivedFeatures
+        self.usageStats = usageStats
         self.derivedLastSuccessAt = derivedLastSuccessAt
         self.derivedFreshnessSeconds = derivedFreshnessSeconds
+        self.usageLastSuccessAt = usageLastSuccessAt
+        self.usageFreshnessSeconds = usageFreshnessSeconds
     }
 
     public var humanDescription: String {
@@ -165,6 +192,20 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         }
         if let remoteHash = recipe.remoteHash, !remoteHash.isEmpty {
             lines.append("remote_hash: \(remoteHash)")
+        }
+
+        if let usageStats {
+            lines.append("usage_read_path: sidecar-derived")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "usage_index",
+                lastSuccessAt: usageLastSuccessAt,
+                freshnessSeconds: usageFreshnessSeconds
+            ))
+            lines.append("usage_derived_at: \(renderedTimestamp(usageStats.derivedAt))")
+            lines.append("times_cooked: \(usageStats.timesCooked)")
+            if let lastCookedAt = usageStats.lastCookedAt {
+                lines.append("last_cooked_at: \(lastCookedAt)")
+            }
         }
 
         if let derivedFeatures {
@@ -235,6 +276,7 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public let recipeSearchFreshnessSeconds: Int?
     public let recipeFeatureFreshnessSeconds: Int?
     public let recipeIngredientFreshnessSeconds: Int?
+    public let recipeUsageFreshnessSeconds: Int?
     public let paths: PantryPathReport
 
     public init(stats: PantryIndexStats, paths: PantryPaths, now: Date) {
@@ -247,6 +289,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.recipeIngredientFreshnessSeconds = stats.lastSuccessfulRecipeIngredientRun.map {
+            max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
+        }
+        self.recipeUsageFreshnessSeconds = stats.lastSuccessfulRecipeUsageRun.map {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.paths = paths.report
@@ -265,6 +310,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_ingredient_recipes: \(stats.recipeIngredientRecipeCount)",
             "recipe_ingredient_lines: \(stats.recipeIngredientLineCount)",
             "recipe_ingredient_tokens: \(stats.recipeIngredientTokenCount)",
+            "recipe_usage_index_ready: \(stats.recipeUsageStatsReady ? "yes" : "no")",
+            "recipe_usage_stat_rows: \(stats.recipeUsageStatsCount)",
+            "recipe_usage_stats_with_last_cooked_at: \(stats.recipeUsageStatsWithLastCookedCount)",
         ]
 
         if let lastRun = stats.lastRecipeSearchRun {
@@ -312,6 +360,21 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("recipe_ingredients_freshness: never-built")
         }
 
+        if let lastRun = stats.lastRecipeUsageRun {
+            lines.append("recipe_usage_last_run_at: \(renderedTimestamp(lastRun.startedAt))")
+            lines.append("recipe_usage_last_run_status: \(lastRun.status.rawValue)")
+        }
+
+        if let lastSuccess = stats.lastSuccessfulRecipeUsageRun {
+            lines.append("recipe_usage_last_success_at: \(renderedTimestamp(lastSuccess.finishedAt ?? lastSuccess.startedAt))")
+        }
+
+        if let recipeUsageFreshnessSeconds {
+            lines.append("recipe_usage_freshness: \(renderedDuration(seconds: recipeUsageFreshnessSeconds)) old")
+        } else {
+            lines.append("recipe_usage_freshness: never-built")
+        }
+
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
@@ -340,6 +403,8 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_ingredient_recipes: \(summary.recipeIngredientRecipeCount)",
             "recipe_ingredient_lines: \(summary.recipeIngredientLineCount)",
             "recipe_ingredient_tokens: \(summary.recipeIngredientTokenCount)",
+            "recipe_usage_stat_rows: \(summary.recipeUsageStatsCount)",
+            "linked_meals_with_recipe_uid: \(summary.linkedMealCount)",
             renderedPaths(paths),
         ].joined(separator: "\n")
     }
@@ -350,12 +415,15 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
     public let readPath: String
     public let derivedReadPath: String?
     public let ingredientReadPath: String?
+    public let usageReadPath: String?
     public let searchLastSuccessAt: Date?
     public let searchFreshnessSeconds: Int?
     public let derivedLastSuccessAt: Date?
     public let derivedFreshnessSeconds: Int?
     public let ingredientLastSuccessAt: Date?
     public let ingredientFreshnessSeconds: Int?
+    public let usageLastSuccessAt: Date?
+    public let usageFreshnessSeconds: Int?
     public let query: String
     public let resultCount: Int
     public let canonicalFilters: RecipeQueryFilters
@@ -376,23 +444,29 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
         readPath: String = "sidecar-search-index",
         derivedReadPath: String? = nil,
         ingredientReadPath: String? = nil,
+        usageReadPath: String? = nil,
         searchLastSuccessAt: Date? = nil,
         searchFreshnessSeconds: Int? = nil,
         derivedLastSuccessAt: Date? = nil,
         derivedFreshnessSeconds: Int? = nil,
         ingredientLastSuccessAt: Date? = nil,
-        ingredientFreshnessSeconds: Int? = nil
+        ingredientFreshnessSeconds: Int? = nil,
+        usageLastSuccessAt: Date? = nil,
+        usageFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes search"
         self.readPath = readPath
         self.derivedReadPath = derivedReadPath
         self.ingredientReadPath = ingredientReadPath
+        self.usageReadPath = usageReadPath
         self.searchLastSuccessAt = searchLastSuccessAt
         self.searchFreshnessSeconds = searchFreshnessSeconds
         self.derivedLastSuccessAt = derivedLastSuccessAt
         self.derivedFreshnessSeconds = derivedFreshnessSeconds
         self.ingredientLastSuccessAt = ingredientLastSuccessAt
         self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
+        self.usageLastSuccessAt = usageLastSuccessAt
+        self.usageFreshnessSeconds = usageFreshnessSeconds
         self.query = query
         self.resultCount = results.count
         self.canonicalFilters = canonicalFilters
@@ -430,6 +504,14 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
                 freshnessSeconds: ingredientFreshnessSeconds
             ))
         }
+        if let usageReadPath {
+            lines.append("usage_read_path: \(usageReadPath)")
+            lines.append(contentsOf: renderedIndexFreshnessLines(
+                prefix: "usage_index",
+                lastSuccessAt: usageLastSuccessAt,
+                freshnessSeconds: usageFreshnessSeconds
+            ))
+        }
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
         lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
         lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
@@ -461,6 +543,7 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
             }
 
             parts.append(contentsOf: renderedRecipeDerivedEvidence(recipe.derivedFeatures))
+            parts.append(contentsOf: renderedRecipeUsageEvidence(recipe.usageStats))
             lines.append(parts.joined(separator: " | "))
         }
 
@@ -808,6 +891,20 @@ func renderedRecipeDerivedEvidence(_ features: RecipeDerivedFeatures?) -> [Strin
 
     if let ingredientLineCountBasis = features.ingredientLineCountBasis {
         parts.append("derived_ingredient_line_count_basis=\(ingredientLineCountBasis.rawValue)")
+    }
+
+    return parts
+}
+
+func renderedRecipeUsageEvidence(_ usageStats: RecipeUsageStats?) -> [String] {
+    guard let usageStats else {
+        return []
+    }
+
+    var parts = ["times_cooked=\(usageStats.timesCooked)"]
+
+    if let lastCookedAt = usageStats.lastCookedAt {
+        parts.append("last_cooked_at=\(lastCookedAt)")
     }
 
     return parts

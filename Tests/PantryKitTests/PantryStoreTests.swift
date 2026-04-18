@@ -37,6 +37,9 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_token"))
             XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid"))
             XCTAssertTrue(indexes.contains("recipe_ingredient_tokens_on_recipe_uid_token"))
+            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_derived_at"))
+            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_times_cooked"))
+            XCTAssertTrue(indexes.contains("recipe_usage_stats_on_last_cooked_at"))
             XCTAssertTrue(indexes.contains("index_runs_on_started_at"))
             XCTAssertTrue(indexes.contains("index_runs_on_status"))
             XCTAssertTrue(indexes.contains("index_runs_on_index_name"))
@@ -45,6 +48,7 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertTrue(try db.tableExists("recipe_features"))
             XCTAssertTrue(try db.tableExists("recipe_ingredient_lines"))
             XCTAssertTrue(try db.tableExists("recipe_ingredient_tokens"))
+            XCTAssertTrue(try db.tableExists("recipe_usage_stats"))
             XCTAssertTrue(try db.tableExists("index_runs"))
             XCTAssertFalse(try db.tableExists("recipes"))
             XCTAssertFalse(try db.tableExists("recipe_categories"))
@@ -133,6 +137,49 @@ final class PantryStoreTests: XCTestCase {
                     rawJSON: "{}"
                 ),
             ]
+            ,
+            meals: [
+                SourceMeal(
+                    uid: "MEAL1",
+                    name: "Weeknight Soup",
+                    scheduledAt: "2026-04-01 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup"
+                ),
+                SourceMeal(
+                    uid: "MEAL2",
+                    name: "Weeknight Soup",
+                    scheduledAt: "2026-04-07 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup"
+                ),
+                SourceMeal(
+                    uid: "MEAL3",
+                    name: "Pasta Salad",
+                    scheduledAt: nil,
+                    mealType: "Lunch",
+                    recipeUID: "BBB",
+                    recipeName: "Pasta Salad"
+                ),
+                SourceMeal(
+                    uid: "MEAL4",
+                    name: "Loose Dinner",
+                    scheduledAt: "2026-04-03 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: nil,
+                    recipeName: nil
+                ),
+                SourceMeal(
+                    uid: "MEAL5",
+                    name: "Deleted Recipe Meal",
+                    scheduledAt: "2026-04-05 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "CCC",
+                    recipeName: "Deleted"
+                ),
+            ]
         )
 
         let summary = try await store.rebuildRecipeIndexes(
@@ -149,6 +196,8 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(summary.recipeIngredientRecipeCount, 2)
         XCTAssertEqual(summary.recipeIngredientLineCount, 4)
         XCTAssertEqual(summary.recipeIngredientTokenCount, 4)
+        XCTAssertEqual(summary.recipeUsageStatsCount, 2)
+        XCTAssertEqual(summary.linkedMealCount, 3)
 
         let results = try store.searchRecipes(query: "lemon", limit: 20)
         XCTAssertEqual(results.map(\.uid), ["AAA"])
@@ -167,6 +216,15 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(ingredientIndex.lines.map(\.sourceText), ["Broth", "Beans"])
         XCTAssertEqual(ingredientIndex.lines.flatMap(\.normalizedTokens), ["broth", "bean"])
 
+        let usageAAA = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "AAA"))
+        XCTAssertEqual(usageAAA.timesCooked, 2)
+        XCTAssertEqual(usageAAA.lastCookedAt, "2026-04-07 18:00:00")
+
+        let usageBBB = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "BBB"))
+        XCTAssertEqual(usageBBB.timesCooked, 1)
+        XCTAssertNil(usageBBB.lastCookedAt)
+        XCTAssertNil(try store.fetchRecipeUsageStats(uid: "CCC"))
+
         let stats = try store.indexStats()
         XCTAssertEqual(stats.recipeSearchDocumentCount, 2)
         XCTAssertEqual(stats.recipeFeatureCount, 2)
@@ -175,15 +233,20 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(stats.recipeIngredientRecipeCount, 2)
         XCTAssertEqual(stats.recipeIngredientLineCount, 4)
         XCTAssertEqual(stats.recipeIngredientTokenCount, 4)
+        XCTAssertEqual(stats.recipeUsageStatsCount, 2)
+        XCTAssertEqual(stats.recipeUsageStatsWithLastCookedCount, 1)
         XCTAssertTrue(stats.recipeSearchReady)
         XCTAssertTrue(stats.recipeFeaturesReady)
         XCTAssertTrue(stats.recipeIngredientIndexReady)
+        XCTAssertTrue(stats.recipeUsageStatsReady)
         XCTAssertEqual(stats.lastRecipeSearchRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeSearchRun?.recipeCount, 2)
         XCTAssertEqual(stats.lastRecipeFeatureRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeFeatureRun?.recipeCount, 2)
         XCTAssertEqual(stats.lastRecipeIngredientRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeIngredientRun?.recipeCount, 2)
+        XCTAssertEqual(stats.lastRecipeUsageRun?.status, .success)
+        XCTAssertEqual(stats.lastRecipeUsageRun?.recipeCount, 2)
     }
 
     func testSearchNormalizesPlainQueriesForFTS() async throws {
@@ -333,6 +396,48 @@ final class PantryStoreTests: XCTestCase {
             limit: 20
         )
         XCTAssertEqual(exactRatingResults.map(\.uid), ["AAA", "BBB"])
+    }
+
+    func testSearchRecipesSupportsUsageAwareRankingAndTimesCookedSort() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Soup", hash: "hash-ccc"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeSourceRecipeForUsageTest(uid: "AAA", name: "Tomato Soup", starRating: 4, isFavorite: false),
+                "BBB": makeSourceRecipeForUsageTest(uid: "BBB", name: "Tomato Soup", starRating: 5, isFavorite: false),
+                "CCC": makeSourceRecipeForUsageTest(uid: "CCC", name: "Tomato Soup", starRating: 5, isFavorite: true),
+            ],
+            meals: [
+                SourceMeal(uid: "MEAL1", name: "Tomato Soup", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Soup"),
+                SourceMeal(uid: "MEAL2", name: "Tomato Soup", scheduledAt: "2026-04-02 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Soup"),
+                SourceMeal(uid: "MEAL3", name: "Tomato Soup", scheduledAt: "2026-04-03 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Soup"),
+                SourceMeal(uid: "MEAL4", name: "Tomato Soup", scheduledAt: "2026-04-04 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Tomato Soup"),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        let relevanceResults = try store.searchRecipes(
+            query: "tomato soup",
+            sort: .relevance,
+            limit: 20
+        )
+        XCTAssertEqual(relevanceResults.map(\.uid), ["AAA", "BBB", "CCC"])
+        XCTAssertEqual(relevanceResults[0].usageStats?.timesCooked, 3)
+        XCTAssertEqual(relevanceResults[1].usageStats?.timesCooked, 1)
+        XCTAssertNil(relevanceResults[2].usageStats)
+
+        let usageResults = try store.searchRecipes(
+            query: "tomato soup",
+            sort: .timesCooked,
+            limit: 20
+        )
+        XCTAssertEqual(usageResults.map(\.uid), ["AAA", "BBB", "CCC"])
     }
 
     func testIngredientNormalizationIndexesConservativeTokensPerLine() async throws {
@@ -824,6 +929,33 @@ final class PantryStoreTests: XCTestCase {
             name: uid,
             categoryReferences: [],
             sourceName: sourceName,
+            ingredients: nil,
+            directions: nil,
+            notes: nil,
+            starRating: starRating,
+            isFavorite: isFavorite,
+            prepTime: nil,
+            cookTime: nil,
+            totalTime: nil,
+            servings: nil,
+            createdAt: nil,
+            updatedAt: nil,
+            remoteHash: "hash-\(uid)",
+            rawJSON: "{}"
+        )
+    }
+
+    private func makeSourceRecipeForUsageTest(
+        uid: String,
+        name: String,
+        starRating: Int?,
+        isFavorite: Bool
+    ) -> SourceRecipe {
+        SourceRecipe(
+            uid: uid,
+            name: name,
+            categoryReferences: [],
+            sourceName: nil,
             ingredients: nil,
             directions: nil,
             notes: nil,

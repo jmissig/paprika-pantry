@@ -12,6 +12,7 @@ Current architecture direction:
 - use a sidecar SQLite database only for things we own: indexing, denormalized helper tables, derived facts, analysis artifacts, and refresh bookkeeping
 - keep sidecar outputs evidence-first and inspectable, not opaque magic
 - design the CLI as a good tool for an LLM: keep reasoning and fuzzy interpretation in the LLM, while the CLI exposes reliable filters, evidence, thresholds, and inspectable outputs
+- prefer meaningful default ranking over alphabetical ordering where possible; search and discovery surfaces should usually try to surface the best candidates first using evidence like rating, usage, or other strong signals, with usage acting as the primary tie-breaker ahead of alphabetical ordering when available
 - remove now-stale mirror-first and remote-auth-as-product planning
 
 ## Product-shaped use cases to support
@@ -81,6 +82,7 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Make `recipes list` read directly from the Paprika adapter
 - [x] Make `recipes show <uid|name>` read directly from the Paprika adapter
 - [x] Add a safe verification/report command for raw source counts and sample coverage
+- [ ] Figure out whether Paprika exposes a native URL scheme or other stable deep-link format so `paprika-pantry` can emit links that open a recipe directly in the Paprika app
 
 ### Phase C — sidecar foundations and first useful query path
 
@@ -92,6 +94,8 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Add the first worthwhile sidecar-backed feature, recipe search
 - [x] Make direct-vs-derived provenance clearer in reports where it matters
 - [x] Add staleness/freshness reporting for sidecar-derived answers
+- [ ] Figure out whether the real Paprika database exposes a reliable last-sync signal, and if so capture/include it in sidecar state and reporting
+- [ ] Figure out whether there is a safe way to launch/open the real Paprika app to try to trigger a sync when needed
 
 ### Phase D — derived recipe features
 
@@ -137,6 +141,14 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Add meals adapter/query support
 - [x] Add groceries adapter/query support
 - [ ] Add pantry adapter/query support if it looks useful
+
+### Phase J — linked meal history and recipe usage stats
+
+- [ ] Build sidecar-derived recipe usage stats from linked meal history only
+- [ ] Add per-recipe usage fields like `times_cooked` and `last_cooked_at`
+- [ ] Surface usage stats in `recipes show`
+- [ ] Add recipe query/report surfaces that can sort or rank by usage
+- [ ] Keep richer historical fields like `first_cooked_at` as a much-later follow-up, not part of the first usage-stats slice
 
 ## Explicitly not now
 

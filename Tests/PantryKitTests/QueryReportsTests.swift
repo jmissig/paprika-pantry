@@ -24,6 +24,12 @@ final class QueryReportsTests: XCTestCase {
                         totalTimeBasis: .summedPrepAndCook,
                         ingredientLineCount: 5,
                         ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                    usageStats: RecipeUsageStats(
+                        uid: "AAA",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        timesCooked: 3,
+                        lastCookedAt: "2026-04-07 18:00:00"
                     )
                 ),
             ],
@@ -32,12 +38,14 @@ final class QueryReportsTests: XCTestCase {
             derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
             sort: .fewestIngredients,
             derivedReadPath: "sidecar-derived",
-            ingredientReadPath: "sidecar-ingredient-index"
+            ingredientReadPath: "sidecar-ingredient-index",
+            usageReadPath: "sidecar-derived"
         )
 
         XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
+        XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.min_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Side"))
@@ -51,6 +59,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes=30"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
+        XCTAssertTrue(report.humanDescription.contains("times_cooked=3"))
+        XCTAssertTrue(report.humanDescription.contains("last_cooked_at=2026-04-07 18:00:00"))
     }
 
     func testRecipeShowReportIncludesRecipeMetadata() {
@@ -84,6 +94,12 @@ final class QueryReportsTests: XCTestCase {
                 totalTimeBasis: .sourceTotalTime,
                 ingredientLineCount: 2,
                 ingredientLineCountBasis: .nonEmptyLines
+            ),
+            usageStats: RecipeUsageStats(
+                uid: "AAA",
+                derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                timesCooked: 4,
+                lastCookedAt: "2026-04-08 18:00:00"
             )
         )
 
@@ -92,6 +108,9 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("source_name: Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("star_rating: 5"))
         XCTAssertTrue(report.humanDescription.contains("favorite: yes"))
+        XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("times_cooked: 4"))
+        XCTAssertTrue(report.humanDescription.contains("last_cooked_at: 2026-04-08 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes: 30"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count_basis: non-empty-ingredient-lines"))
@@ -125,12 +144,16 @@ final class QueryReportsTests: XCTestCase {
                 recipeIngredientRecipeCount: 10,
                 recipeIngredientLineCount: 42,
                 recipeIngredientTokenCount: 77,
+                recipeUsageStatsCount: 8,
+                recipeUsageStatsWithLastCookedCount: 6,
                 lastRecipeSearchRun: searchRun,
                 lastSuccessfulRecipeSearchRun: searchRun,
                 lastRecipeFeatureRun: featureRun,
                 lastSuccessfulRecipeFeatureRun: featureRun,
                 lastRecipeIngredientRun: featureRun,
-                lastSuccessfulRecipeIngredientRun: featureRun
+                lastSuccessfulRecipeIngredientRun: featureRun,
+                lastRecipeUsageRun: featureRun,
+                lastSuccessfulRecipeUsageRun: featureRun
             ),
             paths: makePaths(),
             now: Date(timeIntervalSince1970: 1_712_736_180)
@@ -148,6 +171,9 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("recipe_ingredient_recipes: 10"))
         XCTAssertTrue(report.humanDescription.contains("recipe_ingredient_tokens: 77"))
         XCTAssertTrue(report.humanDescription.contains("recipe_ingredients_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_index_ready: yes"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_stat_rows: 8"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_freshness: 1m old"))
     }
 
     func testRecipesSearchReportIncludesMatches() {
@@ -176,18 +202,27 @@ final class QueryReportsTests: XCTestCase {
                         totalTimeBasis: .summedPrepAndCook,
                         ingredientLineCount: 5,
                         ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                    usageStats: RecipeUsageStats(
+                        uid: "AAA",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        timesCooked: 2,
+                        lastCookedAt: "2026-04-07 18:00:00"
                     )
                 )
             ],
             paths: makePaths(),
             derivedReadPath: "sidecar-derived",
             ingredientReadPath: "sidecar-ingredient-index",
+            usageReadPath: "sidecar-derived",
             searchLastSuccessAt: searchLastSuccessAt,
             searchFreshnessSeconds: 60,
             derivedLastSuccessAt: searchLastSuccessAt,
             derivedFreshnessSeconds: 60,
             ingredientLastSuccessAt: searchLastSuccessAt,
-            ingredientFreshnessSeconds: 60
+            ingredientFreshnessSeconds: 60,
+            usageLastSuccessAt: searchLastSuccessAt,
+            usageFreshnessSeconds: 60
         )
 
         XCTAssertTrue(report.humanDescription.contains("recipes search: 1 matches"))
@@ -199,6 +234,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("derived_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_read_path: sidecar-ingredient-index"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_index_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
+        XCTAssertTrue(report.humanDescription.contains("usage_index_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("canonical.favorite_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("canonical.max_rating: 4"))
         XCTAssertTrue(report.humanDescription.contains("canonical.categories_all: Soup"))
@@ -210,6 +247,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
+        XCTAssertTrue(report.humanDescription.contains("times_cooked=2"))
     }
 
     func testRecipeReportsRenderIngredientAnyAndExcludeSemantics() {

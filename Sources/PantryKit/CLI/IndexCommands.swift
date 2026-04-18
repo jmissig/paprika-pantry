@@ -4,7 +4,7 @@ import Foundation
 public struct IndexCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "index",
-        abstract: "Manage owned sidecar indexes, derived recipe features, and ingredient tokens.",
+        abstract: "Manage owned sidecar search indexes, derived recipe features, usage stats, and ingredient tokens.",
         subcommands: [
             IndexStatsCommand.self,
             IndexRebuildCommand.self,
@@ -31,7 +31,7 @@ public struct IndexStatsCommand: PantryLeafCommand {
 public struct IndexRebuildCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rebuild",
-        abstract: "Rebuild owned recipe search, feature, and ingredient-token indexes from the configured local Paprika source."
+        abstract: "Rebuild owned recipe search, feature, usage, and ingredient-token indexes from the configured local Paprika source."
     )
 
     public init() {}

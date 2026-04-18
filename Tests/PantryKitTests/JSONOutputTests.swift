@@ -51,6 +51,12 @@ final class JSONOutputTests: XCTestCase {
                         totalTimeBasis: .summedPrepAndCook,
                         ingredientLineCount: 5,
                         ingredientLineCountBasis: .nonEmptyLines
+                    ),
+                    usageStats: RecipeUsageStats(
+                        uid: "AAA",
+                        derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        timesCooked: 2,
+                        lastCookedAt: "2026-04-07 18:00:00"
                     )
                 ),
             ],
@@ -63,8 +69,10 @@ final class JSONOutputTests: XCTestCase {
             derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
             sort: .fewestIngredients,
             derivedReadPath: "sidecar-derived",
+            usageReadPath: "sidecar-derived",
             derivedLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
-            derivedFreshnessSeconds: 60
+            derivedFreshnessSeconds: 60,
+            usageFreshnessSeconds: 60
         )
 
         let recipesRendered = try JSONOutput.render(recipesReport)
@@ -73,6 +81,8 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"derivedReadPath\""))
         XCTAssertTrue(recipesRendered.contains("\"sidecar-derived\""))
         XCTAssertTrue(recipesRendered.contains("\"derivedFreshnessSeconds\" : 60"))
+        XCTAssertTrue(recipesRendered.contains("\"usageReadPath\""))
+        XCTAssertTrue(recipesRendered.contains("\"usageFreshnessSeconds\" : 60"))
         XCTAssertTrue(recipesRendered.contains("\"canonicalFilters\""))
         XCTAssertTrue(recipesRendered.contains("\"ingredientFilter\""))
         XCTAssertTrue(recipesRendered.contains("\"includeMode\" : \"any\""))
@@ -93,6 +103,8 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"isFavorite\" : true"))
         XCTAssertTrue(recipesRendered.contains("\"derivedFeatures\""))
         XCTAssertTrue(recipesRendered.contains("\"totalTimeMinutes\" : 30"))
+        XCTAssertTrue(recipesRendered.contains("\"usageStats\""))
+        XCTAssertTrue(recipesRendered.contains("\"timesCooked\" : 2"))
     }
 
     func testRenderDoctorReportIncludesStatusAndIndexFields() throws {
@@ -110,6 +122,8 @@ final class JSONOutputTests: XCTestCase {
                 recipeFeatureCount: 6,
                 recipeFeaturesWithTotalTimeCount: 5,
                 recipeFeaturesWithIngredientLineCountCount: 6,
+                recipeUsageStatsCount: 4,
+                recipeUsageStatsWithLastCookedCount: 3,
                 lastRecipeSearchRun: PantryIndexRun(
                     id: 1,
                     startedAt: Date(timeIntervalSince1970: 1_712_736_000),
@@ -144,6 +158,24 @@ final class JSONOutputTests: XCTestCase {
                     status: .success,
                     indexName: "recipe-features",
                     recipeCount: 6,
+                    errorMessage: nil
+                ),
+                lastRecipeUsageRun: PantryIndexRun(
+                    id: 3,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-usage",
+                    recipeCount: 4,
+                    errorMessage: nil
+                ),
+                lastSuccessfulRecipeUsageRun: PantryIndexRun(
+                    id: 3,
+                    startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    status: .success,
+                    indexName: "recipe-usage",
+                    recipeCount: 4,
                     errorMessage: nil
                 )
             ),

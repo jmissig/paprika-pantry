@@ -132,6 +132,19 @@ public struct PantryDatabase {
             try db.create(index: "recipe_ingredient_tokens_on_recipe_uid_token", on: "recipe_ingredient_tokens", columns: ["recipe_uid", "token"])
         }
 
+        migrator.registerMigration("recipe-usage-v1") { db in
+            try db.create(table: "recipe_usage_stats") { table in
+                table.column("uid", .text).notNull().primaryKey()
+                table.column("derived_at", .text).notNull()
+                table.column("times_cooked", .integer).notNull()
+                table.column("last_cooked_at", .text)
+            }
+
+            try db.create(index: "recipe_usage_stats_on_derived_at", on: "recipe_usage_stats", columns: ["derived_at"])
+            try db.create(index: "recipe_usage_stats_on_times_cooked", on: "recipe_usage_stats", columns: ["times_cooked"])
+            try db.create(index: "recipe_usage_stats_on_last_cooked_at", on: "recipe_usage_stats", columns: ["last_cooked_at"])
+        }
+
         return migrator
     }
 }

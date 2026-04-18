@@ -137,15 +137,25 @@ public struct RecipeDerivedConstraints: Codable, Equatable, Sendable {
 public enum RecipeListSort: String, Codable, CaseIterable, ExpressibleByArgument, Sendable {
     case name
     case rating
+    case timesCooked = "times-cooked"
     case totalTime = "total-time"
     case fewestIngredients = "fewest-ingredients"
 
     public var requiresDerivedFeatures: Bool {
         switch self {
-        case .name, .rating:
+        case .name, .rating, .timesCooked:
             return false
         case .totalTime, .fewestIngredients:
             return true
+        }
+    }
+
+    public var requiresUsageStats: Bool {
+        switch self {
+        case .timesCooked:
+            return true
+        case .name, .rating, .totalTime, .fewestIngredients:
+            return false
         }
     }
 }
@@ -154,15 +164,25 @@ public enum RecipeSearchSort: String, Codable, CaseIterable, ExpressibleByArgume
     case relevance
     case name
     case rating
+    case timesCooked = "times-cooked"
     case totalTime = "total-time"
     case fewestIngredients = "fewest-ingredients"
 
     public var requiresDerivedFeatures: Bool {
         switch self {
-        case .relevance, .name, .rating:
+        case .relevance, .name, .rating, .timesCooked:
             return false
         case .totalTime, .fewestIngredients:
             return true
+        }
+    }
+
+    public var requiresUsageStats: Bool {
+        switch self {
+        case .timesCooked:
+            return true
+        case .relevance, .name, .rating, .totalTime, .fewestIngredients:
+            return false
         }
     }
 }
