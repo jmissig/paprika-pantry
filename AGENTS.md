@@ -274,6 +274,8 @@ Failure signals:
 
 ## Project-document hygiene
 
+- `README.md` is the human-facing usage guide. Write it for a person who wants to install the tool, understand what it is for, and run the normal commands successfully.
+- `README.md` should favor practical examples and operator guidance over implementation detail.
 - `TODO.md` is the literal active backlog and near-term parking lot, not a full roadmap or philosophy dump.
 - Completed work should leave `TODO.md` and live in git history, tests, and code.
 - Durable architectural direction, constraints, and product-shaping guidance belong here in `AGENTS.md`.
