@@ -52,6 +52,13 @@ The system should produce:
 - outputs that keep evidence separate from judgment
 - a CLI that works as a reliable tool for an LLM or other downstream agent
 
+Useful question shapes include:
+- what are our favorite risottos?
+- which cookbook have we consistently liked best?
+- which main can I make in 30 minutes with the fewest ingredients?
+- what is a good side that uses up avocados and goes with risotto?
+- what have we found to be a good substitution for yams?
+
 ## Non-goals
 
 Avoid building, at least initially:
@@ -191,8 +198,10 @@ Support should eventually include:
 
 Prefer a coherent command grammar over a pile of one-off verbs.
 
-Structured JSON output should be first-class for agent consumption.
-Compact human-readable output should remain pleasant by default.
+Default output should be compact and pleasant for humans.
+When structured downstream use matters, a format argument should provide LLM-appropriate output such as JSON or CSV.
+There is a strong product desire to deep-link directly into individual Paprika recipes, but thorough investigation so far did not find a reliable way to do that. Treat direct recipe deep links as desirable but currently unsupported unless new evidence appears.
+Default ranking should prefer meaningful evidence over alphabetical ordering where possible. When multiple strong candidates exist, usage is usually a better tie-breaker than name.
 
 When choosing between a smart CLI and a useful CLI, prefer a useful CLI.
 The right split is usually: the model decides what the human meant, and the CLI returns trustworthy evidence-bounded candidates and filters.
@@ -259,6 +268,13 @@ Failure signals:
 - sidecar duplication outruns actual use cases
 - index state is hard to explain
 - direct reads from Paprika become unsafe or accidental writes slip in
+
+## Project-document hygiene
+
+- `TODO.md` is the literal active backlog and near-term parking lot, not a full roadmap or philosophy dump.
+- Completed work should leave `TODO.md` and live in git history, tests, and code.
+- Durable architectural direction, constraints, and product-shaping guidance belong here in `AGENTS.md`.
+- If a future idea is real but not soon, keep it brief and clearly marked as later work rather than mixing it into the active backlog.
 
 ## Initial implementation priorities
 
