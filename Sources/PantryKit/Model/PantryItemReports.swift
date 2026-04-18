@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PantryItemsListReport: ConsoleRenderable, Equatable, Sendable {
+public struct PantryItemsListReport: ConsoleRenderable, CSVRenderable, Equatable, Sendable {
     public let command: String
     public let pantryItemCount: Int
     public let pantryItems: [PantryItemSummary]
@@ -52,5 +52,35 @@ public struct PantryItemsListReport: ConsoleRenderable, Equatable, Sendable {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    public var csvHeaders: [String] {
+        [
+            "uid",
+            "name",
+            "quantity",
+            "aisle_name",
+            "ingredient_name",
+            "is_in_stock",
+            "purchase_date",
+            "has_expiration",
+            "expiration_date",
+        ]
+    }
+
+    public var csvRows: [[String]] {
+        pantryItems.map {
+            [
+                $0.uid,
+                $0.name,
+                $0.quantity ?? "",
+                $0.aisleName ?? "",
+                $0.ingredientName ?? "",
+                $0.isInStock ? "true" : "false",
+                $0.purchaseDate ?? "",
+                $0.hasExpiration ? "true" : "false",
+                $0.expirationDate ?? "",
+            ]
+        }
     }
 }

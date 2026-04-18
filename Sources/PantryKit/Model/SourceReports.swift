@@ -160,7 +160,7 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
-public struct SourceCookbooksReport: ConsoleRenderable, Equatable, Sendable {
+public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let resultCount: Int
@@ -252,6 +252,46 @@ public struct SourceCookbooksReport: ConsoleRenderable, Equatable, Sendable {
 
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
+    }
+
+    public var csvHeaders: [String] {
+        [
+            "source_name",
+            "is_unlabeled",
+            "recipe_count",
+            "rated_recipe_count",
+            "unrated_recipe_count",
+            "favorite_recipe_count",
+            "average_star_rating",
+            "rated_recipe_share",
+            "favorite_recipe_share",
+            "five_star_count",
+            "four_star_count",
+            "three_star_count",
+            "two_star_count",
+            "one_star_count",
+        ]
+    }
+
+    public var csvRows: [[String]] {
+        aggregates.map { aggregate in
+            [
+                renderedCookbookName(aggregate),
+                aggregate.isUnlabeled ? "true" : "false",
+                String(aggregate.recipeCount),
+                String(aggregate.ratedRecipeCount),
+                String(aggregate.unratedRecipeCount),
+                String(aggregate.favoriteRecipeCount),
+                aggregate.averageStarRating.map(renderedDecimal) ?? "",
+                renderedDecimal(aggregate.ratedRecipeShare),
+                renderedDecimal(aggregate.favoriteRecipeShare),
+                String(aggregate.ratingDistribution.fiveStarCount),
+                String(aggregate.ratingDistribution.fourStarCount),
+                String(aggregate.ratingDistribution.threeStarCount),
+                String(aggregate.ratingDistribution.twoStarCount),
+                String(aggregate.ratingDistribution.oneStarCount),
+            ]
+        }
     }
 }
 

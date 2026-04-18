@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
+public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let derivedReadPath: String?
@@ -116,6 +116,14 @@ public struct RecipesListReport: ConsoleRenderable, Equatable, Sendable {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    public var csvHeaders: [String] {
+        recipeResultCSVHeaders
+    }
+
+    public var csvRows: [[String]] {
+        recipes.map(recipeCSVRow)
     }
 }
 
@@ -434,7 +442,7 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
-public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
+public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, Sendable {
     public let command: String
     public let readPath: String
     public let derivedReadPath: String?
@@ -573,6 +581,14 @@ public struct RecipesSearchReport: ConsoleRenderable, Equatable, Sendable {
 
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
+    }
+
+    public var csvHeaders: [String] {
+        ["query"] + recipeResultCSVHeaders
+    }
+
+    public var csvRows: [[String]] {
+        results.map { [query] + recipeCSVRow(for: $0) }
     }
 }
 
@@ -955,4 +971,50 @@ func renderedRecipeUsageEvidence(_ usageStats: RecipeUsageStats?) -> [String] {
     }
 
     return parts
+}
+
+private let recipeResultCSVHeaders = [
+    "uid",
+    "name",
+    "categories",
+    "source_name",
+    "star_rating",
+    "is_favorite",
+    "updated_at",
+    "derived_total_time_minutes",
+    "derived_ingredient_line_count",
+    "times_cooked",
+    "last_cooked_at",
+]
+
+private func recipeCSVRow(_ recipe: RecipeSummary) -> [String] {
+    [
+        recipe.uid,
+        recipe.name,
+        recipe.categories.joined(separator: " | "),
+        recipe.sourceName ?? "",
+        recipe.starRating.map(String.init) ?? "",
+        recipe.isFavorite ? "true" : "false",
+        recipe.updatedAt ?? "",
+        recipe.derivedFeatures?.totalTimeMinutes.map(String.init) ?? "",
+        recipe.derivedFeatures?.ingredientLineCount.map(String.init) ?? "",
+        recipe.usageStats.map { String($0.timesCooked) } ?? "",
+        recipe.usageStats?.lastCookedAt ?? "",
+    ]
+}
+
+private func recipeCSVRow(for result: IndexedRecipeSearchResult) -> [String] {
+    [
+        result.uid,
+        result.name,
+        result.categories.joined(separator: " | "),
+        result.sourceName ?? "",
+        result.starRating.map(String.init) ?? "",
+        result.isFavorite ? "true" : "false",
+        "",
+        result.derivedFeatures?.totalTimeMinutes.map(String.init) ?? "",
+        result.derivedFeatures?.ingredientLineCount.map(String.init) ?? "",
+        result.usageStats.map { String($0.timesCooked) } ?? "",
+        result.usageStats?.lastCookedAt ?? "",
+    ]
 }

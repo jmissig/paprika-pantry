@@ -7,7 +7,7 @@ public struct CommandContext: Sendable {
 
     public init(runtimeOptions: RuntimeOptions) throws {
         self.paths = try PantryPaths.resolve(options: runtimeOptions.pathOptions)
-        self.outputFormat = runtimeOptions.outputFormat
+        self.outputFormat = try runtimeOptions.resolvedOutputFormat()
     }
 
     public func write<Value: ConsoleRenderable>(_ report: Value) throws {

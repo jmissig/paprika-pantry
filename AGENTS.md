@@ -235,10 +235,13 @@ Do not explode it prematurely.
 ## Output and UX guidance
 
 Borrow the good habits from sibling tools:
-- compact default output
-- JSON output where structured downstream use matters
+- default to compact human-readable output for operators
+- use `--format json` for agent and script consumption
+- `--json` is acceptable shorthand, but prefer `--format json` in guidance and examples
 - diagnostics that explain what is wrong without drama
 - defaults optimized for local use, not cloud-hosted multi-user deployments
+
+For `paprika-pantry`, this means the output surface should converge on an explicit `--format` model that can represent human-readable output, JSON, and CSV cleanly, while keeping the human default compact.
 
 For config and docs, carry forward these established preferences:
 - config files should optimize for humans

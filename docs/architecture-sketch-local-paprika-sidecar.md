@@ -159,6 +159,24 @@ General rule:
 - search and heavier analysis may come from the sidecar
 - sidecar-derived answers should be able to point back to evidence, counts, or contributing recipes
 
+## Output formats
+
+Default CLI output should stay compact and human-readable for local operators.
+
+When a script or local agent needs a stable machine-readable shape, prefer:
+
+- `paprika-pantry recipes list --format json`
+- `paprika-pantry source doctor --format json`
+- `paprika-pantry doctor --format json`
+
+`--json` may remain available as shorthand, but in help text, docs, and examples the preferred spelling should be `--format json`.
+
+CSV should be explicit rather than implied:
+
+- support `--format csv` on naturally row-oriented reports such as list/search outputs and cookbook aggregates
+- do not pretend every diagnostic or detail report cleanly flattens to CSV
+- when CSV is not supported for a command yet, fail clearly and direct callers to `--format json`
+
 ## Recommended file/module shape
 
 Possible direction:

@@ -5,8 +5,7 @@ Completed work should leave this file.
 
 ## Now
 
-- [ ] Add command to launch the local Mac app to trigger a sync
-- [ ] --format work on human-readable vs json vs csv
+- [ ] Align output philosophy with `protect-cadence` and `karivis`: compact human output by default, `--format json` as the preferred structured interface, `--json` as shorthand, and clean human/json/csv behavior under one explicit format model.
 - [ ] Add source/cookbook usage summaries derived from linked meal history where the evidence is strong enough to report cleanly.
 - [ ] Add ingredient co-occurrence / pairing tables with inspectable evidence.
 

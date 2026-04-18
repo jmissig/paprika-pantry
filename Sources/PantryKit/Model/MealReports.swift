@@ -1,6 +1,6 @@
 import Foundation
 
-public struct MealsListReport: ConsoleRenderable, Equatable, Sendable {
+public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Sendable {
     public let command: String
     public let mealCount: Int
     public let meals: [MealSummary]
@@ -39,5 +39,22 @@ public struct MealsListReport: ConsoleRenderable, Equatable, Sendable {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    public var csvHeaders: [String] {
+        ["uid", "name", "scheduled_at", "meal_type", "recipe_uid", "recipe_name"]
+    }
+
+    public var csvRows: [[String]] {
+        meals.map {
+            [
+                $0.uid,
+                $0.name,
+                $0.scheduledAt ?? "",
+                $0.mealType ?? "",
+                $0.recipeUID ?? "",
+                $0.recipeName ?? "",
+            ]
+        }
     }
 }

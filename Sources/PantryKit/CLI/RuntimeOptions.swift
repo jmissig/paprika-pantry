@@ -2,7 +2,13 @@ import ArgumentParser
 import Foundation
 
 public struct RuntimeOptions: ParsableArguments, Sendable {
-    @Flag(name: .long, help: "Emit structured JSON output.")
+    @Option(
+        name: .long,
+        help: "Output format: human, json, or csv. Prefer --format json for agent and script consumption."
+    )
+    public var format: OutputFormat?
+
+    @Flag(name: .long, help: "Shortcut for --format json.")
     public var json = false
 
     @Option(name: .long, help: "Override the managed pantry home directory.")
@@ -30,8 +36,16 @@ public enum RuntimeConfiguration {
 }
 
 extension RuntimeOptions {
-    var outputFormat: OutputFormat {
-        json ? .json : .human
+    func resolvedOutputFormat() throws -> OutputFormat {
+        if json {
+            if let format, format != .json {
+                throw OutputFormatOptionsError.conflictingJSONAndFormat(format)
+            }
+
+            return .json
+        }
+
+        return format ?? .human
     }
 
     var pathOptions: PantryPathOptions {

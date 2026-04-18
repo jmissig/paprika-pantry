@@ -4,6 +4,18 @@ import Foundation
 public enum OutputFormat: String, CaseIterable, Codable, ExpressibleByArgument, Sendable {
     case human
     case json
+    case csv
+}
+
+public enum OutputFormatOptionsError: Error, CustomStringConvertible {
+    case conflictingJSONAndFormat(OutputFormat)
+
+    public var description: String {
+        switch self {
+        case let .conflictingJSONAndFormat(format):
+            return "--json conflicts with --format \(format.rawValue); use only one output override"
+        }
+    }
 }
 
 public enum JSONOutputError: Error {
