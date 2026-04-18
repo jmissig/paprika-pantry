@@ -227,4 +227,6 @@ It is not:
 - a generic Paprika SDK
 - an opaque recommendation engine
 
+---
+
 Made with Codex and OpenClaw.
