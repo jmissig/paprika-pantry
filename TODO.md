@@ -1,5 +1,7 @@
 # TODO
 
+- [ ] Build an explicit `paprika-pantry` SKILL for agents so coding agents and local assistants have a clear, repo-native usage contract.
+
 Active backlog only. Architectural direction and durable constraints live in `AGENTS.md`.
 Completed work should leave this file.
 
