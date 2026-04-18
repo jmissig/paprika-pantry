@@ -45,7 +45,7 @@ final class SourceDoctorReportTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("query_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("journal_mode: wal"))
         XCTAssertTrue(report.humanDescription.contains("wal_files: present"))
-        XCTAssertTrue(report.humanDescription.contains("paprika_last_sync_at: 2024-04-10T08:00:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_last_sync_at: \(renderedTimestamp(Date(timeIntervalSince1970: 1_712_736_000)))"))
         XCTAssertTrue(report.humanDescription.contains("paprika_sync_freshness: 2m old"))
         XCTAssertTrue(report.humanDescription.contains("paprika_sync_signal_source: group-container-preferences"))
         XCTAssertTrue(report.humanDescription.contains("paprika_app_bundle: /Applications/Paprika Recipe Manager 3.app"))

@@ -43,8 +43,8 @@ final class AppLaunchReportTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("waited_for_sync: yes"))
         XCTAssertTrue(report.humanDescription.contains("wait_timeout_seconds: 180"))
         XCTAssertTrue(report.humanDescription.contains("poll_interval_seconds: 2"))
-        XCTAssertTrue(report.humanDescription.contains("initial_paprika_last_sync_at: 2024-04-10T08:00:00Z"))
-        XCTAssertTrue(report.humanDescription.contains("observed_paprika_last_sync_at: 2024-04-10T08:02:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("initial_paprika_last_sync_at: \(renderedTimestamp(Date(timeIntervalSince1970: 1_712_736_000)))"))
+        XCTAssertTrue(report.humanDescription.contains("observed_paprika_last_sync_at: \(renderedTimestamp(Date(timeIntervalSince1970: 1_712_736_120)))"))
         XCTAssertTrue(report.humanDescription.contains("observed_paprika_sync_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("observed_sync_advance: yes"))
     }

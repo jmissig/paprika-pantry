@@ -810,8 +810,12 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
 }
 
 func renderedTimestamp(_ date: Date) -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
+    let formatter = DateFormatter()
+    formatter.locale = .autoupdatingCurrent
+    formatter.timeZone = .autoupdatingCurrent
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    formatter.doesRelativeDateFormatting = false
     return formatter.string(from: date)
 }
 

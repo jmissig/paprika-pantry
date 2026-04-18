@@ -28,7 +28,7 @@ final class SourceLastSyncReportTests: XCTestCase {
 
         XCTAssertTrue(report.humanDescription.contains("source last-sync-time: Loaded the last observed Paprika sync completion time from local metadata."))
         XCTAssertTrue(report.humanDescription.contains("status: ok"))
-        XCTAssertTrue(report.humanDescription.contains("paprika_last_sync_at: 2024-04-10T08:01:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_last_sync_at: \(renderedTimestamp(Date(timeIntervalSince1970: 1_712_736_060)))"))
         XCTAssertTrue(report.humanDescription.contains("paprika_sync_freshness: 1m old"))
     }
 }
