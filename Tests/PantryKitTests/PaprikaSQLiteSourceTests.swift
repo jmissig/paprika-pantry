@@ -14,7 +14,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
     }
 
     func testPaprikaSQLiteSourceReadsRealSchemaRecipesCategoriesAndInspection() async throws {
-        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+        let databaseURL = try makePaprikaSourceDatabase()
+        let source = try PaprikaSQLiteSource(databaseURL: databaseURL)
 
         let stubs = try await source.listRecipeStubs()
         let categories = try await source.listRecipeCategories()
@@ -110,6 +111,17 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(source.inspection.accessMode, "read-only")
         XCTAssertTrue(source.inspection.queryOnly)
         XCTAssertEqual(source.inspection.journalMode, "wal")
+        XCTAssertEqual(source.inspection.paprikaSync?.signalSource, "group-container-preferences")
+        XCTAssertEqual(
+            source.inspection.paprikaSync?.signalLocation,
+            databaseURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Library/Preferences/test.container.plist")
+                .path
+        )
+        XCTAssertEqual(
+            source.inspection.paprikaSync?.lastSyncAt,
+            paprikaLocalSyncDate("2026-04-18 01:08:36")
+        )
         XCTAssertEqual(
             source.inspection.requiredTables,
             ["ZRECIPE", "ZRECIPECATEGORY", "Z_12CATEGORIES", "Z_METADATA"]
@@ -271,8 +283,12 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(summary.recipeFeatureCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithTotalTimeCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithIngredientLineCountCount, 1)
+        XCTAssertEqual(summary.sourceState?.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(summary.sourceState?.sourceLocation, source.databaseURL.path)
+        XCTAssertEqual(summary.sourceState?.paprikaSync?.signalSource, "group-container-preferences")
         XCTAssertEqual(try store.searchRecipes(query: "lemon").map(\.uid), ["AAA"])
         XCTAssertEqual(try store.fetchRecipeFeatures(uid: "AAA")?.totalTimeMinutes, 40)
+        XCTAssertEqual(try store.indexStats().sourceState?.paprikaSync?.signalSource, "group-container-preferences")
     }
 
     private func makeStore() throws -> PantryStore {
@@ -284,7 +300,22 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
 
     private func makePaprikaSourceDatabase() throws -> URL {
         let root = try makeTemporaryDirectory()
-        let databaseURL = root.appendingPathComponent("Paprika.sqlite")
+        let groupContainerURL = root.appendingPathComponent("Library/Group Containers/test.container", isDirectory: true)
+        let databaseDirectoryURL = groupContainerURL.appendingPathComponent("Data/Database", isDirectory: true)
+        let preferencesDirectoryURL = groupContainerURL.appendingPathComponent("Library/Preferences", isDirectory: true)
+        try FileManager.default.createDirectory(at: databaseDirectoryURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: preferencesDirectoryURL, withIntermediateDirectories: true)
+
+        let preferencesURL = preferencesDirectoryURL.appendingPathComponent("test.container.plist")
+        let preferences = ["LastSyncedDate": "2026-04-18 01:08:36"]
+        let preferencesData = try PropertyListSerialization.data(
+            fromPropertyList: preferences,
+            format: .binary,
+            options: 0
+        )
+        try preferencesData.write(to: preferencesURL)
+
+        let databaseURL = databaseDirectoryURL.appendingPathComponent("Paprika.sqlite")
         let queue = try DatabaseQueue(path: databaseURL.path)
 
         try queue.writeWithoutTransaction { db in
@@ -453,5 +484,13 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         temporaryDirectoryURL = root
         return root
+    }
+
+    private func paprikaLocalSyncDate(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.date(from: value)
     }
 }

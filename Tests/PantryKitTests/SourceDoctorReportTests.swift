@@ -16,13 +16,26 @@ final class SourceDoctorReportTests: XCTestCase {
                 accessMode: "read-only",
                 queryOnly: true,
                 journalMode: "wal",
-                hasWriteAheadLogFiles: true
+                hasWriteAheadLogFiles: true,
+                paprikaSync: PaprikaSyncDetails(
+                    lastSyncAt: Date(timeIntervalSince1970: 1_712_736_000),
+                    signalSource: "group-container-preferences",
+                    signalLocation: "/Users/test/Library/Group Containers/.../Library/Preferences/test.plist"
+                ),
+                appInstallation: PaprikaAppInstallation(
+                    appBundlePath: "/Applications/Paprika Recipe Manager 3.app",
+                    bundleIdentifier: "com.hindsightlabs.paprika.mac.v3",
+                    executablePath: "/Applications/Paprika Recipe Manager 3.app/Contents/MacOS/Paprika Recipe Manager 3",
+                    executablePresent: true,
+                    customURLSchemes: []
+                )
             ),
             paths: PantryPaths(
                 homeDirectory: URL(fileURLWithPath: "/tmp/pantry"),
                 configFile: URL(fileURLWithPath: "/tmp/pantry/config.json"),
                 databaseFile: URL(fileURLWithPath: "/tmp/pantry/pantry.sqlite")
-            )
+            ),
+            now: Date(timeIntervalSince1970: 1_712_736_120)
         )
 
         XCTAssertEqual(report.status, "ready")
@@ -32,6 +45,12 @@ final class SourceDoctorReportTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("query_only: yes"))
         XCTAssertTrue(report.humanDescription.contains("journal_mode: wal"))
         XCTAssertTrue(report.humanDescription.contains("wal_files: present"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_last_sync_at: 2024-04-10T08:00:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_sync_freshness: 2m old"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_sync_signal_source: group-container-preferences"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_app_bundle: /Applications/Paprika Recipe Manager 3.app"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_app_url_schemes: none"))
+        XCTAssertTrue(report.humanDescription.contains("launch_for_sync_investigation: no custom URL scheme was found"))
         XCTAssertTrue(report.humanDescription.contains("database: /tmp/pantry/pantry.sqlite"))
     }
 
@@ -80,7 +99,12 @@ final class SourceDoctorReportTests: XCTestCase {
                 sourceKind: .paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
-                sourceLocation: "/Users/test/Paprika.sqlite"
+                sourceLocation: "/Users/test/Paprika.sqlite",
+                paprikaSync: PaprikaSyncDetails(
+                    lastSyncAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    signalSource: "group-container-preferences",
+                    signalLocation: "/Users/test/Library/Preferences/test.plist"
+                )
             ),
             indexStats: PantryIndexStats(
                 recipeSearchDocumentCount: 0,
@@ -102,6 +126,7 @@ final class SourceDoctorReportTests: XCTestCase {
 
         XCTAssertEqual(report.status, "needs-index")
         XCTAssertTrue(report.humanDescription.contains("index_status: missing"))
+        XCTAssertTrue(report.humanDescription.contains("paprika_sync_freshness: 2m old"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: never-built"))
         XCTAssertTrue(report.humanDescription.contains("next_action: Run `paprika-pantry index rebuild`"))
     }

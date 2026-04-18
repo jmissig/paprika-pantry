@@ -145,6 +145,19 @@ public struct PantryDatabase {
             try db.create(index: "recipe_usage_stats_on_last_cooked_at", on: "recipe_usage_stats", columns: ["last_cooked_at"])
         }
 
+        migrator.registerMigration("source-state-v1") { db in
+            try db.create(table: "source_state") { table in
+                table.column("source_kind", .text).notNull().primaryKey()
+                table.column("source_location", .text)
+                table.column("observed_at", .text).notNull()
+                table.column("paprika_last_sync_at", .text)
+                table.column("paprika_sync_signal_source", .text)
+                table.column("paprika_sync_signal_location", .text)
+            }
+
+            try db.create(index: "source_state_on_observed_at", on: "source_state", columns: ["observed_at"])
+        }
+
         return migrator
     }
 }

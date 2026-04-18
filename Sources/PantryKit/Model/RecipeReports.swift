@@ -273,6 +273,7 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
 public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let stats: PantryIndexStats
+    public let capturedPaprikaSyncFreshnessSeconds: Int?
     public let recipeSearchFreshnessSeconds: Int?
     public let recipeFeatureFreshnessSeconds: Int?
     public let recipeIngredientFreshnessSeconds: Int?
@@ -282,6 +283,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public init(stats: PantryIndexStats, paths: PantryPaths, now: Date) {
         self.command = "index stats"
         self.stats = stats
+        self.capturedPaprikaSyncFreshnessSeconds = stats.sourceState?.paprikaSync.map {
+            max(0, Int(now.timeIntervalSince($0.lastSyncAt)))
+        }
         self.recipeSearchFreshnessSeconds = stats.lastSuccessfulRecipeSearchRun.map {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
@@ -300,6 +304,7 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public var humanDescription: String {
         var lines = [
             "\(command): Owned sidecar index status.",
+            "source_state_captured: \(stats.sourceState == nil ? "no" : "yes")",
             "recipe_search_ready: \(stats.recipeSearchReady ? "yes" : "no")",
             "recipe_search_documents: \(stats.recipeSearchDocumentCount)",
             "recipe_features_ready: \(stats.recipeFeaturesReady ? "yes" : "no")",
@@ -314,6 +319,18 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_usage_stat_rows: \(stats.recipeUsageStatsCount)",
             "recipe_usage_stats_with_last_cooked_at: \(stats.recipeUsageStatsWithLastCookedCount)",
         ]
+
+        if let sourceState = stats.sourceState {
+            lines.append("source_state_observed_at: \(renderedTimestamp(sourceState.observedAt))")
+            if let sourceLocation = sourceState.sourceLocation, !sourceLocation.isEmpty {
+                lines.append("source_state_source_location: \(sourceLocation)")
+            }
+        }
+
+        lines.append(contentsOf: renderedCapturedPaprikaSyncLines(
+            stats.sourceState?.paprikaSync,
+            freshnessSeconds: capturedPaprikaSyncFreshnessSeconds
+        ))
 
         if let lastRun = stats.lastRecipeSearchRun {
             lines.append("recipe_search_last_run_at: \(renderedTimestamp(lastRun.startedAt))")
@@ -392,7 +409,7 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
     }
 
     public var humanDescription: String {
-        [
+        var lines = [
             "\(command): Rebuilt owned recipe search, feature, and ingredient indexes.",
             "started_at: \(renderedTimestamp(summary.startedAt))",
             "finished_at: \(renderedTimestamp(summary.finishedAt))",
@@ -405,8 +422,15 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_ingredient_tokens: \(summary.recipeIngredientTokenCount)",
             "recipe_usage_stat_rows: \(summary.recipeUsageStatsCount)",
             "linked_meals_with_recipe_uid: \(summary.linkedMealCount)",
-            renderedPaths(paths),
-        ].joined(separator: "\n")
+        ]
+
+        if let sourceState = summary.sourceState {
+            lines.append("source_state_observed_at: \(renderedTimestamp(sourceState.observedAt))")
+        }
+
+        lines.append(contentsOf: renderedCapturedPaprikaSyncLines(summary.sourceState?.paprikaSync))
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -812,6 +836,29 @@ func renderedCanonicalRecipeFilters(_ filters: RecipeQueryFilters) -> [String] {
 
     if !filters.categoryNames.isEmpty {
         lines.append("canonical.categories_all: \(filters.categoryNames.joined(separator: ", "))")
+    }
+
+    return lines
+}
+
+func renderedCapturedPaprikaSyncLines(
+    _ sync: PaprikaSyncDetails?,
+    freshnessSeconds: Int? = nil
+) -> [String] {
+    guard let sync else {
+        return [
+            "captured_paprika_sync_freshness: unavailable",
+        ]
+    }
+
+    var lines = [
+        "captured_paprika_last_sync_at: \(renderedTimestamp(sync.lastSyncAt))",
+        "captured_paprika_sync_signal_source: \(sync.signalSource)",
+        "captured_paprika_sync_signal_location: \(sync.signalLocation)",
+    ]
+
+    if let freshnessSeconds {
+        lines.append("captured_paprika_sync_freshness: \(renderedDuration(seconds: freshnessSeconds)) old")
     }
 
     return lines

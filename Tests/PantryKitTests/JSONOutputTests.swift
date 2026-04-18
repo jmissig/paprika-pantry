@@ -115,7 +115,12 @@ final class JSONOutputTests: XCTestCase {
                 sourceKind: .paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
-                sourceLocation: "/Users/test/Paprika.sqlite"
+                sourceLocation: "/Users/test/Paprika.sqlite",
+                paprikaSync: PaprikaSyncDetails(
+                    lastSyncAt: Date(timeIntervalSince1970: 1_712_736_060),
+                    signalSource: "group-container-preferences",
+                    signalLocation: "/Users/test/Library/Preferences/test.plist"
+                )
             ),
             indexStats: PantryIndexStats(
                 recipeSearchDocumentCount: 6,
@@ -193,6 +198,7 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(rendered.contains("\"sourceStatus\" : \"ready\""))
         XCTAssertTrue(rendered.contains("\"indexStatus\" : \"ready\""))
         XCTAssertTrue(rendered.contains("\"recipeSearchDocumentCount\" : 6"))
+        XCTAssertTrue(rendered.contains("\"paprikaSyncFreshnessSeconds\" : 60"))
         XCTAssertTrue(rendered.contains("\"recipeSearchFreshnessSeconds\" : 60"))
     }
 }

@@ -26,7 +26,7 @@ public struct SourceDoctorCommand: PantryLeafCommand {
     public mutating func run() throws {
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
-        try context.write(SourceDoctorReport(snapshot: snapshot, paths: context.paths))
+        try context.write(SourceDoctorReport(snapshot: snapshot, paths: context.paths, now: Date()))
     }
 }
 

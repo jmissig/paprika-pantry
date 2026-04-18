@@ -34,6 +34,8 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
     public let queryOnly: Bool
     public let journalMode: String
     public let hasWriteAheadLogFiles: Bool
+    public let paprikaSync: PaprikaSyncDetails?
+    public let appInstallation: PaprikaAppInstallation?
 
     public init(
         schemaFlavor: String,
@@ -41,7 +43,9 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
         accessMode: String,
         queryOnly: Bool,
         journalMode: String,
-        hasWriteAheadLogFiles: Bool
+        hasWriteAheadLogFiles: Bool,
+        paprikaSync: PaprikaSyncDetails? = nil,
+        appInstallation: PaprikaAppInstallation? = nil
     ) {
         self.schemaFlavor = schemaFlavor
         self.requiredTables = requiredTables
@@ -49,6 +53,8 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
         self.queryOnly = queryOnly
         self.journalMode = journalMode
         self.hasWriteAheadLogFiles = hasWriteAheadLogFiles
+        self.paprikaSync = paprikaSync
+        self.appInstallation = appInstallation
     }
 }
 
@@ -575,6 +581,8 @@ private struct PaprikaSQLiteSchema: Sendable {
                 .appendingPathExtension("sqlite-wal")
                 .path
         ) || fileManager.fileExists(atPath: databaseURL.path + "-wal")
+        let paprikaSync = Self.inspectPaprikaSync(databaseURL: databaseURL, fileManager: fileManager)
+        let appInstallation = Self.inspectPaprikaAppInstallation(fileManager: fileManager)
 
         return PaprikaSQLiteSourceInspection(
             schemaFlavor: Self.schemaFlavor,
@@ -582,8 +590,172 @@ private struct PaprikaSQLiteSchema: Sendable {
             accessMode: "read-only",
             queryOnly: queryOnly,
             journalMode: journalMode,
-            hasWriteAheadLogFiles: hasWriteAheadLogFiles
+            hasWriteAheadLogFiles: hasWriteAheadLogFiles,
+            paprikaSync: paprikaSync,
+            appInstallation: appInstallation
         )
+    }
+
+    private static func inspectPaprikaSync(
+        databaseURL: URL,
+        fileManager: FileManager
+    ) -> PaprikaSyncDetails? {
+        for candidate in candidateSyncPreferenceFiles(databaseURL: databaseURL, fileManager: fileManager) {
+            guard fileManager.fileExists(atPath: candidate.location.path) else {
+                continue
+            }
+
+            guard
+                let propertyList = readPropertyList(at: candidate.location),
+                let lastSyncAt = decodePaprikaLastSyncDate(propertyList["LastSyncedDate"])
+            else {
+                continue
+            }
+
+            return PaprikaSyncDetails(
+                lastSyncAt: lastSyncAt,
+                signalSource: candidate.signalSource,
+                signalLocation: candidate.location.path
+            )
+        }
+
+        return nil
+    }
+
+    private static func inspectPaprikaAppInstallation(
+        fileManager: FileManager
+    ) -> PaprikaAppInstallation? {
+        for appURL in candidateAppBundleURLs(fileManager: fileManager) {
+            guard fileManager.fileExists(atPath: appURL.path) else {
+                continue
+            }
+
+            let infoPlistURL = appURL.appendingPathComponent("Contents/Info.plist")
+            let infoPlist = readPropertyList(at: infoPlistURL) ?? [:]
+            let bundleIdentifier = infoPlist["CFBundleIdentifier"] as? String
+            let executableName = infoPlist["CFBundleExecutable"] as? String
+            let executableURL = executableName.map {
+                appURL.appendingPathComponent("Contents/MacOS/\($0)")
+            }
+            let executablePresent = executableURL.map {
+                fileManager.fileExists(atPath: $0.path)
+            } ?? false
+
+            return PaprikaAppInstallation(
+                appBundlePath: appURL.path,
+                bundleIdentifier: bundleIdentifier,
+                executablePath: executableURL?.path,
+                executablePresent: executablePresent,
+                customURLSchemes: decodeCustomURLSchemes(from: infoPlist)
+            )
+        }
+
+        return nil
+    }
+
+    private static func candidateSyncPreferenceFiles(
+        databaseURL: URL,
+        fileManager: FileManager
+    ) -> [(signalSource: String, location: URL)] {
+        var candidates = [(signalSource: String, location: URL)]()
+
+        if
+            let groupContainerURL = derivedGroupContainerURL(from: databaseURL),
+            let containerIdentifier = groupContainerURL.lastPathComponent.trimmedNonEmpty
+        {
+            candidates.append(
+                (
+                    signalSource: "group-container-preferences",
+                    location: groupContainerURL
+                        .appendingPathComponent("Library/Preferences")
+                        .appendingPathComponent("\(containerIdentifier).plist")
+                )
+            )
+        }
+
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        candidates.append(
+            (
+                signalSource: "group-container-preferences",
+                location: homeDirectory
+                    .appendingPathComponent("Library/Group Containers/72KVKW69K8.com.hindsightlabs.paprika.mac.v3/Library/Preferences/72KVKW69K8.com.hindsightlabs.paprika.mac.v3.plist")
+            )
+        )
+        candidates.append(
+            (
+                signalSource: "container-preferences",
+                location: homeDirectory
+                    .appendingPathComponent("Library/Containers/com.hindsightlabs.paprika.mac.v3/Data/Library/Preferences/com.hindsightlabs.paprika.mac.v3.plist")
+            )
+        )
+
+        var seenPaths = Set<String>()
+        return candidates.filter { seenPaths.insert($0.location.path).inserted }
+    }
+
+    private static func derivedGroupContainerURL(from databaseURL: URL) -> URL? {
+        let directory = databaseURL.deletingLastPathComponent()
+        guard directory.lastPathComponent == "Database" else {
+            return nil
+        }
+
+        let dataDirectory = directory.deletingLastPathComponent()
+        guard dataDirectory.lastPathComponent == "Data" else {
+            return nil
+        }
+
+        return dataDirectory.deletingLastPathComponent()
+    }
+
+    private static func candidateAppBundleURLs(fileManager: FileManager) -> [URL] {
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        return [
+            URL(fileURLWithPath: "/Applications/Paprika Recipe Manager 3.app"),
+            homeDirectory.appendingPathComponent("Applications/Paprika Recipe Manager 3.app"),
+        ]
+    }
+
+    private static func readPropertyList(at url: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+
+        guard
+            let propertyList = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+            let dictionary = propertyList as? [String: Any]
+        else {
+            return nil
+        }
+
+        return dictionary
+    }
+
+    private static func decodePaprikaLastSyncDate(_ value: Any?) -> Date? {
+        if let date = value as? Date {
+            return date
+        }
+
+        guard let text = value as? String else {
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.date(from: text)
+    }
+
+    private static func decodeCustomURLSchemes(from infoPlist: [String: Any]) -> [String] {
+        guard let urlTypes = infoPlist["CFBundleURLTypes"] as? [[String: Any]] else {
+            return []
+        }
+
+        return urlTypes
+            .flatMap { entry in
+                (entry["CFBundleURLSchemes"] as? [String]) ?? []
+            }
+            .filter { !$0.isEmpty }
     }
 
     private static func requireTable(_ name: String, in db: Database) throws {
@@ -600,5 +772,12 @@ private struct PaprikaSQLiteSchema: Sendable {
         guard availableColumns.contains(name) else {
             throw PaprikaSQLiteSourceError.missingColumn(table: table, column: name)
         }
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

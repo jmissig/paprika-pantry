@@ -81,6 +81,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
     public let queryOnly: Bool?
     public let journalMode: String?
     public let hasWriteAheadLogFiles: Bool?
+    public let paprikaSync: PaprikaSyncDetails?
+    public let appInstallation: PaprikaAppInstallation?
 
     public init(
         status: PantrySourceDoctorStatus,
@@ -93,7 +95,9 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         accessMode: String? = nil,
         queryOnly: Bool? = nil,
         journalMode: String? = nil,
-        hasWriteAheadLogFiles: Bool? = nil
+        hasWriteAheadLogFiles: Bool? = nil,
+        paprikaSync: PaprikaSyncDetails? = nil,
+        appInstallation: PaprikaAppInstallation? = nil
     ) {
         self.status = status
         self.message = message
@@ -106,6 +110,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         self.queryOnly = queryOnly
         self.journalMode = journalMode
         self.hasWriteAheadLogFiles = hasWriteAheadLogFiles
+        self.paprikaSync = paprikaSync
+        self.appInstallation = appInstallation
     }
 }
 
@@ -164,7 +170,9 @@ public struct ConfiguredPantrySourceProvider: PantrySourceProvider, @unchecked S
                     accessMode: source.inspection.accessMode,
                     queryOnly: source.inspection.queryOnly,
                     journalMode: source.inspection.journalMode,
-                    hasWriteAheadLogFiles: source.inspection.hasWriteAheadLogFiles
+                    hasWriteAheadLogFiles: source.inspection.hasWriteAheadLogFiles,
+                    paprikaSync: source.inspection.paprikaSync,
+                    appInstallation: source.inspection.appInstallation
                 )
             } catch let error as PaprikaSQLiteSourceError {
                 return PantrySourceDoctorSnapshot(

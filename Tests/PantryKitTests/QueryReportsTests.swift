@@ -153,12 +153,26 @@ final class QueryReportsTests: XCTestCase {
                 lastRecipeIngredientRun: featureRun,
                 lastSuccessfulRecipeIngredientRun: featureRun,
                 lastRecipeUsageRun: featureRun,
-                lastSuccessfulRecipeUsageRun: featureRun
+                lastSuccessfulRecipeUsageRun: featureRun,
+                sourceState: PantryStoredSourceState(
+                    sourceKind: .paprikaSQLite,
+                    sourceLocation: "/Users/test/Paprika.sqlite",
+                    observedAt: Date(timeIntervalSince1970: 1_712_736_120),
+                    paprikaSync: PaprikaSyncDetails(
+                        lastSyncAt: Date(timeIntervalSince1970: 1_712_736_060),
+                        signalSource: "group-container-preferences",
+                        signalLocation: "/Users/test/Library/Preferences/test.plist"
+                    )
+                )
             ),
             paths: makePaths(),
             now: Date(timeIntervalSince1970: 1_712_736_180)
         )
 
+        XCTAssertTrue(report.humanDescription.contains("source_state_captured: yes"))
+        XCTAssertTrue(report.humanDescription.contains("source_state_observed_at: 2024-04-10T08:02:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("captured_paprika_last_sync_at: 2024-04-10T08:01:00Z"))
+        XCTAssertTrue(report.humanDescription.contains("captured_paprika_sync_freshness: 2m old"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_ready: yes"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_documents: 12"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_last_run_status: success"))

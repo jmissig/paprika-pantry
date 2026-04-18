@@ -54,6 +54,7 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let lastSuccessfulRecipeIngredientRun: PantryIndexRun?
     public let lastRecipeUsageRun: PantryIndexRun?
     public let lastSuccessfulRecipeUsageRun: PantryIndexRun?
+    public let sourceState: PantryStoredSourceState?
 
     public init(
         recipeSearchDocumentCount: Int,
@@ -72,7 +73,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         lastRecipeIngredientRun: PantryIndexRun? = nil,
         lastSuccessfulRecipeIngredientRun: PantryIndexRun? = nil,
         lastRecipeUsageRun: PantryIndexRun? = nil,
-        lastSuccessfulRecipeUsageRun: PantryIndexRun? = nil
+        lastSuccessfulRecipeUsageRun: PantryIndexRun? = nil,
+        sourceState: PantryStoredSourceState? = nil
     ) {
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
         self.recipeFeatureCount = recipeFeatureCount
@@ -91,6 +93,7 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.lastSuccessfulRecipeIngredientRun = lastSuccessfulRecipeIngredientRun
         self.lastRecipeUsageRun = lastRecipeUsageRun
         self.lastSuccessfulRecipeUsageRun = lastSuccessfulRecipeUsageRun
+        self.sourceState = sourceState
     }
 
     public var recipeSearchReady: Bool {
@@ -221,6 +224,7 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let recipeIngredientTokenCount: Int
     public let recipeUsageStatsCount: Int
     public let linkedMealCount: Int
+    public let sourceState: PantryStoredSourceState?
 
     public init(
         startedAt: Date,
@@ -233,7 +237,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         recipeIngredientLineCount: Int = 0,
         recipeIngredientTokenCount: Int = 0,
         recipeUsageStatsCount: Int = 0,
-        linkedMealCount: Int = 0
+        linkedMealCount: Int = 0,
+        sourceState: PantryStoredSourceState? = nil
     ) {
         self.startedAt = startedAt
         self.finishedAt = finishedAt
@@ -246,6 +251,7 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.recipeIngredientTokenCount = recipeIngredientTokenCount
         self.recipeUsageStatsCount = recipeUsageStatsCount
         self.linkedMealCount = linkedMealCount
+        self.sourceState = sourceState
     }
 }
 
@@ -357,7 +363,8 @@ public struct PantryStore: @unchecked Sendable {
                 lastRecipeIngredientRun: try latestIndexRun(named: Self.recipeIngredientIndexName, db: db),
                 lastSuccessfulRecipeIngredientRun: try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db),
                 lastRecipeUsageRun: try latestIndexRun(named: Self.recipeUsageIndexName, db: db),
-                lastSuccessfulRecipeUsageRun: try latestSuccessfulIndexRun(named: Self.recipeUsageIndexName, db: db)
+                lastSuccessfulRecipeUsageRun: try latestSuccessfulIndexRun(named: Self.recipeUsageIndexName, db: db),
+                sourceState: try fetchStoredSourceState(db: db)
             )
         }
     }
@@ -877,6 +884,7 @@ public struct PantryStore: @unchecked Sendable {
             }
             let recipeUsageStatsCount = sortedUsageStats.count
             let linkedMealCount = usageStats.linkedMealCount
+            let sourceState = Self.makeStoredSourceState(from: source, observedAt: finishedAt)
             try await dbQueue.write { db in
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
                 try db.execute(sql: "DELETE FROM recipe_search_fts")
@@ -884,6 +892,7 @@ public struct PantryStore: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
                 try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
                 try db.execute(sql: "DELETE FROM recipe_usage_stats")
+                try db.execute(sql: "DELETE FROM source_state")
 
                 for document in sortedDocuments {
                     try db.execute(
@@ -1029,6 +1038,10 @@ public struct PantryStore: @unchecked Sendable {
                     )
                 }
 
+                if let sourceState {
+                    try writeStoredSourceState(sourceState, in: db)
+                }
+
                 try finishIndexRun(
                     id: searchRunID,
                     status: .success,
@@ -1074,7 +1087,8 @@ public struct PantryStore: @unchecked Sendable {
                 recipeIngredientLineCount: recipeIngredientLineCount,
                 recipeIngredientTokenCount: recipeIngredientTokenCount,
                 recipeUsageStatsCount: recipeUsageStatsCount,
-                linkedMealCount: linkedMealCount
+                linkedMealCount: linkedMealCount,
+                sourceState: sourceState
             )
         } catch {
             try finishIndexRun(
@@ -1107,6 +1121,101 @@ public struct PantryStore: @unchecked Sendable {
             )
             throw error
         }
+    }
+
+    private func fetchStoredSourceState(db: Database) throws -> PantryStoredSourceState? {
+        guard
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT
+                    source_kind,
+                    source_location,
+                    observed_at,
+                    paprika_last_sync_at,
+                    paprika_sync_signal_source,
+                    paprika_sync_signal_location
+                FROM source_state
+                ORDER BY observed_at DESC
+                LIMIT 1
+                """
+            )
+        else {
+            return nil
+        }
+
+        let sourceKindRawValue: String = row["source_kind"]
+        guard let sourceKind = PantrySourceKind(rawValue: sourceKindRawValue) else {
+            return nil
+        }
+
+        let paprikaLastSyncAt: String? = row["paprika_last_sync_at"]
+        let paprikaSyncSignalSource: String? = row["paprika_sync_signal_source"]
+        let paprikaSyncSignalLocation: String? = row["paprika_sync_signal_location"]
+        let paprikaSync: PaprikaSyncDetails?
+        if
+            let paprikaLastSyncAt,
+            let lastSyncAt = DatabaseTimestamp.decode(paprikaLastSyncAt),
+            let paprikaSyncSignalSource,
+            let paprikaSyncSignalLocation
+        {
+            paprikaSync = PaprikaSyncDetails(
+                lastSyncAt: lastSyncAt,
+                signalSource: paprikaSyncSignalSource,
+                signalLocation: paprikaSyncSignalLocation
+            )
+        } else {
+            paprikaSync = nil
+        }
+
+        return PantryStoredSourceState(
+            sourceKind: sourceKind,
+            sourceLocation: row["source_location"],
+            observedAt: DatabaseTimestamp.decodeRequired(row["observed_at"]),
+            paprikaSync: paprikaSync
+        )
+    }
+
+    private static func makeStoredSourceState(
+        from source: any PantrySource,
+        observedAt: Date
+    ) -> PantryStoredSourceState? {
+        guard let source = source as? PaprikaSQLiteSource else {
+            return nil
+        }
+
+        return PantryStoredSourceState(
+            sourceKind: .paprikaSQLite,
+            sourceLocation: source.databaseURL.path,
+            observedAt: observedAt,
+            paprikaSync: source.inspection.paprikaSync
+        )
+    }
+
+    private func writeStoredSourceState(
+        _ sourceState: PantryStoredSourceState,
+        in db: Database
+    ) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO source_state (
+                source_kind,
+                source_location,
+                observed_at,
+                paprika_last_sync_at,
+                paprika_sync_signal_source,
+                paprika_sync_signal_location
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            arguments: [
+                sourceState.sourceKind.rawValue,
+                sourceState.sourceLocation,
+                DatabaseTimestamp.encode(sourceState.observedAt),
+                sourceState.paprikaSync.map { DatabaseTimestamp.encode($0.lastSyncAt) },
+                sourceState.paprikaSync?.signalSource,
+                sourceState.paprikaSync?.signalLocation,
+            ]
+        )
     }
 
     private func latestIndexRun(named indexName: String, db: Database) throws -> PantryIndexRun? {

@@ -40,6 +40,7 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertTrue(indexes.contains("recipe_usage_stats_on_derived_at"))
             XCTAssertTrue(indexes.contains("recipe_usage_stats_on_times_cooked"))
             XCTAssertTrue(indexes.contains("recipe_usage_stats_on_last_cooked_at"))
+            XCTAssertTrue(indexes.contains("source_state_on_observed_at"))
             XCTAssertTrue(indexes.contains("index_runs_on_started_at"))
             XCTAssertTrue(indexes.contains("index_runs_on_status"))
             XCTAssertTrue(indexes.contains("index_runs_on_index_name"))
@@ -49,6 +50,7 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertTrue(try db.tableExists("recipe_ingredient_lines"))
             XCTAssertTrue(try db.tableExists("recipe_ingredient_tokens"))
             XCTAssertTrue(try db.tableExists("recipe_usage_stats"))
+            XCTAssertTrue(try db.tableExists("source_state"))
             XCTAssertTrue(try db.tableExists("index_runs"))
             XCTAssertFalse(try db.tableExists("recipes"))
             XCTAssertFalse(try db.tableExists("recipe_categories"))
@@ -76,6 +78,7 @@ final class PantryStoreTests: XCTestCase {
             XCTAssertFalse(try db.tableExists("recipe_categories"))
             XCTAssertFalse(try db.tableExists("sync_runs"))
             XCTAssertTrue(try db.tableExists("recipe_search_documents"))
+            XCTAssertTrue(try db.tableExists("source_state"))
         }
     }
 

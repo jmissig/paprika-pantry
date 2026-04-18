@@ -13,9 +13,12 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let queryOnly: Bool?
     public let journalMode: String?
     public let hasWriteAheadLogFiles: Bool?
+    public let paprikaSync: PaprikaSyncDetails?
+    public let paprikaSyncFreshnessSeconds: Int?
+    public let appInstallation: PaprikaAppInstallation?
     public let paths: PantryPathReport
 
-    public init(snapshot: PantrySourceDoctorSnapshot, paths: PantryPaths) {
+    public init(snapshot: PantrySourceDoctorSnapshot, paths: PantryPaths, now: Date) {
         self.command = "source doctor"
         self.status = snapshot.status.rawValue
         self.message = snapshot.message
@@ -28,6 +31,11 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.queryOnly = snapshot.queryOnly
         self.journalMode = snapshot.journalMode
         self.hasWriteAheadLogFiles = snapshot.hasWriteAheadLogFiles
+        self.paprikaSync = snapshot.paprikaSync
+        self.paprikaSyncFreshnessSeconds = snapshot.paprikaSync.map {
+            max(0, Int(now.timeIntervalSince($0.lastSyncAt)))
+        }
+        self.appInstallation = snapshot.appInstallation
         self.paths = paths.report
     }
 
@@ -73,6 +81,12 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("wal_files: \(hasWriteAheadLogFiles ? "present" : "absent")")
         }
 
+        lines.append(contentsOf: renderedPaprikaSyncLines(
+            sync: paprikaSync,
+            prefix: "paprika",
+            freshnessSeconds: paprikaSyncFreshnessSeconds
+        ))
+        lines.append(contentsOf: renderedPaprikaAppInstallationLines(appInstallation))
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
@@ -249,6 +263,8 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let indexStatus: String
     public let sourceKind: PantrySourceKind?
     public let sourceLocation: String?
+    public let paprikaSync: PaprikaSyncDetails?
+    public let paprikaSyncFreshnessSeconds: Int?
     public let recipeSearchDocumentCount: Int
     public let recipeSearchFreshnessSeconds: Int?
     public let lastRecipeSearchRunStatus: String?
@@ -304,6 +320,10 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.indexStatus = indexStatus
         self.sourceKind = sourceSnapshot.sourceKind
         self.sourceLocation = sourceSnapshot.sourceLocation
+        self.paprikaSync = sourceSnapshot.paprikaSync
+        self.paprikaSyncFreshnessSeconds = sourceSnapshot.paprikaSync.map {
+            max(0, Int(now.timeIntervalSince($0.lastSyncAt)))
+        }
         self.recipeSearchDocumentCount = indexStats.recipeSearchDocumentCount
         self.recipeSearchFreshnessSeconds = indexFreshnessSeconds
         self.lastRecipeSearchRunStatus = indexStats.lastRecipeSearchRun?.status.rawValue
@@ -332,6 +352,12 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("recipe_search_last_run_status: \(lastRecipeSearchRunStatus)")
         }
 
+        lines.append(contentsOf: renderedPaprikaSyncLines(
+            sync: paprikaSync,
+            prefix: "paprika",
+            freshnessSeconds: paprikaSyncFreshnessSeconds
+        ))
+
         if let recipeSearchFreshnessSeconds {
             lines.append("recipe_search_freshness: \(renderedDuration(seconds: recipeSearchFreshnessSeconds)) old")
         } else {
@@ -345,6 +371,67 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
+}
+
+private func renderedPaprikaSyncLines(
+    sync: PaprikaSyncDetails?,
+    prefix: String,
+    freshnessSeconds: Int?
+) -> [String] {
+    guard let sync else {
+        return [
+            "\(prefix)_sync_freshness: unavailable",
+        ]
+    }
+
+    var lines = [
+        "\(prefix)_last_sync_at: \(renderedTimestamp(sync.lastSyncAt))",
+        "\(prefix)_sync_signal_source: \(sync.signalSource)",
+        "\(prefix)_sync_signal_location: \(sync.signalLocation)",
+    ]
+
+    if let freshnessSeconds {
+        lines.insert("\(prefix)_sync_freshness: \(renderedDuration(seconds: freshnessSeconds)) old", at: 1)
+    } else {
+        lines.insert("\(prefix)_sync_freshness: unavailable", at: 1)
+    }
+
+    return lines
+}
+
+private func renderedPaprikaAppInstallationLines(
+    _ appInstallation: PaprikaAppInstallation?
+) -> [String] {
+    guard let appInstallation else {
+        return [
+            "paprika_app_bundle: unavailable",
+            "launch_for_sync_investigation: no Paprika app bundle was found in standard local app locations",
+        ]
+    }
+
+    var lines = [
+        "paprika_app_bundle: \(appInstallation.appBundlePath)",
+    ]
+
+    if let bundleIdentifier = appInstallation.bundleIdentifier, !bundleIdentifier.isEmpty {
+        lines.append("paprika_app_bundle_identifier: \(bundleIdentifier)")
+    }
+
+    if let executablePath = appInstallation.executablePath, !executablePath.isEmpty {
+        lines.append("paprika_app_executable: \(executablePath)")
+    }
+
+    lines.append("paprika_app_executable_present: \(appInstallation.executablePresent ? "yes" : "no")")
+
+    if appInstallation.customURLSchemes.isEmpty {
+        lines.append("paprika_app_url_schemes: none")
+        lines.append("launch_for_sync_investigation: no custom URL scheme was found; manual app open is the only obvious on-disk sync nudge")
+    } else {
+        lines.append("paprika_app_url_schemes: \(appInstallation.customURLSchemes.joined(separator: ", "))")
+        lines.append("launch_for_sync_investigation: custom app URL schemes exist, but sync-on-open remains unverified")
+    }
+
+    return lines
 }
 
 private func renderedCookbookName(_ aggregate: CookbookAggregateSummary) -> String {

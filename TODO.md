@@ -12,6 +12,10 @@ Current architecture direction:
 - use a sidecar SQLite database only for things we own: indexing, denormalized helper tables, derived facts, analysis artifacts, and refresh bookkeeping
 - keep sidecar outputs evidence-first and inspectable, not opaque magic
 - design the CLI as a good tool for an LLM: keep reasoning and fuzzy interpretation in the LLM, while the CLI exposes reliable filters, evidence, thresholds, and inspectable outputs
+- consider a clean explicit output selector like `--format text | table | json | csv` for surfaces where multiple renderings are useful
+- default to human-friendly output, with structured/machine-oriented formats requested explicitly
+- render empty results, missing fields, and unknown values cleanly and predictably across formats
+- treat `text | table | json | csv` as a promising cross-tool CLI pattern, not just a one-off paprika-pantry choice
 - prefer meaningful default ranking over alphabetical ordering where possible; search and discovery surfaces should usually try to surface the best candidates first using evidence like rating, usage, or other strong signals, with usage acting as the primary tie-breaker ahead of alphabetical ordering when available
 - remove now-stale mirror-first and remote-auth-as-product planning
 
@@ -94,8 +98,8 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [x] Add the first worthwhile sidecar-backed feature, recipe search
 - [x] Make direct-vs-derived provenance clearer in reports where it matters
 - [x] Add staleness/freshness reporting for sidecar-derived answers
-- [ ] Figure out whether the real Paprika database exposes a reliable last-sync signal, and if so capture/include it in sidecar state and reporting
-- [ ] Figure out whether there is a safe way to launch/open the real Paprika app to try to trigger a sync when needed
+- [x] Surface a reliable on-disk Paprika last-sync signal from local preferences and capture/include it in sidecar state and reporting
+- [x] Investigate launch/open surfaces for Paprika Mac and report the findings conservatively instead of automating a flaky sync trigger
 
 ### Phase D — derived recipe features
 
@@ -149,6 +153,18 @@ These are now legacy direction and should be removed or reshaped around the new 
 - [ ] Surface usage stats in `recipes show`
 - [ ] Add recipe query/report surfaces that can sort or rank by usage
 - [ ] Keep richer historical fields like `first_cooked_at` as a much-later follow-up, not part of the first usage-stats slice
+
+### Phase K — deep links / handoff links
+
+- [ ] Figure out the real supported Paprika deep-link surface, especially on iOS
+- [ ] When `paprika-pantry` shows an individual recipe, include a link/handoff target by default when we have one
+- [ ] Prefer recipe-detail output to carry the most useful direct-open link instead of making link generation a separate extra step
+- [ ] If direct open-to-existing-recipe links are not reliable, fall back to the best practical handoff path rather than omitting links entirely
+
+### Phase L — CLI surface polish
+
+- [ ] Add a first-class `doctor` command for discovery/runtime/source/sidecar diagnostics
+- [ ] Later, consider explicit `--columns` support for table/csv-like outputs where scan shape matters
 
 ## Explicitly not now
 
