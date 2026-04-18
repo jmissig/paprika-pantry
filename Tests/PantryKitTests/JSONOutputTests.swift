@@ -3,17 +3,20 @@ import XCTest
 
 final class JSONOutputTests: XCTestCase {
     func testRenderProducesStructuredJSON() throws {
-        let report = CommandReport(
-            command: "groceries list",
-            status: "stub",
-            plannedPhase: "Later",
-            message: "Direct grocery reads are intentionally deferred until after the first recipe read slice.",
-            details: [:],
-            paths: PantryPathReport(
-                home: "/tmp/pantry",
-                config: "/tmp/pantry/config.json",
-                database: "/tmp/pantry/pantry.sqlite"
-            )
+        let report = GroceriesListReport(
+            groceries: [
+                GroceryItemSummary(
+                    uid: "GROC1",
+                    name: "Avocados",
+                    quantity: "2",
+                    instruction: "ripe",
+                    groceryListName: "Main",
+                    aisleName: "Produce",
+                    ingredientName: "avocado",
+                    recipeName: nil,
+                    isPurchased: false
+                )
+            ]
         )
 
         let rendered = try JSONOutput.render(report)
@@ -21,8 +24,9 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(rendered.hasSuffix("\n"))
         XCTAssertTrue(rendered.contains("\"command\""))
         XCTAssertTrue(rendered.contains("\"groceries list\""))
-        XCTAssertTrue(rendered.contains("\"paths\""))
-        XCTAssertTrue(rendered.contains("\"database\""))
+        XCTAssertTrue(rendered.contains("\"groceries\""))
+        XCTAssertTrue(rendered.contains("\"groceryCount\" : 1"))
+        XCTAssertTrue(rendered.contains("\"groceryListName\" : \"Main\""))
         XCTAssertFalse(rendered.contains("\\/"))
     }
 

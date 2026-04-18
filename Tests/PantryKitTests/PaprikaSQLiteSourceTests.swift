@@ -19,6 +19,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let stubs = try await source.listRecipeStubs()
         let categories = try await source.listRecipeCategories()
         let meals = try await source.listMeals()
+        let groceryItems = try await source.listGroceryItems()
         let recipe = try await source.fetchRecipe(uid: "AAA")
 
         XCTAssertEqual(
@@ -62,6 +63,45 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     recipeUID: nil,
                     recipeName: nil,
                     isDeleted: true
+                ),
+            ]
+        )
+        XCTAssertEqual(
+            groceryItems,
+            [
+                SourceGroceryItem(
+                    uid: "GROC3",
+                    name: "Deleted Item",
+                    quantity: nil,
+                    instruction: nil,
+                    groceryListName: "Main",
+                    aisleName: nil,
+                    ingredientName: nil,
+                    recipeName: nil,
+                    isPurchased: false,
+                    isDeleted: true
+                ),
+                SourceGroceryItem(
+                    uid: "GROC1",
+                    name: "Avocados",
+                    quantity: "2",
+                    instruction: "ripe",
+                    groceryListName: "Main",
+                    aisleName: "Produce",
+                    ingredientName: "avocado",
+                    recipeName: nil,
+                    isPurchased: false
+                ),
+                SourceGroceryItem(
+                    uid: "GROC2",
+                    name: "pasta",
+                    quantity: "1 box",
+                    instruction: nil,
+                    groceryListName: "Main",
+                    aisleName: "Pantry",
+                    ingredientName: "pasta",
+                    recipeName: "Pantry Pasta",
+                    isPurchased: true
                 ),
             ]
         )
@@ -181,6 +221,43 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         )
     }
 
+    func testGroceryReadServiceListsGroceriesDirectlyFromPaprikaSQLiteSource() throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+        let service = try GroceryReadService(source: source)
+
+        let groceries = try BlockingAsync.run {
+            try await service.listGroceries()
+        }
+
+        XCTAssertEqual(
+            groceries,
+            [
+                GroceryItemSummary(
+                    uid: "GROC1",
+                    name: "Avocados",
+                    quantity: "2",
+                    instruction: "ripe",
+                    groceryListName: "Main",
+                    aisleName: "Produce",
+                    ingredientName: "avocado",
+                    recipeName: nil,
+                    isPurchased: false
+                ),
+                GroceryItemSummary(
+                    uid: "GROC2",
+                    name: "pasta",
+                    quantity: "1 box",
+                    instruction: nil,
+                    groceryListName: "Main",
+                    aisleName: "Pantry",
+                    ingredientName: "pasta",
+                    recipeName: "Pantry Pasta",
+                    isPurchased: true
+                ),
+            ]
+        )
+    }
+
     func testRecipeIndexesRebuildUsesDirectPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let store = try makeStore()
@@ -280,6 +357,39 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ZNAME VARCHAR
                 )
                 """)
+            try db.execute(sql: """
+                CREATE TABLE ZGROCERYLIST (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZISDEFAULT INTEGER,
+                    ZNAME VARCHAR,
+                    ZSTATUS VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZGROCERYAISLE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZNAME VARCHAR,
+                    ZSTATUS VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZGROCERYITEM (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZPURCHASED INTEGER,
+                    ZAISLE INTEGER,
+                    ZLIST INTEGER,
+                    ZAISLENAME VARCHAR,
+                    ZINGREDIENT VARCHAR,
+                    ZINSTRUCTION VARCHAR,
+                    ZNAME VARCHAR,
+                    ZQUANTITY VARCHAR,
+                    ZRECIPENAME VARCHAR,
+                    ZSTATUS VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
 
             try db.execute(sql: """
                 INSERT INTO ZRECIPECATEGORY (Z_PK, ZNAME, ZSTATUS, ZUID)
@@ -314,6 +424,23 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     (1, 'MEAL1', '', 765988800, 1, 1, ''),
                     (2, 'MEAL2', 'Pantry Pasta', 766077000, 2, NULL, ''),
                     (3, 'MEAL3', 'Deleted Meal', 765968400, 1, NULL, 'deleted')
+                """)
+            try db.execute(sql: """
+                INSERT INTO ZGROCERYLIST (Z_PK, ZISDEFAULT, ZNAME, ZSTATUS, ZUID)
+                VALUES (1, 1, 'Main', '', 'LIST1')
+                """)
+            try db.execute(sql: """
+                INSERT INTO ZGROCERYAISLE (Z_PK, ZNAME, ZSTATUS, ZUID)
+                VALUES
+                    (1, 'Produce', '', 'AISLE1'),
+                    (2, 'Pantry', '', 'AISLE2')
+                """)
+            try db.execute(sql: """
+                INSERT INTO ZGROCERYITEM (Z_PK, ZPURCHASED, ZAISLE, ZLIST, ZAISLENAME, ZINGREDIENT, ZINSTRUCTION, ZNAME, ZQUANTITY, ZRECIPENAME, ZSTATUS, ZUID)
+                VALUES
+                    (1, 0, 1, 1, '', 'avocado', 'ripe', 'Avocados', '2', NULL, '', 'GROC1'),
+                    (2, 1, 2, 1, '', 'pasta', NULL, '', '1 box', 'Pantry Pasta', '', 'GROC2'),
+                    (3, 0, NULL, 1, NULL, NULL, NULL, 'Deleted Item', NULL, NULL, 'deleted', 'GROC3')
                 """)
         }
 
