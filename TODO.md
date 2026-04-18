@@ -148,10 +148,10 @@ These are now legacy direction and should be removed or reshaped around the new 
 
 ### Phase J — linked meal history and recipe usage stats
 
-- [ ] Build sidecar-derived recipe usage stats from linked meal history only
-- [ ] Add per-recipe usage fields like `times_cooked` and `last_cooked_at`
-- [ ] Surface usage stats in `recipes show`
-- [ ] Add recipe query/report surfaces that can sort or rank by usage
+- [x] Build sidecar-derived recipe usage stats from linked meal history only
+- [x] Add per-recipe usage fields like `times_cooked` and `last_cooked_at`
+- [x] Surface usage stats in `recipes show`
+- [x] Add recipe query/report surfaces that can sort or rank by usage
 - [ ] Keep richer historical fields like `first_cooked_at` as a much-later follow-up, not part of the first usage-stats slice
 
 ### Phase K — deep links / handoff links
