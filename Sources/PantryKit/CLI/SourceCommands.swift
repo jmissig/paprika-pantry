@@ -9,10 +9,57 @@ public struct SourceCommand: ParsableCommand {
             SourceDoctorCommand.self,
             SourceStatsCommand.self,
             SourceCookbooksCommand.self,
+            SourceLaunchAppCommand.self,
         ]
     )
 
     public init() {}
+}
+
+public struct SourceLaunchAppCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "launch-app",
+        abstract: "Launch the local Paprika app. This does not sync directly, but Paprika may sync on launch."
+    )
+
+    public init() {}
+
+    public mutating func run() throws {
+        let context = try makeContext()
+        let snapshot = try context.makeSourceProvider().diagnose()
+
+        guard let appInstallation = snapshot.appInstallation else {
+            throw ValidationError("No local Paprika app bundle was found in standard app locations.")
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-a", appInstallation.appBundlePath]
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            throw ValidationError("Failed to launch Paprika.app via `open -a`. \(error.localizedDescription)")
+        }
+
+        guard process.terminationStatus == 0 else {
+            throw ValidationError("Launching Paprika.app exited with status \(process.terminationStatus).")
+        }
+
+        try context.write(
+            AppLaunchReport(
+                command: "source launch-app",
+                status: "launched",
+                message: "Launched the local Paprika app.",
+                effect: "This does not trigger a direct sync command. It only opens Paprika, which may sync as part of normal app launch behavior.",
+                appBundlePath: appInstallation.appBundlePath,
+                bundleIdentifier: appInstallation.bundleIdentifier,
+                launchedVia: "open -a",
+                paths: context.paths
+            )
+        )
+    }
 }
 
 public struct SourceDoctorCommand: PantryLeafCommand {
