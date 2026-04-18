@@ -7,6 +7,7 @@ public struct SourceCommand: ParsableCommand {
         abstract: "Inspect direct Paprika SQLite source readiness.",
         subcommands: [
             SourceDoctorCommand.self,
+            SourceLastSyncTimeCommand.self,
             SourceStatsCommand.self,
             SourceCookbooksCommand.self,
             SourceLaunchAppCommand.self,
@@ -22,9 +23,26 @@ public struct SourceLaunchAppCommand: PantryLeafCommand {
         abstract: "Launch the local Paprika app. This does not sync directly, but Paprika may sync on launch."
     )
 
+    @Flag(name: .customLong("wait-for-sync"), help: "After launching, wait for the observed Paprika last-sync timestamp to advance.")
+    public var waitForSync = false
+
+    @Option(name: .customLong("timeout-seconds"), help: "Maximum seconds to wait for an observed sync advance after launch.")
+    public var timeoutSeconds: Int = 180
+
+    @Option(name: .customLong("poll-interval"), help: "Seconds between sync-state checks while waiting.")
+    public var pollInterval: Double = 2
+
     public init() {}
 
     public mutating func run() throws {
+        guard timeoutSeconds >= 0 else {
+            throw ValidationError("--timeout-seconds must be zero or greater.")
+        }
+
+        guard pollInterval > 0 else {
+            throw ValidationError("--poll-interval must be greater than zero.")
+        }
+
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
 
@@ -47,18 +65,112 @@ public struct SourceLaunchAppCommand: PantryLeafCommand {
             throw ValidationError("Launching Paprika.app exited with status \(process.terminationStatus).")
         }
 
+        let initialPaprikaSync = snapshot.paprikaSync
+        var observedPaprikaSync = snapshot.paprikaSync
+        var syncAdvanced: Bool? = nil
+        var status = "launched"
+        var message = "Launched the local Paprika app."
+        var effect = "This does not trigger a direct sync command. It only opens Paprika, which may sync as part of normal app launch behavior."
+        var observedSyncFreshnessSeconds: Int? = nil
+
+        if waitForSync {
+            let waitResult = try waitForPaprikaSyncAdvance(
+                context: context,
+                initialPaprikaSync: initialPaprikaSync,
+                timeoutSeconds: timeoutSeconds,
+                pollInterval: pollInterval
+            )
+            observedPaprikaSync = waitResult.snapshot.paprikaSync
+            syncAdvanced = waitResult.syncAdvanced
+            observedSyncFreshnessSeconds = waitResult.snapshot.paprikaSync.map {
+                max(0, Int(waitResult.observedAt.timeIntervalSince($0.lastSyncAt)))
+            }
+
+            if waitResult.syncAdvanced {
+                status = "launched-and-sync-advanced"
+                message = "Launched the local Paprika app and observed the Paprika last-sync timestamp advance."
+                effect = "This still does not call a direct sync API. It launches Paprika, then waits for the locally observed last-sync marker to move forward."
+            } else {
+                status = "launched-no-sync-advance-observed"
+                message = "Launched the local Paprika app, but did not observe the Paprika last-sync timestamp advance before timeout."
+                effect = "This still does not call a direct sync API. It launches Paprika and watches local metadata, which may lag or remain unchanged if Paprika was already current."
+            }
+        }
+
         try context.write(
             AppLaunchReport(
                 command: "source launch-app",
-                status: "launched",
-                message: "Launched the local Paprika app.",
-                effect: "This does not trigger a direct sync command. It only opens Paprika, which may sync as part of normal app launch behavior.",
+                status: status,
+                message: message,
+                effect: effect,
                 appBundlePath: appInstallation.appBundlePath,
                 bundleIdentifier: appInstallation.bundleIdentifier,
                 launchedVia: "open -a",
+                waitedForSync: waitForSync,
+                waitTimeoutSeconds: waitForSync ? timeoutSeconds : nil,
+                pollIntervalSeconds: waitForSync ? pollInterval : nil,
+                initialPaprikaSync: waitForSync ? initialPaprikaSync : nil,
+                observedPaprikaSync: waitForSync ? observedPaprikaSync : nil,
+                syncAdvanced: syncAdvanced,
+                observedSyncFreshnessSeconds: observedSyncFreshnessSeconds,
                 paths: context.paths
             )
         )
+    }
+}
+
+public struct SourceLastSyncTimeCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "last-sync-time",
+        abstract: "Show the last observed Paprika sync completion time from local metadata."
+    )
+
+    public init() {}
+
+    public mutating func run() throws {
+        let context = try makeContext()
+        let snapshot = try context.makeSourceProvider().diagnose()
+        try context.write(SourceLastSyncReport(snapshot: snapshot, paths: context.paths, now: Date()))
+    }
+}
+
+private func waitForPaprikaSyncAdvance(
+    context: CommandContext,
+    initialPaprikaSync: PaprikaSyncDetails?,
+    timeoutSeconds: Int,
+    pollInterval: Double
+) throws -> (snapshot: PantrySourceDoctorSnapshot, observedAt: Date, syncAdvanced: Bool) {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
+    var latestSnapshot = try context.makeSourceProvider().diagnose()
+    var observedAt = Date()
+
+    while true {
+        observedAt = Date()
+        latestSnapshot = try context.makeSourceProvider().diagnose()
+
+        if paprikaSyncHasAdvanced(initial: initialPaprikaSync, observed: latestSnapshot.paprikaSync) {
+            return (latestSnapshot, observedAt, true)
+        }
+
+        if observedAt >= deadline {
+            return (latestSnapshot, observedAt, false)
+        }
+
+        Thread.sleep(forTimeInterval: min(pollInterval, max(0, deadline.timeIntervalSince(observedAt))))
+    }
+}
+
+private func paprikaSyncHasAdvanced(
+    initial: PaprikaSyncDetails?,
+    observed: PaprikaSyncDetails?
+) -> Bool {
+    switch (initial, observed) {
+    case (.none, .some):
+        return true
+    case let (.some(initial), .some(observed)):
+        return observed.lastSyncAt > initial.lastSyncAt
+    default:
+        return false
     }
 }
 

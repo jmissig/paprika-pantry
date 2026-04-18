@@ -373,7 +373,7 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
     }
 }
 
-private func renderedPaprikaSyncLines(
+func renderedPaprikaSyncLines(
     sync: PaprikaSyncDetails?,
     prefix: String,
     freshnessSeconds: Int?
@@ -399,7 +399,7 @@ private func renderedPaprikaSyncLines(
     return lines
 }
 
-private func renderedPaprikaAppInstallationLines(
+func renderedPaprikaAppInstallationLines(
     _ appInstallation: PaprikaAppInstallation?
 ) -> [String] {
     guard let appInstallation else {
@@ -434,7 +434,7 @@ private func renderedPaprikaAppInstallationLines(
     return lines
 }
 
-private func renderedCookbookName(_ aggregate: CookbookAggregateSummary) -> String {
+func renderedCookbookName(_ aggregate: CookbookAggregateSummary) -> String {
     if let sourceName = aggregate.sourceName, !sourceName.isEmpty {
         return sourceName
     }
@@ -442,7 +442,7 @@ private func renderedCookbookName(_ aggregate: CookbookAggregateSummary) -> Stri
     return "(unlabeled source/cookbook)"
 }
 
-private func renderedRatingDistribution(_ distribution: CookbookRatingDistribution) -> String {
+func renderedRatingDistribution(_ distribution: CookbookRatingDistribution) -> String {
     let parts = [
         (5, distribution.fiveStarCount),
         (4, distribution.fourStarCount),
@@ -456,6 +456,6 @@ private func renderedRatingDistribution(_ distribution: CookbookRatingDistributi
     return parts.joined(separator: ",")
 }
 
-private func renderedDecimal(_ value: Double) -> String {
+func renderedDecimal(_ value: Double) -> String {
     String(format: "%.2f", value)
 }
