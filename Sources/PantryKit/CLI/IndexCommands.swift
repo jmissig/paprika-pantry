@@ -8,6 +8,7 @@ public struct IndexCommand: ParsableCommand {
         subcommands: [
             IndexStatsCommand.self,
             IndexRebuildCommand.self,
+            IndexUpdateCommand.self,
         ]
     )
 
@@ -36,12 +37,34 @@ public struct IndexRebuildCommand: PantryLeafCommand {
 
     public init() {}
     public mutating func run() throws {
-        let context = try makeContext()
-        let source = try context.makeSource()
-        let store = try context.makeSidecarStore()
-        let summary = try BlockingAsync.run {
-            try await store.rebuildRecipeIndexes(from: source)
-        }
-        try context.write(IndexRebuildReport(summary: summary, paths: context.paths))
+        try runIndexRefresh()
+    }
+}
+
+public struct IndexUpdateCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Update owned sidecar indexes from the configured local Paprika source. Currently equivalent to `index rebuild`, but kept as a stable surface for future partial updates."
+    )
+
+    public init() {}
+    public mutating func run() throws {
+        try runIndexRefresh()
+    }
+}
+
+private func performIndexRefresh(using command: some PantryLeafCommand) throws {
+    let context = try command.makeContext()
+    let source = try context.makeSource()
+    let store = try context.makeSidecarStore()
+    let summary = try BlockingAsync.run {
+        try await store.rebuildRecipeIndexes(from: source)
+    }
+    try context.write(IndexRebuildReport(summary: summary, paths: context.paths))
+}
+
+private extension PantryLeafCommand {
+    func runIndexRefresh() throws {
+        try performIndexRefresh(using: self)
     }
 }

@@ -47,14 +47,14 @@ To refresh paprika-pantry's local index after Paprika has synced, do:
 
 ```bash
 paprika-pantry source last-sync-time
-paprika-pantry index rebuild
+paprika-pantry index update
 ```
 
 On Macs where Paprika is not being actively used, you can nudge a sync first, then rebuild:
 
 ```bash
 paprika-pantry source launch-app --wait-for-sync
-paprika-pantry index rebuild
+paprika-pantry index update
 ```
 
 After that, the usual commands are things like:
@@ -127,6 +127,7 @@ paprika-pantry pantry list
 paprika-pantry pantry list --format csv
 
 paprika-pantry index stats
+paprika-pantry index update
 paprika-pantry index rebuild
 paprika-pantry doctor
 paprika-pantry doctor --format json
