@@ -43,7 +43,7 @@ final class JSONOutputTests: XCTestCase {
                     updatedAt: "2026-04-02 10:00:00",
                     derivedFeatures: RecipeDerivedFeatures(
                         uid: "AAA",
-                        sourceRemoteHash: "hash-aaa",
+                        sourceFingerprint: "hash-aaa",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 10,
                         cookTimeMinutes: 20,
@@ -112,7 +112,7 @@ final class JSONOutputTests: XCTestCase {
             sourceSnapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
                 message: "The configured pantry source is ready for direct read-only Paprika access.",
-                sourceKind: .paprikaSQLite,
+                sourceType: PantrySourceType.paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Paprika.sqlite",

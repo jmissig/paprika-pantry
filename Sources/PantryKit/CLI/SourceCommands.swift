@@ -249,7 +249,7 @@ public struct SourceCookbooksCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         let indexStats = try store.indexStats()
 
         guard indexStats.recipeSearchReady else {

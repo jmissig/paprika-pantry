@@ -23,7 +23,7 @@ public struct IndexStatsCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         try context.write(IndexStatsReport(stats: try store.indexStats(), paths: context.paths, now: Date()))
     }
 }
@@ -38,7 +38,7 @@ public struct IndexRebuildCommand: PantryLeafCommand {
     public mutating func run() throws {
         let context = try makeContext()
         let source = try context.makeSource()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         let summary = try BlockingAsync.run {
             try await store.rebuildRecipeIndexes(from: source)
         }

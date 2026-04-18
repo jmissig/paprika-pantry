@@ -4,7 +4,7 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let command: String
     public let status: String
     public let message: String
-    public let sourceKind: PantrySourceKind?
+    public let sourceType: String?
     public let displayName: String?
     public let implementation: String?
     public let sourceLocation: String?
@@ -22,7 +22,7 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.command = "source doctor"
         self.status = snapshot.status.rawValue
         self.message = snapshot.message
-        self.sourceKind = snapshot.sourceKind
+        self.sourceType = snapshot.sourceType
         self.displayName = snapshot.displayName
         self.implementation = snapshot.implementation
         self.sourceLocation = snapshot.sourceLocation
@@ -45,8 +45,8 @@ public struct SourceDoctorReport: ConsoleRenderable, Equatable, Sendable {
             "status: \(status)",
         ]
 
-        if let sourceKind {
-            lines.append("kind: \(sourceKind.rawValue)")
+        if let sourceType, !sourceType.isEmpty {
+            lines.append("source_type: \(sourceType)")
         }
 
         if let displayName, !displayName.isEmpty {
@@ -301,7 +301,7 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
     public let message: String
     public let sourceStatus: String
     public let indexStatus: String
-    public let sourceKind: PantrySourceKind?
+    public let sourceType: String?
     public let displayName: String?
     public let implementation: String?
     public let sourceLocation: String?
@@ -366,7 +366,7 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
         self.message = message
         self.sourceStatus = sourceSnapshot.status.rawValue
         self.indexStatus = indexStatus
-        self.sourceKind = sourceSnapshot.sourceKind
+        self.sourceType = sourceSnapshot.sourceType
         self.displayName = sourceSnapshot.displayName
         self.implementation = sourceSnapshot.implementation
         self.sourceLocation = sourceSnapshot.sourceLocation
@@ -396,8 +396,8 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_search_documents: \(recipeSearchDocumentCount)",
         ]
 
-        if let sourceKind {
-            lines.append("source_kind: \(sourceKind.rawValue)")
+        if let sourceType, !sourceType.isEmpty {
+            lines.append("source_type: \(sourceType)")
         }
 
         if let displayName, !displayName.isEmpty {

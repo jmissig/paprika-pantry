@@ -94,7 +94,7 @@ public struct RecipesListCommand: PantryLeafCommand {
             maxIngredientLineCount: maxIngredientLines
         )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         let indexStats = try store.indexStats()
         let now = Date()
         let matchingRecipeUIDs: Set<String>?
@@ -184,7 +184,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         let derivedFeatures = try store.fetchRecipeFeatures(uid: recipe.uid)
         let usageStats = try store.fetchRecipeUsageStats(uid: recipe.uid)
         let indexStats = try store.indexStats()
@@ -275,7 +275,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         guard try store.indexStats().recipeSearchReady else {
             throw ValidationError("Recipe search index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -358,7 +358,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         guard try store.indexStats().recipeFeaturesReady else {
             throw ValidationError("Recipe feature index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -399,7 +399,7 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeStore()
+        let store = try context.makeSidecarStore()
         guard try store.indexStats().recipeIngredientIndexReady else {
             throw ValidationError("Recipe ingredient index is not ready. Run `paprika-pantry index rebuild` first.")
         }

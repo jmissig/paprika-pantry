@@ -16,7 +16,7 @@ final class QueryReportsTests: XCTestCase {
                     updatedAt: "2026-04-02 10:00:00",
                     derivedFeatures: RecipeDerivedFeatures(
                         uid: "AAA",
-                        sourceRemoteHash: "hash-aaa",
+                        sourceFingerprint: "hash-aaa",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 10,
                         cookTimeMinutes: 20,
@@ -81,12 +81,12 @@ final class QueryReportsTests: XCTestCase {
                 servings: "4",
                 createdAt: "2026-04-01 10:00:00",
                 updatedAt: "2026-04-02 10:00:00",
-                remoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 rawJSON: #"{"uid":"AAA"}"#
             ),
             derivedFeatures: RecipeDerivedFeatures(
                 uid: "AAA",
-                sourceRemoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                 prepTimeMinutes: 10,
                 cookTimeMinutes: 20,
@@ -155,7 +155,7 @@ final class QueryReportsTests: XCTestCase {
                 lastRecipeUsageRun: featureRun,
                 lastSuccessfulRecipeUsageRun: featureRun,
                 sourceState: PantryStoredSourceState(
-                    sourceKind: .paprikaSQLite,
+                    sourceType: PantrySourceType.paprikaSQLite,
                     sourceLocation: "/Users/test/Paprika.sqlite",
                     observedAt: Date(timeIntervalSince1970: 1_712_736_120),
                     paprikaSync: PaprikaSyncDetails(
@@ -208,7 +208,7 @@ final class QueryReportsTests: XCTestCase {
                     starRating: 4,
                     derivedFeatures: RecipeDerivedFeatures(
                         uid: "AAA",
-                        sourceRemoteHash: "hash-aaa",
+                        sourceFingerprint: "hash-aaa",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 10,
                         cookTimeMinutes: 20,
@@ -302,12 +302,12 @@ final class QueryReportsTests: XCTestCase {
                 servings: nil,
                 createdAt: nil,
                 updatedAt: nil,
-                remoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 rawJSON: #"{"uid":"AAA"}"#
             ),
             features: RecipeDerivedFeatures(
                 uid: "AAA",
-                sourceRemoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                 prepTimeMinutes: 10,
                 cookTimeMinutes: 20,
@@ -347,12 +347,12 @@ final class QueryReportsTests: XCTestCase {
                 servings: nil,
                 createdAt: nil,
                 updatedAt: nil,
-                remoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 rawJSON: #"{"uid":"AAA"}"#
             ),
             ingredientIndex: RecipeIngredientIndex(
                 uid: "AAA",
-                sourceRemoteHash: "hash-1",
+                sourceFingerprint: "hash-1",
                 derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                 lines: [
                     RecipeIngredientLine(

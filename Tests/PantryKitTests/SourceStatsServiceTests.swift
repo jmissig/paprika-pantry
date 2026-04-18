@@ -6,9 +6,9 @@ final class SourceStatsServiceTests: XCTestCase {
     func testMakeSnapshotReportsCountsAndSampleCoverage() throws {
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "CCC", name: "Zucchini Pasta", hash: "hash-ccc"),
-                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", hash: "hash-bbb", isDeleted: true),
-                SourceRecipeStub(uid: "AAA", name: "Apple Cake", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "CCC", name: "Zucchini Pasta", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", sourceFingerprint: "hash-bbb", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Apple Cake", sourceFingerprint: "hash-aaa"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT2", name: "Archived", isDeleted: true),
@@ -41,14 +41,14 @@ final class SourceStatsServiceTests: XCTestCase {
                 SourceRecipeSample(uid: "CCC", name: "Zucchini Pasta", categories: ["CAT2", "MISSING"]),
             ]
         )
-        XCTAssertEqual(snapshot.sampleFailures, [])
+        XCTAssertTrue(snapshot.sampleFailures.isEmpty)
     }
 
     func testMakeSnapshotCapturesSampleFailuresWithoutFailingWholeReport() throws {
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Apple Cake", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Broken Recipe", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "AAA", name: "Apple Cake", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Broken Recipe", sourceFingerprint: "hash-bbb"),
             ],
             categories: [],
             recipesByUID: [
@@ -106,7 +106,7 @@ final class SourceStatsServiceTests: XCTestCase {
             servings: nil,
             createdAt: nil,
             updatedAt: nil,
-            remoteHash: "hash-\(uid)",
+            sourceFingerprint: "hash-\(uid)",
             rawJSON: #"{"uid":"test"}"#
         )
     }

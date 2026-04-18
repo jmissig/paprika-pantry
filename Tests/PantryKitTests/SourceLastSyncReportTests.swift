@@ -8,7 +8,7 @@ final class SourceLastSyncReportTests: XCTestCase {
             snapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
                 message: "The configured pantry source is ready for direct read-only Paprika access.",
-                sourceKind: .paprikaSQLite,
+                sourceType: PantrySourceType.paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Paprika.sqlite",

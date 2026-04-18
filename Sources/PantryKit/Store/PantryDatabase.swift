@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-public struct PantryDatabase {
+public struct PantrySidecarDatabase {
     public let path: URL
 
     public init(path: URL) {
@@ -34,7 +34,7 @@ public struct PantryDatabase {
                 table.column("source_name", .text)
                 table.column("ingredients", .text)
                 table.column("notes", .text)
-                table.column("remote_hash", .text)
+                table.column("source_fingerprint", .text)
                 table.column("indexed_at", .text).notNull()
             }
 
@@ -90,7 +90,7 @@ public struct PantryDatabase {
         migrator.registerMigration("recipe-features-v1") { db in
             try db.create(table: "recipe_features") { table in
                 table.column("uid", .text).notNull().primaryKey()
-                table.column("source_remote_hash", .text)
+                table.column("source_fingerprint", .text)
                 table.column("derived_at", .text).notNull()
                 table.column("prep_time_minutes", .integer)
                 table.column("cook_time_minutes", .integer)
@@ -111,7 +111,7 @@ public struct PantryDatabase {
                 table.column("line_number", .integer).notNull()
                 table.column("source_text", .text).notNull()
                 table.column("normalized_text", .text)
-                table.column("source_remote_hash", .text)
+                table.column("source_fingerprint", .text)
                 table.column("derived_at", .text).notNull()
                 table.primaryKey(["recipe_uid", "line_number"])
             }
@@ -147,7 +147,7 @@ public struct PantryDatabase {
 
         migrator.registerMigration("source-state-v1") { db in
             try db.create(table: "source_state") { table in
-                table.column("source_kind", .text).notNull().primaryKey()
+                table.column("source_type", .text).notNull().primaryKey()
                 table.column("source_location", .text)
                 table.column("observed_at", .text).notNull()
                 table.column("paprika_last_sync_at", .text)
@@ -158,6 +158,46 @@ public struct PantryDatabase {
             try db.create(index: "source_state_on_observed_at", on: "source_state", columns: ["observed_at"])
         }
 
+        migrator.registerMigration("sidecar-local-source-naming-v1") { db in
+            if try Self.table("recipe_search_documents", hasColumn: "remote_hash", db: db) {
+                try db.execute(
+                    sql: "ALTER TABLE recipe_search_documents RENAME COLUMN remote_hash TO source_fingerprint"
+                )
+            }
+
+            if try Self.table("recipe_features", hasColumn: "source_remote_hash", db: db) {
+                try db.execute(
+                    sql: "ALTER TABLE recipe_features RENAME COLUMN source_remote_hash TO source_fingerprint"
+                )
+            }
+
+            if try Self.table("recipe_ingredient_lines", hasColumn: "source_remote_hash", db: db) {
+                try db.execute(
+                    sql: "ALTER TABLE recipe_ingredient_lines RENAME COLUMN source_remote_hash TO source_fingerprint"
+                )
+            }
+
+            if try Self.table("source_state", hasColumn: "source_kind", db: db) {
+                try db.execute(
+                    sql: "ALTER TABLE source_state RENAME COLUMN source_kind TO source_type"
+                )
+            }
+        }
+
         return migrator
     }
+
+    private static func table(
+        _ tableName: String,
+        hasColumn columnName: String,
+        db: Database
+    ) throws -> Bool {
+        guard try db.tableExists(tableName) else {
+            return false
+        }
+
+        return try db.columns(in: tableName).contains { $0.name == columnName }
+    }
 }
+
+public typealias PantryDatabase = PantrySidecarDatabase

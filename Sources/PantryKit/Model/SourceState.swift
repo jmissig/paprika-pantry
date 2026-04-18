@@ -39,18 +39,18 @@ public struct PaprikaAppInstallation: Codable, Equatable, Sendable {
 }
 
 public struct PantryStoredSourceState: Codable, Equatable, Sendable {
-    public let sourceKind: PantrySourceKind
+    public let sourceType: String
     public let sourceLocation: String?
     public let observedAt: Date
     public let paprikaSync: PaprikaSyncDetails?
 
     public init(
-        sourceKind: PantrySourceKind,
+        sourceType: String,
         sourceLocation: String?,
         observedAt: Date,
         paprikaSync: PaprikaSyncDetails?
     ) {
-        self.sourceKind = sourceKind
+        self.sourceType = sourceType
         self.sourceLocation = sourceLocation
         self.observedAt = observedAt
         self.paprikaSync = paprikaSync

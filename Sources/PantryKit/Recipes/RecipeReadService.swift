@@ -50,7 +50,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
     public let servings: String?
     public let createdAt: String?
     public let updatedAt: String?
-    public let remoteHash: String?
+    public let sourceFingerprint: String?
     public let rawJSON: String
 
     public init(
@@ -69,7 +69,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
         servings: String?,
         createdAt: String?,
         updatedAt: String?,
-        remoteHash: String?,
+        sourceFingerprint: String?,
         rawJSON: String
     ) {
         self.uid = uid
@@ -87,7 +87,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
         self.servings = servings
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.remoteHash = remoteHash
+        self.sourceFingerprint = sourceFingerprint
         self.rawJSON = rawJSON
     }
 }
@@ -205,7 +205,7 @@ public struct RecipeReadService: Sendable {
             servings: recipe.servings,
             createdAt: recipe.createdAt,
             updatedAt: recipe.updatedAt,
-            remoteHash: recipe.remoteHash,
+            sourceFingerprint: recipe.sourceFingerprint,
             rawJSON: recipe.rawJSON
         )
     }

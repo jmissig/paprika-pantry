@@ -16,8 +16,7 @@ final class PantryConfigStoreTests: XCTestCase {
         let paths = try makePaths()
         let store = PantryConfigStore(paths: paths)
         let config = PantryConfig(
-            source: PantrySourceConfiguration(
-                kind: .paprikaSQLite,
+            source: PaprikaSourceConfiguration(
                 displayName: "local paprika",
                 paprikaSQLite: PaprikaSQLiteSourceConfiguration(
                     databasePath: "/Users/test/Library/Group Containers/.../Paprika.sqlite"

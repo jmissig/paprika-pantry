@@ -25,22 +25,23 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         let source = try provider.makeSource()
 
         XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(snapshot.sourceType, PantrySourceType.paprikaSQLite)
         XCTAssertEqual(snapshot.sourceLocation, databaseURL.path)
         XCTAssertNotNil(source as? PaprikaSQLiteSource)
     }
 
-    func testLegacyTokenConfigurationReportsUnsupported() throws {
+    func testLegacySourceKindConfigurationReportsInvalid() throws {
         let paths = try makePaths()
-        try PantryConfigStore(paths: paths).saveConfig(
-            PantryConfig(
-                source: PantrySourceConfiguration(
-                    kind: .paprikaToken,
-                    displayName: "legacy token"
-                ),
-                updatedAt: Date(timeIntervalSince1970: 1_712_736_000)
-            )
-        )
+        let configData = """
+            {
+              "source": {
+                "kind": "paprika-token",
+                "displayName": "legacy token"
+              },
+              "updatedAt": "2024-04-10T08:00:00Z"
+            }
+            """.data(using: .utf8)!
+        try configData.write(to: paths.configFile)
         let provider = ConfiguredPantrySourceProvider(
             paths: paths,
             environment: [:],
@@ -49,10 +50,13 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
 
         let snapshot = try provider.diagnose()
 
-        XCTAssertEqual(snapshot.status, .unsupported)
-        XCTAssertEqual(snapshot.sourceKind, .paprikaToken)
+        XCTAssertEqual(snapshot.status, .invalid)
+        XCTAssertEqual(snapshot.sourceType, PantrySourceType.paprikaSQLite)
         XCTAssertThrowsError(try provider.makeSource()) { error in
-            XCTAssertEqual(error as? PantrySourceProviderError, .unsupportedSource(.paprikaToken))
+            XCTAssertEqual(
+                error as? PantrySourceProviderError,
+                .invalidConfiguration("The config source kind `paprika-token` is no longer supported. Use the local Paprika SQLite database.")
+            )
         }
     }
 
@@ -61,8 +65,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         let sourceDatabaseURL = try makePaprikaSourceDatabase(at: "Paprika.sqlite")
         try PantryConfigStore(paths: paths).saveConfig(
             PantryConfig(
-                source: PantrySourceConfiguration(
-                    kind: .paprikaSQLite,
+                source: PaprikaSourceConfiguration(
                     displayName: "local paprika",
                     paprikaSQLite: PaprikaSQLiteSourceConfiguration(
                         databasePath: sourceDatabaseURL.path
@@ -81,7 +84,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         let source = try provider.makeSource()
 
         XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(snapshot.sourceType, PantrySourceType.paprikaSQLite)
         XCTAssertEqual(snapshot.displayName, "local paprika")
         XCTAssertEqual(snapshot.sourceLocation, sourceDatabaseURL.path)
         XCTAssertEqual(snapshot.schemaFlavor, "paprika-3-core-data")
@@ -113,7 +116,7 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         let snapshot = try provider.diagnose()
 
         XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(snapshot.sourceType, PantrySourceType.paprikaSQLite)
         XCTAssertEqual(snapshot.displayName, "default Paprika SQLite")
         XCTAssertEqual(snapshot.sourceLocation, groupContainerDatabaseURL.path)
     }
@@ -130,32 +133,6 @@ final class ConfiguredPantrySourceProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.status, .notConfigured)
         XCTAssertThrowsError(try provider.makeSource()) { error in
             XCTAssertEqual(error as? PantrySourceProviderError, .notConfigured)
-        }
-    }
-
-    func testKappariConfigurationReportsUnsupported() throws {
-        let paths = try makePaths()
-        try PantryConfigStore(paths: paths).saveConfig(
-            PantryConfig(
-                source: PantrySourceConfiguration(
-                    kind: .kappari,
-                    displayName: "kappari"
-                ),
-                updatedAt: Date(timeIntervalSince1970: 1_712_736_000)
-            )
-        )
-        let provider = ConfiguredPantrySourceProvider(
-            paths: paths,
-            environment: [:],
-            fileManager: try makeProviderFileManager()
-        )
-
-        let snapshot = try provider.diagnose()
-
-        XCTAssertEqual(snapshot.status, .unsupported)
-        XCTAssertEqual(snapshot.sourceKind, .kappari)
-        XCTAssertThrowsError(try provider.makeSource()) { error in
-            XCTAssertEqual(error as? PantrySourceProviderError, .unsupportedSource(.kappari))
         }
     }
 

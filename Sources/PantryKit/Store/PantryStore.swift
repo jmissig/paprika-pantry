@@ -266,7 +266,7 @@ public enum RecipeIngredientLineCountBasis: String, Codable, Equatable, Sendable
 
 public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
     public let uid: String
-    public let sourceRemoteHash: String?
+    public let sourceFingerprint: String?
     public let derivedAt: Date
     public let prepTimeMinutes: Int?
     public let cookTimeMinutes: Int?
@@ -277,7 +277,7 @@ public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
 
     public init(
         uid: String,
-        sourceRemoteHash: String?,
+        sourceFingerprint: String?,
         derivedAt: Date,
         prepTimeMinutes: Int?,
         cookTimeMinutes: Int?,
@@ -287,7 +287,7 @@ public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
         ingredientLineCountBasis: RecipeIngredientLineCountBasis?
     ) {
         self.uid = uid
-        self.sourceRemoteHash = sourceRemoteHash
+        self.sourceFingerprint = sourceFingerprint
         self.derivedAt = derivedAt
         self.prepTimeMinutes = prepTimeMinutes
         self.cookTimeMinutes = cookTimeMinutes
@@ -297,12 +297,12 @@ public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
         self.ingredientLineCountBasis = ingredientLineCountBasis
     }
 
-    public func sourceHashMatches(_ currentSourceHash: String?) -> Bool? {
-        guard let currentSourceHash, let sourceRemoteHash else {
+    public func sourceFingerprintMatches(_ currentSourceFingerprint: String?) -> Bool? {
+        guard let currentSourceFingerprint, let sourceFingerprint else {
             return nil
         }
 
-        return currentSourceHash == sourceRemoteHash
+        return currentSourceFingerprint == sourceFingerprint
     }
 }
 
@@ -325,7 +325,7 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
     }
 }
 
-public struct PantryStore: @unchecked Sendable {
+public struct PantrySidecarStore: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
 
     public init(dbQueue: DatabaseQueue) {
@@ -451,7 +451,7 @@ public struct PantryStore: @unchecked Sendable {
                     recipe_search_documents.is_favorite,
                     recipe_search_documents.star_rating,
                     recipe_features.uid AS feature_uid,
-                    recipe_features.source_remote_hash,
+                    recipe_features.source_fingerprint,
                     recipe_features.derived_at,
                     recipe_features.prep_time_minutes,
                     recipe_features.cook_time_minutes,
@@ -594,7 +594,7 @@ public struct PantryStore: @unchecked Sendable {
                     sql: """
                     SELECT
                         uid,
-                        source_remote_hash,
+                        source_fingerprint,
                         derived_at,
                         prep_time_minutes,
                         cook_time_minutes,
@@ -648,7 +648,7 @@ public struct PantryStore: @unchecked Sendable {
                 sql: """
                 SELECT
                     uid,
-                    source_remote_hash,
+                    source_fingerprint,
                     derived_at,
                     prep_time_minutes,
                     cook_time_minutes,
@@ -705,7 +705,7 @@ public struct PantryStore: @unchecked Sendable {
                 sql: """
                 SELECT
                     recipe_ingredient_lines.recipe_uid,
-                    recipe_ingredient_lines.source_remote_hash,
+                    recipe_ingredient_lines.source_fingerprint,
                     recipe_ingredient_lines.derived_at,
                     recipe_ingredient_lines.line_number,
                     recipe_ingredient_lines.source_text,
@@ -727,7 +727,7 @@ public struct PantryStore: @unchecked Sendable {
             }
 
             let derivedAt = DatabaseTimestamp.decodeRequired(firstRow["derived_at"])
-            let sourceRemoteHash: String? = firstRow["source_remote_hash"]
+            let sourceFingerprint: String? = firstRow["source_fingerprint"]
             var linesByNumber = [Int: RecipeIngredientLine]()
             var orderedLineNumbers = [Int]()
 
@@ -760,7 +760,7 @@ public struct PantryStore: @unchecked Sendable {
 
             return RecipeIngredientIndex(
                 uid: uid,
-                sourceRemoteHash: sourceRemoteHash,
+                sourceFingerprint: sourceFingerprint,
                 derivedAt: derivedAt,
                 lines: orderedLineNumbers.compactMap { linesByNumber[$0] }
             )
@@ -845,7 +845,7 @@ public struct PantryStore: @unchecked Sendable {
                         sourceName: recipe.sourceName,
                         ingredients: recipe.ingredients,
                         notes: recipe.notes,
-                        remoteHash: recipe.remoteHash,
+                        sourceFingerprint: recipe.sourceFingerprint,
                         isFavorite: recipe.isFavorite,
                         starRating: recipe.starRating
                     )
@@ -858,7 +858,7 @@ public struct PantryStore: @unchecked Sendable {
                 )
                 if let ingredientIndex = IngredientNormalizer.normalizeIngredientLines(
                     recipeUID: recipe.uid,
-                    sourceRemoteHash: recipe.remoteHash,
+                    sourceFingerprint: recipe.sourceFingerprint,
                     ingredients: recipe.ingredients,
                     derivedAt: startedAt
                 ) {
@@ -904,7 +904,7 @@ public struct PantryStore: @unchecked Sendable {
                             source_name,
                             ingredients,
                             notes,
-                            remote_hash,
+                            source_fingerprint,
                             indexed_at,
                             is_favorite,
                             star_rating
@@ -917,7 +917,7 @@ public struct PantryStore: @unchecked Sendable {
                             document.sourceName,
                             document.ingredients,
                             document.notes,
-                            document.remoteHash,
+                            document.sourceFingerprint,
                             DatabaseTimestamp.encode(finishedAt),
                             document.isFavorite,
                             document.starRating,
@@ -951,7 +951,7 @@ public struct PantryStore: @unchecked Sendable {
                         sql: """
                         INSERT INTO recipe_features (
                             uid,
-                            source_remote_hash,
+                            source_fingerprint,
                             derived_at,
                             prep_time_minutes,
                             cook_time_minutes,
@@ -963,7 +963,7 @@ public struct PantryStore: @unchecked Sendable {
                         """,
                         arguments: [
                             feature.uid,
-                            feature.sourceRemoteHash,
+                            feature.sourceFingerprint,
                             DatabaseTimestamp.encode(finishedAt),
                             feature.prepTimeMinutes,
                             feature.cookTimeMinutes,
@@ -984,7 +984,7 @@ public struct PantryStore: @unchecked Sendable {
                                 line_number,
                                 source_text,
                                 normalized_text,
-                                source_remote_hash,
+                                source_fingerprint,
                                 derived_at
                             ) VALUES (?, ?, ?, ?, ?, ?)
                             """,
@@ -993,7 +993,7 @@ public struct PantryStore: @unchecked Sendable {
                                 line.lineNumber,
                                 line.sourceText,
                                 line.normalizedText,
-                                ingredientIndex.sourceRemoteHash,
+                                ingredientIndex.sourceFingerprint,
                                 DatabaseTimestamp.encode(finishedAt),
                             ]
                         )
@@ -1129,7 +1129,7 @@ public struct PantryStore: @unchecked Sendable {
                 db,
                 sql: """
                 SELECT
-                    source_kind,
+                    source_type,
                     source_location,
                     observed_at,
                     paprika_last_sync_at,
@@ -1141,11 +1141,6 @@ public struct PantryStore: @unchecked Sendable {
                 """
             )
         else {
-            return nil
-        }
-
-        let sourceKindRawValue: String = row["source_kind"]
-        guard let sourceKind = PantrySourceKind(rawValue: sourceKindRawValue) else {
             return nil
         }
 
@@ -1169,7 +1164,7 @@ public struct PantryStore: @unchecked Sendable {
         }
 
         return PantryStoredSourceState(
-            sourceKind: sourceKind,
+            sourceType: row["source_type"],
             sourceLocation: row["source_location"],
             observedAt: DatabaseTimestamp.decodeRequired(row["observed_at"]),
             paprikaSync: paprikaSync
@@ -1185,7 +1180,7 @@ public struct PantryStore: @unchecked Sendable {
         }
 
         return PantryStoredSourceState(
-            sourceKind: .paprikaSQLite,
+            sourceType: PantrySourceType.paprikaSQLite,
             sourceLocation: source.databaseURL.path,
             observedAt: observedAt,
             paprikaSync: source.inspection.paprikaSync
@@ -1199,7 +1194,7 @@ public struct PantryStore: @unchecked Sendable {
         try db.execute(
             sql: """
             INSERT INTO source_state (
-                source_kind,
+                source_type,
                 source_location,
                 observed_at,
                 paprika_last_sync_at,
@@ -1208,7 +1203,7 @@ public struct PantryStore: @unchecked Sendable {
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             arguments: [
-                sourceState.sourceKind.rawValue,
+                sourceState.sourceType,
                 sourceState.sourceLocation,
                 DatabaseTimestamp.encode(sourceState.observedAt),
                 sourceState.paprikaSync.map { DatabaseTimestamp.encode($0.lastSyncAt) },
@@ -1501,7 +1496,7 @@ public struct PantryStore: @unchecked Sendable {
 
         return RecipeDerivedFeatures(
             uid: row["feature_uid"] ?? row["uid"],
-            sourceRemoteHash: row["source_remote_hash"],
+            sourceFingerprint: row["source_fingerprint"],
             derivedAt: DatabaseTimestamp.decodeRequired(derivedAtValue),
             prepTimeMinutes: row["prep_time_minutes"],
             cookTimeMinutes: row["cook_time_minutes"],
@@ -1614,7 +1609,7 @@ public struct PantryStore: @unchecked Sendable {
 
         return RecipeDerivedFeatures(
             uid: recipe.uid,
-            sourceRemoteHash: recipe.remoteHash,
+            sourceFingerprint: recipe.sourceFingerprint,
             derivedAt: derivedAt,
             prepTimeMinutes: prepTimeMinutes,
             cookTimeMinutes: cookTimeMinutes,
@@ -1746,6 +1741,8 @@ public struct PantryStore: @unchecked Sendable {
     }
 }
 
+public typealias PantryStore = PantrySidecarStore
+
 private struct IndexRunRow: FetchableRecord, Decodable {
     let id: Int64
     let startedAt: String
@@ -1773,7 +1770,7 @@ private struct RecipeSearchDocument: Equatable, Sendable {
     let sourceName: String?
     let ingredients: String?
     let notes: String?
-    let remoteHash: String?
+    let sourceFingerprint: String?
     let isFavorite: Bool
     let starRating: Int?
 }

@@ -101,7 +101,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
             SELECT
                 ZUID AS uid,
                 ZNAME AS name,
-                \(self.schema.recipeSyncHashExpression) AS remote_hash,
+                \(self.schema.recipeSyncHashExpression) AS source_fingerprint,
                 \(self.schema.recipeDeletedExpression) AS is_deleted
             FROM ZRECIPE
             WHERE ZUID IS NOT NULL
@@ -114,7 +114,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 SourceRecipeStub(
                     uid: row["uid"],
                     name: row["name"],
-                    hash: row["remote_hash"],
+                    sourceFingerprint: row["source_fingerprint"],
                     isDeleted: Self.decodeBoolean(row["is_deleted"])
                 )
             }
@@ -280,7 +280,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 \(self.schema.optionalTextExpression(column: "ZSERVINGS")) AS servings,
                 \(self.schema.coreDataTimestampExpression(column: "ZCREATED")) AS created_at,
                 NULL AS updated_at,
-                \(self.schema.recipeSyncHashExpression) AS remote_hash,
+                \(self.schema.recipeSyncHashExpression) AS source_fingerprint,
                 \(self.schema.recipeDeletedExpression) AS is_deleted
             FROM ZRECIPE
             WHERE ZUID = ?
@@ -316,7 +316,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 servings: row["servings"],
                 createdAt: row["created_at"],
                 updatedAt: row["updated_at"],
-                remoteHash: row["remote_hash"],
+                sourceFingerprint: row["source_fingerprint"],
                 rawJSON: rawJSON
             )
         }
@@ -361,7 +361,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         let servings: String? = row["servings"]
         let createdAt: String? = row["created_at"]
         let updatedAt: String? = row["updated_at"]
-        let remoteHash: String? = row["remote_hash"]
+        let sourceFingerprint: String? = row["source_fingerprint"]
 
         var object: [String: Any] = [
             "uid": uid,
@@ -382,7 +382,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         Self.setOptionalValue(in: &object, key: "servings", value: servings)
         Self.setOptionalValue(in: &object, key: "created", value: createdAt)
         Self.setOptionalValue(in: &object, key: "updated", value: updatedAt)
-        Self.setOptionalValue(in: &object, key: "hash", value: remoteHash)
+        Self.setOptionalValue(in: &object, key: "hash", value: sourceFingerprint)
 
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         guard let rawJSON = String(data: data, encoding: .utf8) else {

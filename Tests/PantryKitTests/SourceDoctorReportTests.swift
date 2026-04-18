@@ -8,7 +8,7 @@ final class SourceDoctorReportTests: XCTestCase {
             snapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
                 message: "The configured pantry source is ready for direct read-only Paprika access.",
-                sourceKind: .paprikaSQLite,
+                sourceType: PantrySourceType.paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Library/Group Containers/.../Paprika.sqlite",
@@ -39,7 +39,7 @@ final class SourceDoctorReportTests: XCTestCase {
         )
 
         XCTAssertEqual(report.status, "ready")
-        XCTAssertTrue(report.humanDescription.contains("kind: paprika-sqlite"))
+        XCTAssertTrue(report.humanDescription.contains("source_type: paprika-sqlite"))
         XCTAssertTrue(report.humanDescription.contains("schema: paprika-3-core-data"))
         XCTAssertTrue(report.humanDescription.contains("access_mode: read-only"))
         XCTAssertTrue(report.humanDescription.contains("query_only: yes"))
@@ -96,7 +96,7 @@ final class SourceDoctorReportTests: XCTestCase {
             sourceSnapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
                 message: "The configured pantry source is ready for direct read-only Paprika access.",
-                sourceKind: .paprikaSQLite,
+                sourceType: PantrySourceType.paprikaSQLite,
                 displayName: "default Paprika SQLite",
                 implementation: "direct Paprika SQLite source",
                 sourceLocation: "/Users/test/Paprika.sqlite",

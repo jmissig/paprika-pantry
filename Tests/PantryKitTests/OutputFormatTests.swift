@@ -56,7 +56,7 @@ final class OutputFormatTests: XCTestCase {
                     updatedAt: "2026-04-02 10:00:00",
                     derivedFeatures: RecipeDerivedFeatures(
                         uid: "AAA",
-                        sourceRemoteHash: "hash-aaa",
+                        sourceFingerprint: "hash-aaa",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 10,
                         cookTimeMinutes: 20,

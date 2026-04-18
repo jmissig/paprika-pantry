@@ -6,8 +6,8 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testResolveRecipePrefersUIDBeforeNameMatch() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "MATCH", name: "UID Winner", hash: "hash-match"),
-                SourceRecipeStub(uid: "OTHER", name: "match", hash: "hash-other"),
+                SourceRecipeStub(uid: "MATCH", name: "UID Winner", sourceFingerprint: "hash-match"),
+                SourceRecipeStub(uid: "OTHER", name: "match", sourceFingerprint: "hash-other"),
             ],
             recipesByUID: [
                 "MATCH": makeSourceRecipe(uid: "MATCH", name: "UID Winner"),
@@ -26,7 +26,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testResolveRecipeFallsBackToExactCaseInsensitiveName() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
             ],
             recipesByUID: [
                 "AAA": makeSourceRecipe(uid: "AAA", name: "Weeknight Soup"),
@@ -43,8 +43,8 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testResolveRecipeThrowsAmbiguityErrorForDuplicateNames() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Curry", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "curry", hash: "hash-bbb"),
+                SourceRecipeStub(uid: "AAA", name: "Curry", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "curry", sourceFingerprint: "hash-bbb"),
             ],
             recipesByUID: [
                 "AAA": makeSourceRecipe(uid: "AAA", name: "Curry"),
@@ -85,8 +85,8 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testListRecipesReadsActiveRecipesFromSourceAndResolvesCategoryNames() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", hash: "hash-bbb", isDeleted: true),
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", sourceFingerprint: "hash-bbb", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -127,10 +127,10 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testListRecipesAppliesCanonicalRatingAndFavoriteFilters() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Favorite Five", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Favorite Four", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Unrated Favorite", hash: "hash-ccc"),
-                SourceRecipeStub(uid: "DDD", name: "Rated Nonfavorite", hash: "hash-ddd"),
+                SourceRecipeStub(uid: "AAA", name: "Favorite Five", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Favorite Four", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Unrated Favorite", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Rated Nonfavorite", sourceFingerprint: "hash-ddd"),
             ],
             recipesByUID: [
                 "AAA": makeSourceRecipe(uid: "AAA", name: "Favorite Five", starRating: 5, isFavorite: true),
@@ -153,9 +153,9 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testListRecipesAppliesCanonicalCategoryFiltersCaseInsensitively() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Sheet Pan Salmon", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Salad", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Sheet Pan Salmon", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Salad", sourceFingerprint: "hash-ccc"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -181,9 +181,9 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testListRecipesSortsByRatingThenFavoriteThenName() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Alpha", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Beta", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Gamma", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Alpha", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Beta", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Gamma", sourceFingerprint: "hash-ccc"),
             ],
             recipesByUID: [
                 "AAA": makeSourceRecipe(uid: "AAA", name: "Alpha", starRating: 5, isFavorite: false),
@@ -202,9 +202,9 @@ final class RecipeCommandResolutionTests: XCTestCase {
     func testListRecipesAppliesDerivedConstraintsAndFewestIngredientSort() throws {
         let service = makeRecipeReadService(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Longer", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Shorter", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Too Slow", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Longer", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Shorter", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Too Slow", sourceFingerprint: "hash-ccc"),
             ],
             recipesByUID: [
                 "AAA": makeSourceRecipe(uid: "AAA", name: "Longer"),
@@ -220,7 +220,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
                 derivedFeaturesByUID: [
                     "AAA": RecipeDerivedFeatures(
                         uid: "AAA",
-                        sourceRemoteHash: "hash-aaa",
+                        sourceFingerprint: "hash-aaa",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 10,
                         cookTimeMinutes: 20,
@@ -231,7 +231,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
                     ),
                     "BBB": RecipeDerivedFeatures(
                         uid: "BBB",
-                        sourceRemoteHash: "hash-bbb",
+                        sourceFingerprint: "hash-bbb",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 5,
                         cookTimeMinutes: 15,
@@ -242,7 +242,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
                     ),
                     "CCC": RecipeDerivedFeatures(
                         uid: "CCC",
-                        sourceRemoteHash: "hash-ccc",
+                        sourceFingerprint: "hash-ccc",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
                         prepTimeMinutes: 15,
                         cookTimeMinutes: 30,
@@ -350,7 +350,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
             servings: nil,
             createdAt: nil,
             updatedAt: nil,
-            remoteHash: "hash-\(uid)",
+            sourceFingerprint: "hash-\(uid)",
             rawJSON: #"{"uid":"test"}"#
         )
     }

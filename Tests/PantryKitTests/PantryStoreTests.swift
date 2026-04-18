@@ -92,9 +92,9 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Pasta Salad", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Deleted", hash: "hash-ccc", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Pasta Salad", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Deleted", sourceFingerprint: "hash-ccc", isDeleted: true),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -117,7 +117,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
                 "BBB": SourceRecipe(
@@ -136,7 +136,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-bbb",
+                    sourceFingerprint: "hash-bbb",
                     rawJSON: "{}"
                 ),
             ]
@@ -256,7 +256,7 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -278,7 +278,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: nil,
+                    sourceFingerprint: nil,
                     rawJSON: "{}"
                 ),
             ]
@@ -294,10 +294,10 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Mushroom Risotto", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Lemon Risotto", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Tomato Risotto", hash: "hash-ccc"),
-                SourceRecipeStub(uid: "DDD", name: "Unrated Risotto", hash: "hash-ddd"),
+                SourceRecipeStub(uid: "AAA", name: "Mushroom Risotto", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Lemon Risotto", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Risotto", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Unrated Risotto", sourceFingerprint: "hash-ddd"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -319,7 +319,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
                 "BBB": SourceRecipe(
@@ -338,7 +338,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-bbb",
+                    sourceFingerprint: "hash-bbb",
                     rawJSON: "{}"
                 ),
                 "CCC": SourceRecipe(
@@ -357,7 +357,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-ccc",
+                    sourceFingerprint: "hash-ccc",
                     rawJSON: "{}"
                 ),
                 "DDD": SourceRecipe(
@@ -376,7 +376,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-ddd",
+                    sourceFingerprint: "hash-ddd",
                     rawJSON: "{}"
                 ),
             ]
@@ -405,9 +405,9 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Tomato Soup", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Tomato Soup", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Tomato Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Soup", sourceFingerprint: "hash-ccc"),
             ],
             categories: [],
             recipesByUID: [
@@ -447,7 +447,7 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Tomato Salad", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "AAA", name: "Tomato Salad", sourceFingerprint: "hash-aaa"),
             ],
             categories: [],
             recipesByUID: [
@@ -471,7 +471,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
             ]
@@ -491,11 +491,11 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Soup A", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Soup B", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Soup C", hash: "hash-ccc"),
-                SourceRecipeStub(uid: "DDD", name: "Soup D", hash: "hash-ddd"),
-                SourceRecipeStub(uid: "EEE", name: "Soup E", hash: "hash-eee"),
+                SourceRecipeStub(uid: "AAA", name: "Soup A", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Soup B", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Soup C", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Soup D", sourceFingerprint: "hash-ddd"),
+                SourceRecipeStub(uid: "EEE", name: "Soup E", sourceFingerprint: "hash-eee"),
             ],
             categories: [],
             recipesByUID: [
@@ -540,11 +540,11 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "A", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "B", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "C", hash: "hash-ccc"),
-                SourceRecipeStub(uid: "DDD", name: "D", hash: "hash-ddd"),
-                SourceRecipeStub(uid: "EEE", name: "E", hash: "hash-eee"),
+                SourceRecipeStub(uid: "AAA", name: "A", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "B", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "C", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "D", sourceFingerprint: "hash-ddd"),
+                SourceRecipeStub(uid: "EEE", name: "E", sourceFingerprint: "hash-eee"),
             ],
             categories: [],
             recipesByUID: [
@@ -576,9 +576,9 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Weeknight Salad", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Tomato Soup", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Weeknight Salad", sourceFingerprint: "hash-ccc"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -602,7 +602,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
                 "BBB": SourceRecipe(
@@ -621,7 +621,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-bbb",
+                    sourceFingerprint: "hash-bbb",
                     rawJSON: "{}"
                 ),
                 "CCC": SourceRecipe(
@@ -640,7 +640,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-ccc",
+                    sourceFingerprint: "hash-ccc",
                     rawJSON: "{}"
                 ),
             ]
@@ -669,9 +669,9 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Tomato Pasta", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Lemon Pasta", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Green Salad", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Tomato Pasta", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Lemon Pasta", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Green Salad", sourceFingerprint: "hash-ccc"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -693,7 +693,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
                 "BBB": SourceRecipe(
@@ -712,7 +712,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-bbb",
+                    sourceFingerprint: "hash-bbb",
                     rawJSON: "{}"
                 ),
                 "CCC": SourceRecipe(
@@ -731,7 +731,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-ccc",
+                    sourceFingerprint: "hash-ccc",
                     rawJSON: "{}"
                 ),
             ]
@@ -784,7 +784,7 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Braise", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "AAA", name: "Braise", sourceFingerprint: "hash-aaa"),
             ],
             categories: [],
             recipesByUID: [
@@ -804,7 +804,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
             ]
@@ -824,9 +824,9 @@ final class PantryStoreTests: XCTestCase {
         let store = try makeStore()
         let source = InMemoryPantrySource(
             stubs: [
-                SourceRecipeStub(uid: "AAA", name: "Quick Bean Soup", hash: "hash-aaa"),
-                SourceRecipeStub(uid: "BBB", name: "Quick Tomato Soup", hash: "hash-bbb"),
-                SourceRecipeStub(uid: "CCC", name: "Slow Tomato Soup", hash: "hash-ccc"),
+                SourceRecipeStub(uid: "AAA", name: "Quick Bean Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Quick Tomato Soup", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Slow Tomato Soup", sourceFingerprint: "hash-ccc"),
             ],
             categories: [
                 SourceRecipeCategory(uid: "CAT1", name: "Dinner"),
@@ -849,7 +849,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-aaa",
+                    sourceFingerprint: "hash-aaa",
                     rawJSON: "{}"
                 ),
                 "BBB": SourceRecipe(
@@ -868,7 +868,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-bbb",
+                    sourceFingerprint: "hash-bbb",
                     rawJSON: "{}"
                 ),
                 "CCC": SourceRecipe(
@@ -887,7 +887,7 @@ final class PantryStoreTests: XCTestCase {
                     servings: nil,
                     createdAt: nil,
                     updatedAt: nil,
-                    remoteHash: "hash-ccc",
+                    sourceFingerprint: "hash-ccc",
                     rawJSON: "{}"
                 ),
             ]
@@ -910,15 +910,15 @@ final class PantryStoreTests: XCTestCase {
         XCTAssertEqual(results[1].derivedFeatures?.totalTimeMinutes, 25)
     }
 
-    private func makeDatabase() throws -> PantryDatabase {
+    private func makeDatabase() throws -> PantrySidecarDatabase {
         let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         temporaryDirectoryURL = directoryURL
-        return PantryDatabase(path: directoryURL.appendingPathComponent("pantry.sqlite"))
+        return PantrySidecarDatabase(path: directoryURL.appendingPathComponent("pantry.sqlite"))
     }
 
-    private func makeStore() throws -> PantryStore {
+    private func makeStore() throws -> PantrySidecarStore {
         let database = try makeDatabase()
-        return PantryStore(dbQueue: try database.openQueue())
+        return PantrySidecarStore(dbQueue: try database.openQueue())
     }
 
     private func makeRecipeForAggregate(
@@ -943,7 +943,7 @@ final class PantryStoreTests: XCTestCase {
             servings: nil,
             createdAt: nil,
             updatedAt: nil,
-            remoteHash: "hash-\(uid)",
+            sourceFingerprint: "hash-\(uid)",
             rawJSON: "{}"
         )
     }
@@ -970,7 +970,7 @@ final class PantryStoreTests: XCTestCase {
             servings: nil,
             createdAt: nil,
             updatedAt: nil,
-            remoteHash: "hash-\(uid)",
+            sourceFingerprint: "hash-\(uid)",
             rawJSON: "{}"
         )
     }

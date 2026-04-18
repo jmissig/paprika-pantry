@@ -11,7 +11,7 @@ public struct DoctorCommand: PantryLeafCommand {
     public mutating func run() throws {
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
-        let stats = try context.makeStore().indexStats()
+        let stats = try context.makeSidecarStore().indexStats()
         try context.write(
             DoctorReport(
                 sourceSnapshot: snapshot,

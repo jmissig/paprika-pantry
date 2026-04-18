@@ -153,18 +153,18 @@ public struct RecipeIngredientLine: Codable, Equatable, Sendable {
 
 public struct RecipeIngredientIndex: Codable, Equatable, Sendable {
     public let uid: String
-    public let sourceRemoteHash: String?
+    public let sourceFingerprint: String?
     public let derivedAt: Date
     public let lines: [RecipeIngredientLine]
 
     public init(
         uid: String,
-        sourceRemoteHash: String?,
+        sourceFingerprint: String?,
         derivedAt: Date,
         lines: [RecipeIngredientLine]
     ) {
         self.uid = uid
-        self.sourceRemoteHash = sourceRemoteHash
+        self.sourceFingerprint = sourceFingerprint
         self.derivedAt = derivedAt
         self.lines = lines
     }
@@ -175,12 +175,12 @@ public struct RecipeIngredientIndex: Codable, Equatable, Sendable {
         }
     }
 
-    public func sourceHashMatches(_ currentSourceHash: String?) -> Bool? {
-        guard let currentSourceHash, let sourceRemoteHash else {
+    public func sourceFingerprintMatches(_ currentSourceFingerprint: String?) -> Bool? {
+        guard let currentSourceFingerprint, let sourceFingerprint else {
             return nil
         }
 
-        return currentSourceHash == sourceRemoteHash
+        return currentSourceFingerprint == sourceFingerprint
     }
 }
 
@@ -215,7 +215,7 @@ enum IngredientNormalizer {
 
     static func normalizeIngredientLines(
         recipeUID: String,
-        sourceRemoteHash: String?,
+        sourceFingerprint: String?,
         ingredients: String?,
         derivedAt: Date
     ) -> RecipeIngredientIndex? {
@@ -244,7 +244,7 @@ enum IngredientNormalizer {
 
         return RecipeIngredientIndex(
             uid: recipeUID,
-            sourceRemoteHash: sourceRemoteHash,
+            sourceFingerprint: sourceFingerprint,
             derivedAt: derivedAt,
             lines: lines
         )

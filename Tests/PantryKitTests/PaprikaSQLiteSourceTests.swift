@@ -27,8 +27,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(
             stubs,
             [
-                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", hash: "hash-bbb", isDeleted: true),
-                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", hash: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", sourceFingerprint: "hash-bbb", isDeleted: true),
+                SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
             ]
         )
         XCTAssertEqual(
@@ -183,7 +183,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.servings, "4")
         XCTAssertEqual(recipe.createdAt, "2025-04-10 10:00:00")
         XCTAssertNil(recipe.updatedAt)
-        XCTAssertEqual(recipe.remoteHash, "hash-aaa")
+        XCTAssertEqual(recipe.sourceFingerprint, "hash-aaa")
         XCTAssertTrue(recipe.rawJSON.contains("\"category_uids\":[\"CAT1\"]"))
         XCTAssertTrue(recipe.rawJSON.contains("\"created\":\"2025-04-10 10:00:00\""))
     }
@@ -240,7 +240,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.sourceName, "Serious Eats")
         XCTAssertEqual(recipe.starRating, 4)
         XCTAssertTrue(recipe.isFavorite)
-        XCTAssertEqual(recipe.remoteHash, "hash-aaa")
+        XCTAssertEqual(recipe.sourceFingerprint, "hash-aaa")
     }
 
     func testMealReadServiceListsMealsDirectlyFromPaprikaSQLiteSource() throws {
@@ -361,7 +361,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(summary.recipeFeatureCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithTotalTimeCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithIngredientLineCountCount, 1)
-        XCTAssertEqual(summary.sourceState?.sourceKind, .paprikaSQLite)
+        XCTAssertEqual(summary.sourceState?.sourceType, PantrySourceType.paprikaSQLite)
         XCTAssertEqual(summary.sourceState?.sourceLocation, source.databaseURL.path)
         XCTAssertEqual(summary.sourceState?.paprikaSync?.signalSource, "group-container-preferences")
         XCTAssertEqual(try store.searchRecipes(query: "lemon").map(\.uid), ["AAA"])
@@ -369,11 +369,11 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(try store.indexStats().sourceState?.paprikaSync?.signalSource, "group-container-preferences")
     }
 
-    private func makeStore() throws -> PantryStore {
+    private func makeStore() throws -> PantrySidecarStore {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("pantry.sqlite")
-        let database = PantryDatabase(path: databaseURL)
-        return PantryStore(dbQueue: try database.openQueue())
+        let database = PantrySidecarDatabase(path: databaseURL)
+        return PantrySidecarStore(dbQueue: try database.openQueue())
     }
 
     private func makePaprikaSourceDatabase() throws -> URL {

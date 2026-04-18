@@ -16,18 +16,26 @@ public struct CommandContext: Sendable {
         }
     }
 
-    public func makeDatabase() -> PantryDatabase {
-        PantryDatabase(path: paths.databaseFile)
+    public func makeSidecarDatabase() -> PantrySidecarDatabase {
+        PantrySidecarDatabase(path: paths.databaseFile)
     }
 
-    public func makeStore() throws -> PantryStore {
-        PantryStore(dbQueue: try makeDatabase().openQueue())
+    public func makeSidecarStore() throws -> PantrySidecarStore {
+        PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue())
+    }
+
+    public func makeDatabase() -> PantrySidecarDatabase {
+        makeSidecarDatabase()
+    }
+
+    public func makeStore() throws -> PantrySidecarStore {
+        try makeSidecarStore()
     }
 
     public func makeSourceProvider(
         environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> ConfiguredPantrySourceProvider {
-        ConfiguredPantrySourceProvider(paths: paths, environment: environment)
+    ) -> ConfiguredPaprikaSourceProvider {
+        ConfiguredPaprikaSourceProvider(paths: paths, environment: environment)
     }
 
     public func makeSource(

@@ -198,8 +198,8 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         if let updatedAt = recipe.updatedAt, !updatedAt.isEmpty {
             lines.append("updated_at: \(updatedAt)")
         }
-        if let remoteHash = recipe.remoteHash, !remoteHash.isEmpty {
-            lines.append("remote_hash: \(remoteHash)")
+        if let sourceFingerprint = recipe.sourceFingerprint, !sourceFingerprint.isEmpty {
+            lines.append("source_fingerprint: \(sourceFingerprint)")
         }
 
         if let usageStats {
@@ -225,13 +225,13 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             ))
             lines.append("derived_at: \(renderedTimestamp(derivedFeatures.derivedAt))")
 
-            switch derivedFeatures.sourceHashMatches(recipe.remoteHash) {
+            switch derivedFeatures.sourceFingerprintMatches(recipe.sourceFingerprint) {
             case .some(true):
-                lines.append("derived_source_hash_matches: yes")
+                lines.append("derived_source_fingerprint_matches: yes")
             case .some(false):
-                lines.append("derived_source_hash_matches: no")
+                lines.append("derived_source_fingerprint_matches: no")
             case .none:
-                lines.append("derived_source_hash_matches: unknown")
+                lines.append("derived_source_fingerprint_matches: unknown")
             }
 
             if let prepTimeMinutes = derivedFeatures.prepTimeMinutes {
@@ -656,13 +656,13 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
 
         lines.append("derived_at: \(renderedTimestamp(features.derivedAt))")
 
-        switch features.sourceHashMatches(recipe.remoteHash) {
+        switch features.sourceFingerprintMatches(recipe.sourceFingerprint) {
         case .some(true):
-            lines.append("derived_source_hash_matches: yes")
+            lines.append("derived_source_fingerprint_matches: yes")
         case .some(false):
-            lines.append("derived_source_hash_matches: no")
+            lines.append("derived_source_fingerprint_matches: no")
         case .none:
-            lines.append("derived_source_hash_matches: unknown")
+            lines.append("derived_source_fingerprint_matches: unknown")
         }
 
         if let prepTimeMinutes = features.prepTimeMinutes {
@@ -747,13 +747,13 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
         if let ingredientIndex {
             lines.append("derived_at: \(renderedTimestamp(ingredientIndex.derivedAt))")
 
-            switch ingredientIndex.sourceHashMatches(recipe.remoteHash) {
+            switch ingredientIndex.sourceFingerprintMatches(recipe.sourceFingerprint) {
             case .some(true):
-                lines.append("derived_source_hash_matches: yes")
+                lines.append("derived_source_fingerprint_matches: yes")
             case .some(false):
-                lines.append("derived_source_hash_matches: no")
+                lines.append("derived_source_fingerprint_matches: no")
             case .none:
-                lines.append("derived_source_hash_matches: unknown")
+                lines.append("derived_source_fingerprint_matches: unknown")
             }
 
             lines.append("indexed_ingredient_lines: \(ingredientIndex.lines.count)")

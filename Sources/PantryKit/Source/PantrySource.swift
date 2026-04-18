@@ -3,13 +3,13 @@ import Foundation
 public struct SourceRecipeStub: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
-    public let hash: String?
+    public let sourceFingerprint: String?
     public let isDeleted: Bool
 
-    public init(uid: String, name: String, hash: String?, isDeleted: Bool = false) {
+    public init(uid: String, name: String, sourceFingerprint: String?, isDeleted: Bool = false) {
         self.uid = uid
         self.name = name
-        self.hash = hash
+        self.sourceFingerprint = sourceFingerprint
         self.isDeleted = isDeleted
     }
 }
@@ -42,7 +42,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     public let servings: String?
     public let createdAt: String?
     public let updatedAt: String?
-    public let remoteHash: String?
+    public let sourceFingerprint: String?
     public let rawJSON: String
 
     public init(
@@ -61,7 +61,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         servings: String?,
         createdAt: String?,
         updatedAt: String?,
-        remoteHash: String?,
+        sourceFingerprint: String?,
         rawJSON: String
     ) {
         self.uid = uid
@@ -79,7 +79,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         self.servings = servings
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.remoteHash = remoteHash
+        self.sourceFingerprint = sourceFingerprint
         self.rawJSON = rawJSON
     }
 }
