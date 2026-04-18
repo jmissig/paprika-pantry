@@ -68,8 +68,13 @@ final class OutputFormatTests: XCTestCase {
                     usageStats: RecipeUsageStats(
                         uid: "AAA",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
-                        timesCooked: 2,
-                        lastCookedAt: "2026-04-07 18:00:00"
+                        mealCount: 2,
+                        firstMealAt: "2026-04-01 18:00:00",
+                        lastMealAt: "2026-04-07 18:00:00",
+                        mealGapDays: [6],
+                        daysSpannedByMeals: 6,
+                        medianMealGapDays: 6.0,
+                        mealShare: 0.25
                     )
                 ),
             ]
@@ -78,8 +83,8 @@ final class OutputFormatTests: XCTestCase {
         XCTAssertEqual(
             report.csvDescription,
             """
-            uid,name,categories,source_name,star_rating,is_favorite,updated_at,derived_total_time_minutes,derived_ingredient_line_count,times_cooked,last_cooked_at
-            AAA,Soup,Dinner | Weeknight,Serious Eats,5,true,2026-04-02 10:00:00,30,5,2,2026-04-07 18:00:00
+            uid,name,categories,source_name,star_rating,is_favorite,updated_at,derived_total_time_minutes,derived_ingredient_line_count,meal_count,last_meal_at,days_spanned_by_meals,median_meal_gap_days,meal_share
+            AAA,Soup,Dinner | Weeknight,Serious Eats,5,true,2026-04-02 10:00:00,30,5,2,2026-04-07 18:00:00,6,6.0,0.250
 
             """
         )

@@ -145,6 +145,37 @@ public struct PantrySidecarDatabase {
             try db.create(index: "recipe_usage_stats_on_last_cooked_at", on: "recipe_usage_stats", columns: ["last_cooked_at"])
         }
 
+        migrator.registerMigration("recipe-usage-v2") { db in
+            try db.alter(table: "recipe_usage_stats") { table in
+                table.add(column: "meal_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "first_meal_at", .text)
+                table.add(column: "last_meal_at", .text)
+                table.add(column: "meal_gap_days_json", .text)
+                table.add(column: "days_spanned_by_meals", .integer)
+                table.add(column: "median_meal_gap_days", .double)
+                table.add(column: "meal_share", .double)
+            }
+
+            try db.execute(
+                sql: """
+                UPDATE recipe_usage_stats
+                SET meal_count = times_cooked,
+                    last_meal_at = last_cooked_at
+                """
+            )
+
+            try db.create(index: "recipe_usage_stats_on_meal_count", on: "recipe_usage_stats", columns: ["meal_count"])
+            try db.create(index: "recipe_usage_stats_on_last_meal_at", on: "recipe_usage_stats", columns: ["last_meal_at"])
+
+            try db.create(table: "recipe_usage_summary") { table in
+                table.column("summary_key", .text).notNull().primaryKey()
+                table.column("derived_at", .text).notNull()
+                table.column("total_meal_count", .integer).notNull()
+            }
+
+            try db.create(index: "recipe_usage_summary_on_derived_at", on: "recipe_usage_summary", columns: ["derived_at"])
+        }
+
         migrator.registerMigration("source-state-v1") { db in
             try db.create(table: "source_state") { table in
                 table.column("source_type", .text).notNull().primaryKey()

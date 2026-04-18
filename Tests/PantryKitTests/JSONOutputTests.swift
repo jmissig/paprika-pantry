@@ -55,8 +55,13 @@ final class JSONOutputTests: XCTestCase {
                     usageStats: RecipeUsageStats(
                         uid: "AAA",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
-                        timesCooked: 2,
-                        lastCookedAt: "2026-04-07 18:00:00"
+                        mealCount: 2,
+                        firstMealAt: "2026-04-01 18:00:00",
+                        lastMealAt: "2026-04-07 18:00:00",
+                        mealGapDays: [6],
+                        daysSpannedByMeals: 6,
+                        medianMealGapDays: 6.0,
+                        mealShare: 0.25
                     )
                 ),
             ],
@@ -104,7 +109,7 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"derivedFeatures\""))
         XCTAssertTrue(recipesRendered.contains("\"totalTimeMinutes\" : 30"))
         XCTAssertTrue(recipesRendered.contains("\"usageStats\""))
-        XCTAssertTrue(recipesRendered.contains("\"timesCooked\" : 2"))
+        XCTAssertTrue(recipesRendered.contains("\"mealCount\" : 2"))
     }
 
     func testRenderDoctorReportIncludesStatusAndIndexFields() throws {
@@ -140,7 +145,9 @@ final class JSONOutputTests: XCTestCase {
                 recipeFeaturesWithTotalTimeCount: 5,
                 recipeFeaturesWithIngredientLineCountCount: 6,
                 recipeUsageStatsCount: 4,
-                recipeUsageStatsWithLastCookedCount: 3,
+                recipeUsageStatsWithLastMealAtCount: 3,
+                recipeUsageStatsWithGapArrayCount: 2,
+                recipeUsageTotalMealCount: 7,
                 lastRecipeSearchRun: PantryIndexRun(
                     id: 1,
                     startedAt: Date(timeIntervalSince1970: 1_712_736_000),

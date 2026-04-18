@@ -28,8 +28,13 @@ final class QueryReportsTests: XCTestCase {
                     usageStats: RecipeUsageStats(
                         uid: "AAA",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
-                        timesCooked: 3,
-                        lastCookedAt: "2026-04-07 18:00:00"
+                        mealCount: 3,
+                        firstMealAt: "2026-04-01 18:00:00",
+                        lastMealAt: "2026-04-07 18:00:00",
+                        mealGapDays: [3, 3],
+                        daysSpannedByMeals: 6,
+                        medianMealGapDays: 3.0,
+                        mealShare: 0.375
                     )
                 ),
             ],
@@ -59,8 +64,12 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes=30"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
-        XCTAssertTrue(report.humanDescription.contains("times_cooked=3"))
-        XCTAssertTrue(report.humanDescription.contains("last_cooked_at=2026-04-07 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("meal_count=3"))
+        XCTAssertTrue(report.humanDescription.contains("last_meal_at=2026-04-07 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("days_since_last_meal="))
+        XCTAssertTrue(report.humanDescription.contains("days_spanned_by_meals=6"))
+        XCTAssertTrue(report.humanDescription.contains("median_meal_gap_days=3.0"))
+        XCTAssertTrue(report.humanDescription.contains("meal_share=0.375"))
     }
 
     func testRecipeShowReportIncludesRecipeMetadata() {
@@ -98,8 +107,13 @@ final class QueryReportsTests: XCTestCase {
             usageStats: RecipeUsageStats(
                 uid: "AAA",
                 derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
-                timesCooked: 4,
-                lastCookedAt: "2026-04-08 18:00:00"
+                mealCount: 4,
+                firstMealAt: "2026-04-01 18:00:00",
+                lastMealAt: "2026-04-08 18:00:00",
+                mealGapDays: [2, 3, 2],
+                daysSpannedByMeals: 7,
+                medianMealGapDays: 2.0,
+                mealShare: 0.5
             )
         )
 
@@ -109,8 +123,14 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("star_rating: 5"))
         XCTAssertTrue(report.humanDescription.contains("favorite: yes"))
         XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
-        XCTAssertTrue(report.humanDescription.contains("times_cooked: 4"))
-        XCTAssertTrue(report.humanDescription.contains("last_cooked_at: 2026-04-08 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("meal_count: 4"))
+        XCTAssertTrue(report.humanDescription.contains("first_meal_at: 2026-04-01 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("last_meal_at: 2026-04-08 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("days_since_last_meal:"))
+        XCTAssertTrue(report.humanDescription.contains("meal_gap_days: [2, 3, 2]"))
+        XCTAssertTrue(report.humanDescription.contains("days_spanned_by_meals: 7"))
+        XCTAssertTrue(report.humanDescription.contains("median_meal_gap_days: 2.0"))
+        XCTAssertTrue(report.humanDescription.contains("meal_share: 0.500"))
         XCTAssertTrue(report.humanDescription.contains("derived_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes: 30"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count_basis: non-empty-ingredient-lines"))
@@ -145,7 +165,9 @@ final class QueryReportsTests: XCTestCase {
                 recipeIngredientLineCount: 42,
                 recipeIngredientTokenCount: 77,
                 recipeUsageStatsCount: 8,
-                recipeUsageStatsWithLastCookedCount: 6,
+                recipeUsageStatsWithLastMealAtCount: 6,
+                recipeUsageStatsWithGapArrayCount: 5,
+                recipeUsageTotalMealCount: 14,
                 lastRecipeSearchRun: searchRun,
                 lastSuccessfulRecipeSearchRun: searchRun,
                 lastRecipeFeatureRun: featureRun,
@@ -187,6 +209,9 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("recipe_ingredients_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("recipe_usage_index_ready: yes"))
         XCTAssertTrue(report.humanDescription.contains("recipe_usage_stat_rows: 8"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_rows_with_last_meal_at: 6"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_rows_with_gap_arrays: 5"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_total_meals: 14"))
         XCTAssertTrue(report.humanDescription.contains("recipe_usage_freshness: 1m old"))
     }
 
@@ -220,8 +245,13 @@ final class QueryReportsTests: XCTestCase {
                     usageStats: RecipeUsageStats(
                         uid: "AAA",
                         derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
-                        timesCooked: 2,
-                        lastCookedAt: "2026-04-07 18:00:00"
+                        mealCount: 2,
+                        firstMealAt: "2026-04-01 18:00:00",
+                        lastMealAt: "2026-04-07 18:00:00",
+                        mealGapDays: [6],
+                        daysSpannedByMeals: 6,
+                        medianMealGapDays: 6.0,
+                        mealShare: 0.25
                     )
                 )
             ],
@@ -261,7 +291,34 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
-        XCTAssertTrue(report.humanDescription.contains("times_cooked=2"))
+        XCTAssertTrue(report.humanDescription.contains("meal_count=2"))
+        XCTAssertTrue(report.humanDescription.contains("last_meal_at=2026-04-07 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("days_since_last_meal="))
+    }
+
+    func testRecipeUsageStatsComputesDaysSinceLastMealByCalendarDay() {
+        let stats = RecipeUsageStats(
+            uid: "AAA",
+            derivedAt: Date(timeIntervalSince1970: 1_712_736_060),
+            mealCount: 2,
+            firstMealAt: "2026-04-01 18:00:00",
+            lastMealAt: "2026-04-07 23:30:00",
+            mealGapDays: [6],
+            daysSpannedByMeals: 6,
+            medianMealGapDays: 6.0,
+            mealShare: 0.25
+        )
+
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = .current
+        components.year = 2026
+        components.month = 4
+        components.day = 9
+        components.hour = 1
+        let referenceDate = components.date ?? Date(timeIntervalSince1970: 0)
+
+        XCTAssertEqual(stats.daysSinceLastMeal(referenceDate: referenceDate), 2)
     }
 
     func testRecipeReportsRenderIngredientAnyAndExcludeSemantics() {

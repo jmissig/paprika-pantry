@@ -45,7 +45,9 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let recipeIngredientLineCount: Int
     public let recipeIngredientTokenCount: Int
     public let recipeUsageStatsCount: Int
-    public let recipeUsageStatsWithLastCookedCount: Int
+    public let recipeUsageStatsWithLastMealAtCount: Int
+    public let recipeUsageStatsWithGapArrayCount: Int
+    public let recipeUsageTotalMealCount: Int
     public let lastRecipeSearchRun: PantryIndexRun?
     public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
     public let lastRecipeFeatureRun: PantryIndexRun?
@@ -65,7 +67,9 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         recipeIngredientLineCount: Int = 0,
         recipeIngredientTokenCount: Int = 0,
         recipeUsageStatsCount: Int = 0,
-        recipeUsageStatsWithLastCookedCount: Int = 0,
+        recipeUsageStatsWithLastMealAtCount: Int = 0,
+        recipeUsageStatsWithGapArrayCount: Int = 0,
+        recipeUsageTotalMealCount: Int = 0,
         lastRecipeSearchRun: PantryIndexRun?,
         lastSuccessfulRecipeSearchRun: PantryIndexRun?,
         lastRecipeFeatureRun: PantryIndexRun?,
@@ -84,7 +88,9 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.recipeIngredientLineCount = recipeIngredientLineCount
         self.recipeIngredientTokenCount = recipeIngredientTokenCount
         self.recipeUsageStatsCount = recipeUsageStatsCount
-        self.recipeUsageStatsWithLastCookedCount = recipeUsageStatsWithLastCookedCount
+        self.recipeUsageStatsWithLastMealAtCount = recipeUsageStatsWithLastMealAtCount
+        self.recipeUsageStatsWithGapArrayCount = recipeUsageStatsWithGapArrayCount
+        self.recipeUsageTotalMealCount = recipeUsageTotalMealCount
         self.lastRecipeSearchRun = lastRecipeSearchRun
         self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
         self.lastRecipeFeatureRun = lastRecipeFeatureRun
@@ -223,7 +229,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let recipeIngredientLineCount: Int
     public let recipeIngredientTokenCount: Int
     public let recipeUsageStatsCount: Int
+    public let recipeUsageStatsWithLastMealAtCount: Int
+    public let recipeUsageStatsWithGapArrayCount: Int
     public let linkedMealCount: Int
+    public let totalMealCount: Int
     public let sourceState: PantryStoredSourceState?
 
     public init(
@@ -237,7 +246,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         recipeIngredientLineCount: Int = 0,
         recipeIngredientTokenCount: Int = 0,
         recipeUsageStatsCount: Int = 0,
+        recipeUsageStatsWithLastMealAtCount: Int = 0,
+        recipeUsageStatsWithGapArrayCount: Int = 0,
         linkedMealCount: Int = 0,
+        totalMealCount: Int = 0,
         sourceState: PantryStoredSourceState? = nil
     ) {
         self.startedAt = startedAt
@@ -250,7 +262,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.recipeIngredientLineCount = recipeIngredientLineCount
         self.recipeIngredientTokenCount = recipeIngredientTokenCount
         self.recipeUsageStatsCount = recipeUsageStatsCount
+        self.recipeUsageStatsWithLastMealAtCount = recipeUsageStatsWithLastMealAtCount
+        self.recipeUsageStatsWithGapArrayCount = recipeUsageStatsWithGapArrayCount
         self.linkedMealCount = linkedMealCount
+        self.totalMealCount = totalMealCount
         self.sourceState = sourceState
     }
 }
@@ -309,8 +324,35 @@ public struct RecipeDerivedFeatures: Codable, Equatable, Sendable {
 public struct RecipeUsageStats: Codable, Equatable, Sendable {
     public let uid: String
     public let derivedAt: Date
-    public let timesCooked: Int
-    public let lastCookedAt: String?
+    public let mealCount: Int
+    public let firstMealAt: String?
+    public let lastMealAt: String?
+    public let mealGapDays: [Int]?
+    public let daysSpannedByMeals: Int?
+    public let medianMealGapDays: Double?
+    public let mealShare: Double?
+
+    public init(
+        uid: String,
+        derivedAt: Date,
+        mealCount: Int,
+        firstMealAt: String?,
+        lastMealAt: String?,
+        mealGapDays: [Int]?,
+        daysSpannedByMeals: Int?,
+        medianMealGapDays: Double?,
+        mealShare: Double?
+    ) {
+        self.uid = uid
+        self.derivedAt = derivedAt
+        self.mealCount = mealCount
+        self.firstMealAt = firstMealAt
+        self.lastMealAt = lastMealAt
+        self.mealGapDays = mealGapDays
+        self.daysSpannedByMeals = daysSpannedByMeals
+        self.medianMealGapDays = medianMealGapDays
+        self.mealShare = mealShare
+    }
 
     public init(
         uid: String,
@@ -318,10 +360,33 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
         timesCooked: Int,
         lastCookedAt: String?
     ) {
-        self.uid = uid
-        self.derivedAt = derivedAt
-        self.timesCooked = timesCooked
-        self.lastCookedAt = lastCookedAt
+        self.init(
+            uid: uid,
+            derivedAt: derivedAt,
+            mealCount: timesCooked,
+            firstMealAt: nil,
+            lastMealAt: lastCookedAt,
+            mealGapDays: nil,
+            daysSpannedByMeals: nil,
+            medianMealGapDays: nil,
+            mealShare: nil
+        )
+    }
+
+    public var timesCooked: Int {
+        mealCount
+    }
+
+    public var lastCookedAt: String? {
+        lastMealAt
+    }
+
+    public func daysSinceLastMeal(referenceDate: Date = Date()) -> Int? {
+        guard let lastMealAt, let lastMealDate = MealHistoryDateSupport.parsedDate(from: lastMealAt) else {
+            return nil
+        }
+
+        return MealHistoryDateSupport.dayDistance(from: lastMealDate, to: referenceDate)
     }
 }
 
@@ -352,9 +417,23 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 recipeIngredientLineCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_lines") ?? 0,
                 recipeIngredientTokenCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_tokens") ?? 0,
                 recipeUsageStatsCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_usage_stats") ?? 0,
-                recipeUsageStatsWithLastCookedCount: try Int.fetchOne(
+                recipeUsageStatsWithLastMealAtCount: try Int.fetchOne(
                     db,
-                    sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE last_cooked_at IS NOT NULL"
+                    sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE last_meal_at IS NOT NULL"
+                ) ?? 0,
+                recipeUsageStatsWithGapArrayCount: try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE meal_gap_days_json IS NOT NULL"
+                ) ?? 0,
+                recipeUsageTotalMealCount: try Int.fetchOne(
+                    db,
+                    sql: """
+                    SELECT total_meal_count
+                    FROM recipe_usage_summary
+                    WHERE summary_key = ?
+                    LIMIT 1
+                    """,
+                    arguments: [Self.recipeUsageSummaryKey]
                 ) ?? 0,
                 lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db),
@@ -461,6 +540,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     recipe_features.ingredient_line_count_basis,
                     recipe_usage_stats.uid AS usage_uid,
                     recipe_usage_stats.derived_at AS usage_derived_at,
+                    recipe_usage_stats.meal_count,
+                    recipe_usage_stats.first_meal_at,
+                    recipe_usage_stats.last_meal_at,
+                    recipe_usage_stats.meal_gap_days_json,
+                    recipe_usage_stats.days_spanned_by_meals,
+                    recipe_usage_stats.median_meal_gap_days,
+                    recipe_usage_stats.meal_share,
                     recipe_usage_stats.times_cooked,
                     recipe_usage_stats.last_cooked_at
                 FROM recipe_search_fts
@@ -625,6 +711,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     SELECT
                         uid,
                         derived_at,
+                        meal_count,
+                        first_meal_at,
+                        last_meal_at,
+                        meal_gap_days_json,
+                        days_spanned_by_meals,
+                        median_meal_gap_days,
+                        meal_share,
                         times_cooked,
                         last_cooked_at
                     FROM recipe_usage_stats
@@ -680,6 +773,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 SELECT
                     uid,
                     derived_at,
+                    meal_count,
+                    first_meal_at,
+                    last_meal_at,
+                    meal_gap_days_json,
+                    days_spanned_by_meals,
+                    median_meal_gap_days,
+                    meal_share,
                     times_cooked,
                     last_cooked_at
                 FROM recipe_usage_stats
@@ -826,7 +926,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
             let usageStats = Self.deriveUsageStats(
                 from: meals,
                 activeRecipeUIDs: activeRecipeUIDs,
-                derivedAt: startedAt
+                derivedAt: startedAt,
+                referenceDate: startedAt
             )
             documents.reserveCapacity(activeStubs.count)
             features.reserveCapacity(activeStubs.count)
@@ -883,7 +984,18 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 partialResult += index.normalizedTokenCount
             }
             let recipeUsageStatsCount = sortedUsageStats.count
+            let recipeUsageStatsWithLastMealAtCount = sortedUsageStats.reduce(into: 0) { count, stats in
+                if stats.lastMealAt != nil {
+                    count += 1
+                }
+            }
+            let recipeUsageStatsWithGapArrayCount = sortedUsageStats.reduce(into: 0) { count, stats in
+                if stats.mealGapDays != nil {
+                    count += 1
+                }
+            }
             let linkedMealCount = usageStats.linkedMealCount
+            let totalMealCount = usageStats.totalMealCount
             let sourceState = Self.makeStoredSourceState(from: source, observedAt: finishedAt)
             try await dbQueue.write { db in
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
@@ -892,6 +1004,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
                 try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
                 try db.execute(sql: "DELETE FROM recipe_usage_stats")
+                try db.execute(sql: "DELETE FROM recipe_usage_summary")
                 try db.execute(sql: "DELETE FROM source_state")
 
                 for document in sortedDocuments {
@@ -1026,17 +1139,46 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             uid,
                             derived_at,
                             times_cooked,
-                            last_cooked_at
-                        ) VALUES (?, ?, ?, ?)
+                            last_cooked_at,
+                            meal_count,
+                            first_meal_at,
+                            last_meal_at,
+                            meal_gap_days_json,
+                            days_spanned_by_meals,
+                            median_meal_gap_days,
+                            meal_share
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         arguments: [
                             usageStat.uid,
                             DatabaseTimestamp.encode(finishedAt),
-                            usageStat.timesCooked,
-                            usageStat.lastCookedAt,
+                            usageStat.mealCount,
+                            usageStat.lastMealAt,
+                            usageStat.mealCount,
+                            usageStat.firstMealAt,
+                            usageStat.lastMealAt,
+                            Self.encodeIntArrayJSON(usageStat.mealGapDays),
+                            usageStat.daysSpannedByMeals,
+                            usageStat.medianMealGapDays,
+                            usageStat.mealShare,
                         ]
                     )
                 }
+
+                try db.execute(
+                    sql: """
+                    INSERT INTO recipe_usage_summary (
+                        summary_key,
+                        derived_at,
+                        total_meal_count
+                    ) VALUES (?, ?, ?)
+                    """,
+                    arguments: [
+                        Self.recipeUsageSummaryKey,
+                        DatabaseTimestamp.encode(finishedAt),
+                        totalMealCount,
+                    ]
+                )
 
                 if let sourceState {
                     try writeStoredSourceState(sourceState, in: db)
@@ -1087,7 +1229,10 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 recipeIngredientLineCount: recipeIngredientLineCount,
                 recipeIngredientTokenCount: recipeIngredientTokenCount,
                 recipeUsageStatsCount: recipeUsageStatsCount,
+                recipeUsageStatsWithLastMealAtCount: recipeUsageStatsWithLastMealAtCount,
+                recipeUsageStatsWithGapArrayCount: recipeUsageStatsWithGapArrayCount,
                 linkedMealCount: linkedMealCount,
+                totalMealCount: totalMealCount,
                 sourceState: sourceState
             )
         } catch {
@@ -1347,6 +1492,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     private static let recipeFeatureIndexName = "recipe-features"
     private static let recipeIngredientIndexName = "recipe-ingredients"
     private static let recipeUsageIndexName = "recipe-usage"
+    private static let recipeUsageSummaryKey = "current"
 
     private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
         if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
@@ -1361,9 +1507,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
         case .relevance:
             return """
             bm25(recipe_search_fts) ASC,
-            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
-            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
-            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1378,17 +1524,17 @@ public struct PantrySidecarStore: @unchecked Sendable {
             return """
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
-            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
-            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
-            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
             recipe_search_documents.uid ASC
             """
         case .timesCooked:
             return """
-            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
-            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
-            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1400,9 +1546,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
             recipe_features.total_time_minutes ASC,
             CASE WHEN recipe_features.ingredient_line_count IS NULL THEN 1 ELSE 0 END ASC,
             recipe_features.ingredient_line_count ASC,
-            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
-            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
-            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1414,9 +1560,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
             recipe_features.ingredient_line_count ASC,
             CASE WHEN recipe_features.total_time_minutes IS NULL THEN 1 ELSE 0 END ASC,
             recipe_features.total_time_minutes ASC,
-            COALESCE(recipe_usage_stats.times_cooked, 0) DESC,
-            CASE WHEN recipe_usage_stats.last_cooked_at IS NULL THEN 1 ELSE 0 END ASC,
-            recipe_usage_stats.last_cooked_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
@@ -1509,16 +1655,21 @@ public struct PantrySidecarStore: @unchecked Sendable {
 
     private static func decodeRecipeUsageStats(row: Row) -> RecipeUsageStats? {
         let derivedAtValue: String? = row["usage_derived_at"] ?? row["derived_at"]
-        let timesCooked: Int? = row["times_cooked"]
-        guard let derivedAtValue, let timesCooked else {
+        let mealCount: Int? = row["meal_count"] ?? row["times_cooked"]
+        guard let derivedAtValue, let mealCount else {
             return nil
         }
 
         return RecipeUsageStats(
             uid: row["usage_uid"] ?? row["uid"],
             derivedAt: DatabaseTimestamp.decodeRequired(derivedAtValue),
-            timesCooked: timesCooked,
-            lastCookedAt: row["last_cooked_at"]
+            mealCount: mealCount,
+            firstMealAt: row["first_meal_at"],
+            lastMealAt: row["last_meal_at"] ?? row["last_cooked_at"],
+            mealGapDays: decodeIntArrayJSON(row["meal_gap_days_json"]),
+            daysSpannedByMeals: row["days_spanned_by_meals"],
+            medianMealGapDays: row["median_meal_gap_days"],
+            mealShare: row["meal_share"]
         )
     }
 
@@ -1587,6 +1738,22 @@ public struct PantrySidecarStore: @unchecked Sendable {
         value.split(separator: "\u{1F}").map(String.init)
     }
 
+    private static func encodeIntArrayJSON(_ values: [Int]?) -> String? {
+        guard let values, let data = try? JSONEncoder().encode(values) else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeIntArrayJSON(_ value: String?) -> [Int]? {
+        guard let value, let data = value.data(using: .utf8) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode([Int].self, from: data)
+    }
+
     private static func deriveFeatures(from recipe: SourceRecipe, derivedAt: Date) -> RecipeDerivedFeatures {
         let prepTimeMinutes = parsedDurationMinutes(recipe.prepTime)
         let cookTimeMinutes = parsedDurationMinutes(recipe.cookTime)
@@ -1623,45 +1790,108 @@ public struct PantrySidecarStore: @unchecked Sendable {
     private static func deriveUsageStats(
         from meals: [SourceMeal],
         activeRecipeUIDs: Set<String>,
-        derivedAt: Date
+        derivedAt: Date,
+        referenceDate: Date
     ) -> RecipeUsageDerivation {
-        var linkedMealCount = 0
-        var countsByRecipeUID = [String: Int]()
-        var lastCookedAtByRecipeUID = [String: String]()
-
-        for meal in meals where !meal.isDeleted {
-            guard let recipeUID = meal.recipeUID?.trimmingCharacters(in: .whitespacesAndNewlines), !recipeUID.isEmpty else {
-                continue
+        let qualifyingMeals = meals.enumerated().compactMap { offset, meal -> QualifiedMealOccurrence? in
+            guard !meal.isDeleted else {
+                return nil
             }
 
-            guard activeRecipeUIDs.contains(recipeUID) else {
+            guard
+                let scheduledAt = meal.scheduledAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+                !scheduledAt.isEmpty,
+                let scheduledDate = MealHistoryDateSupport.parsedDate(from: scheduledAt),
+                scheduledDate <= referenceDate
+            else {
+                return nil
+            }
+
+            return QualifiedMealOccurrence(
+                inputOrder: offset,
+                scheduledAt: scheduledAt,
+                scheduledDate: scheduledDate,
+                recipeUID: meal.recipeUID?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfEmpty
+            )
+        }
+
+        let totalMealCount = qualifyingMeals.count
+        var linkedMealCount = 0
+        var mealsByRecipeUID = [String: [QualifiedMealOccurrence]]()
+
+        for meal in qualifyingMeals {
+            guard let recipeUID = meal.recipeUID, activeRecipeUIDs.contains(recipeUID) else {
                 continue
             }
 
             linkedMealCount += 1
-            countsByRecipeUID[recipeUID, default: 0] += 1
-
-            if let scheduledAt = meal.scheduledAt?.trimmingCharacters(in: .whitespacesAndNewlines), !scheduledAt.isEmpty {
-                let existing = lastCookedAtByRecipeUID[recipeUID]
-                if existing == nil || scheduledAt > existing! {
-                    lastCookedAtByRecipeUID[recipeUID] = scheduledAt
-                }
-            }
+            mealsByRecipeUID[recipeUID, default: []].append(meal)
         }
 
-        let stats = countsByRecipeUID.map { recipeUID, timesCooked in
-            RecipeUsageStats(
+        let stats = mealsByRecipeUID.map { recipeUID, recipeMeals in
+            let sortedMeals = recipeMeals.sorted { lhs, rhs in
+                if lhs.scheduledDate != rhs.scheduledDate {
+                    return lhs.scheduledDate < rhs.scheduledDate
+                }
+
+                return lhs.inputOrder < rhs.inputOrder
+            }
+
+            let mealGapDays: [Int]? = sortedMeals.count < 2
+                ? nil
+                : zip(sortedMeals, sortedMeals.dropFirst()).map { earlier, later in
+                    MealHistoryDateSupport.dayDistance(
+                        from: earlier.scheduledDate,
+                        to: later.scheduledDate
+                    )
+                }
+            let firstMeal = sortedMeals.first
+            let lastMeal = sortedMeals.last
+            let daysSpannedByMeals = sortedMeals.count < 2
+                ? nil
+                : firstMeal.flatMap { firstMeal in
+                    lastMeal.map { lastMeal in
+                        MealHistoryDateSupport.dayDistance(
+                            from: firstMeal.scheduledDate,
+                            to: lastMeal.scheduledDate
+                        )
+                    }
+                }
+
+            return RecipeUsageStats(
                 uid: recipeUID,
                 derivedAt: derivedAt,
-                timesCooked: timesCooked,
-                lastCookedAt: lastCookedAtByRecipeUID[recipeUID]
+                mealCount: sortedMeals.count,
+                firstMealAt: firstMeal?.scheduledAt,
+                lastMealAt: lastMeal?.scheduledAt,
+                mealGapDays: mealGapDays,
+                daysSpannedByMeals: daysSpannedByMeals,
+                medianMealGapDays: median(of: mealGapDays),
+                mealShare: totalMealCount == 0 ? nil : Double(sortedMeals.count) / Double(totalMealCount)
             )
         }
 
         return RecipeUsageDerivation(
             stats: stats,
-            linkedMealCount: linkedMealCount
+            linkedMealCount: linkedMealCount,
+            totalMealCount: totalMealCount
         )
+    }
+
+    private static func median(of values: [Int]?) -> Double? {
+        guard let values, !values.isEmpty else {
+            return nil
+        }
+
+        let sortedValues = values.sorted()
+        let middleIndex = sortedValues.count / 2
+        if sortedValues.count.isMultiple(of: 2) {
+            return Double(sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2.0
+        }
+
+        return Double(sortedValues[middleIndex])
     }
 
     private static func countedIngredientLines(_ ingredients: String?) -> Int? {
@@ -1778,6 +2008,43 @@ private struct RecipeSearchDocument: Equatable, Sendable {
 private struct RecipeUsageDerivation: Equatable, Sendable {
     let stats: [RecipeUsageStats]
     let linkedMealCount: Int
+    let totalMealCount: Int
+}
+
+private struct QualifiedMealOccurrence: Equatable, Sendable {
+    let inputOrder: Int
+    let scheduledAt: String
+    let scheduledDate: Date
+    let recipeUID: String?
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
+private enum MealHistoryDateSupport {
+    static func parsedDate(from value: String) -> Date? {
+        formatter().date(from: value)
+    }
+
+    static func dayDistance(from earlier: Date, to later: Date) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+
+        let earlierDay = calendar.startOfDay(for: earlier)
+        let laterDay = calendar.startOfDay(for: later)
+        return calendar.dateComponents([.day], from: earlierDay, to: laterDay).day ?? 0
+    }
+
+    private static func formatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }
 }
 
 enum DatabaseTimestamp {

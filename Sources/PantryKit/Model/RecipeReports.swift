@@ -210,9 +210,27 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
                 freshnessSeconds: usageFreshnessSeconds
             ))
             lines.append("usage_derived_at: \(renderedTimestamp(usageStats.derivedAt))")
-            lines.append("times_cooked: \(usageStats.timesCooked)")
-            if let lastCookedAt = usageStats.lastCookedAt {
-                lines.append("last_cooked_at: \(lastCookedAt)")
+            lines.append("meal_count: \(usageStats.mealCount)")
+            if let firstMealAt = usageStats.firstMealAt {
+                lines.append("first_meal_at: \(firstMealAt)")
+            }
+            if let lastMealAt = usageStats.lastMealAt {
+                lines.append("last_meal_at: \(lastMealAt)")
+            }
+            if let daysSinceLastMeal = usageStats.daysSinceLastMeal() {
+                lines.append("days_since_last_meal: \(daysSinceLastMeal)")
+            }
+            if let mealGapDays = usageStats.mealGapDays {
+                lines.append("meal_gap_days: \(renderedIntArray(mealGapDays))")
+            }
+            if let daysSpannedByMeals = usageStats.daysSpannedByMeals {
+                lines.append("days_spanned_by_meals: \(daysSpannedByMeals)")
+            }
+            if let medianMealGapDays = usageStats.medianMealGapDays {
+                lines.append("median_meal_gap_days: \(renderedDouble(medianMealGapDays))")
+            }
+            if let mealShare = usageStats.mealShare {
+                lines.append("meal_share: \(renderedDouble(mealShare))")
             }
         }
 
@@ -325,7 +343,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_ingredient_tokens: \(stats.recipeIngredientTokenCount)",
             "recipe_usage_index_ready: \(stats.recipeUsageStatsReady ? "yes" : "no")",
             "recipe_usage_stat_rows: \(stats.recipeUsageStatsCount)",
-            "recipe_usage_stats_with_last_cooked_at: \(stats.recipeUsageStatsWithLastCookedCount)",
+            "recipe_usage_rows_with_last_meal_at: \(stats.recipeUsageStatsWithLastMealAtCount)",
+            "recipe_usage_rows_with_gap_arrays: \(stats.recipeUsageStatsWithGapArrayCount)",
+            "recipe_usage_total_meals: \(stats.recipeUsageTotalMealCount)",
         ]
 
         if let sourceState = stats.sourceState {
@@ -419,7 +439,7 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
     public var humanDescription: String {
         let rebuildDurationMilliseconds = max(0, Int((summary.finishedAt.timeIntervalSince(summary.startedAt) * 1_000).rounded()))
         var lines = [
-            "\(command): Rebuilt owned recipe search, feature, and ingredient indexes.",
+            "\(command): Rebuilt owned recipe search, feature, usage, and ingredient indexes.",
             "duration_ms: \(rebuildDurationMilliseconds)",
             "recipe_search_documents: \(summary.recipeSearchDocumentCount)",
             "recipe_feature_rows: \(summary.recipeFeatureCount)",
@@ -429,7 +449,10 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_ingredient_lines: \(summary.recipeIngredientLineCount)",
             "recipe_ingredient_tokens: \(summary.recipeIngredientTokenCount)",
             "recipe_usage_stat_rows: \(summary.recipeUsageStatsCount)",
+            "recipe_usage_rows_with_last_meal_at: \(summary.recipeUsageStatsWithLastMealAtCount)",
+            "recipe_usage_rows_with_gap_arrays: \(summary.recipeUsageStatsWithGapArrayCount)",
             "linked_meals_with_recipe_uid: \(summary.linkedMealCount)",
+            "total_qualifying_meals: \(summary.totalMealCount)",
         ]
 
         if let sourceState = summary.sourceState {
@@ -964,10 +987,26 @@ func renderedRecipeUsageEvidence(_ usageStats: RecipeUsageStats?) -> [String] {
         return []
     }
 
-    var parts = ["times_cooked=\(usageStats.timesCooked)"]
+    var parts = ["meal_count=\(usageStats.mealCount)"]
 
-    if let lastCookedAt = usageStats.lastCookedAt {
-        parts.append("last_cooked_at=\(lastCookedAt)")
+    if let lastMealAt = usageStats.lastMealAt {
+        parts.append("last_meal_at=\(lastMealAt)")
+    }
+
+    if let daysSinceLastMeal = usageStats.daysSinceLastMeal() {
+        parts.append("days_since_last_meal=\(daysSinceLastMeal)")
+    }
+
+    if let daysSpannedByMeals = usageStats.daysSpannedByMeals {
+        parts.append("days_spanned_by_meals=\(daysSpannedByMeals)")
+    }
+
+    if let medianMealGapDays = usageStats.medianMealGapDays {
+        parts.append("median_meal_gap_days=\(renderedDouble(medianMealGapDays))")
+    }
+
+    if let mealShare = usageStats.mealShare {
+        parts.append("meal_share=\(renderedDouble(mealShare))")
     }
 
     return parts
@@ -983,8 +1022,11 @@ private let recipeResultCSVHeaders = [
     "updated_at",
     "derived_total_time_minutes",
     "derived_ingredient_line_count",
-    "times_cooked",
-    "last_cooked_at",
+    "meal_count",
+    "last_meal_at",
+    "days_spanned_by_meals",
+    "median_meal_gap_days",
+    "meal_share",
 ]
 
 private func recipeCSVRow(_ recipe: RecipeSummary) -> [String] {
@@ -998,8 +1040,11 @@ private func recipeCSVRow(_ recipe: RecipeSummary) -> [String] {
         recipe.updatedAt ?? "",
         recipe.derivedFeatures?.totalTimeMinutes.map(String.init) ?? "",
         recipe.derivedFeatures?.ingredientLineCount.map(String.init) ?? "",
-        recipe.usageStats.map { String($0.timesCooked) } ?? "",
-        recipe.usageStats?.lastCookedAt ?? "",
+        recipe.usageStats.map { String($0.mealCount) } ?? "",
+        recipe.usageStats?.lastMealAt ?? "",
+        recipe.usageStats?.daysSpannedByMeals.map(String.init) ?? "",
+        recipe.usageStats?.medianMealGapDays.map(renderedDouble) ?? "",
+        recipe.usageStats?.mealShare.map(renderedDouble) ?? "",
     ]
 }
 
@@ -1014,7 +1059,22 @@ private func recipeCSVRow(for result: IndexedRecipeSearchResult) -> [String] {
         "",
         result.derivedFeatures?.totalTimeMinutes.map(String.init) ?? "",
         result.derivedFeatures?.ingredientLineCount.map(String.init) ?? "",
-        result.usageStats.map { String($0.timesCooked) } ?? "",
-        result.usageStats?.lastCookedAt ?? "",
+        result.usageStats.map { String($0.mealCount) } ?? "",
+        result.usageStats?.lastMealAt ?? "",
+        result.usageStats?.daysSpannedByMeals.map(String.init) ?? "",
+        result.usageStats?.medianMealGapDays.map(renderedDouble) ?? "",
+        result.usageStats?.mealShare.map(renderedDouble) ?? "",
     ]
+}
+
+private func renderedIntArray(_ values: [Int]) -> String {
+    "[\(values.map(String.init).joined(separator: ", "))]"
+}
+
+private func renderedDouble(_ value: Double) -> String {
+    if value.rounded() == value {
+        return String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), value)
+    }
+
+    return String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), value)
 }

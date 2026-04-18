@@ -14,6 +14,7 @@ final class PantrySidecarStoreTests: XCTestCase {
 
     func testRecipeIndexesRebuildSearchAndDerivedFeatures() async throws {
         let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
         let source = InMemoryPantrySource(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
@@ -106,13 +107,30 @@ final class PantrySidecarStoreTests: XCTestCase {
                     recipeUID: "CCC",
                     recipeName: "Deleted"
                 ),
+                SourceMeal(
+                    uid: "MEAL6",
+                    name: "Future Weeknight Soup",
+                    scheduledAt: "2026-04-15 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup"
+                ),
+                SourceMeal(
+                    uid: "MEAL7",
+                    name: "Deleted Meal",
+                    scheduledAt: "2026-04-06 18:00:00",
+                    mealType: "Dinner",
+                    recipeUID: "AAA",
+                    recipeName: "Weeknight Soup",
+                    isDeleted: true
+                ),
             ]
         )
 
         let summary = try await store.rebuildRecipeIndexes(
             from: source,
             now: {
-                Date(timeIntervalSince1970: 1_712_736_000)
+                referenceDate
             }
         )
 
@@ -123,8 +141,8 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(summary.recipeIngredientRecipeCount, 2)
         XCTAssertEqual(summary.recipeIngredientLineCount, 4)
         XCTAssertEqual(summary.recipeIngredientTokenCount, 4)
-        XCTAssertEqual(summary.recipeUsageStatsCount, 2)
-        XCTAssertEqual(summary.linkedMealCount, 3)
+        XCTAssertEqual(summary.recipeUsageStatsCount, 1)
+        XCTAssertEqual(summary.linkedMealCount, 2)
 
         let results = try store.searchRecipes(query: "lemon", limit: 20)
         XCTAssertEqual(results.map(\.uid), ["AAA"])
@@ -144,13 +162,28 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(ingredientIndex.lines.flatMap(\.normalizedTokens), ["broth", "bean"])
 
         let usageAAA = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "AAA"))
-        XCTAssertEqual(usageAAA.timesCooked, 2)
-        XCTAssertEqual(usageAAA.lastCookedAt, "2026-04-07 18:00:00")
+        XCTAssertEqual(usageAAA.mealCount, 2)
+        XCTAssertEqual(usageAAA.firstMealAt, "2026-04-01 18:00:00")
+        XCTAssertEqual(usageAAA.lastMealAt, "2026-04-07 18:00:00")
+        XCTAssertEqual(usageAAA.mealGapDays, [6])
+        XCTAssertEqual(usageAAA.daysSpannedByMeals, 6)
+        XCTAssertEqual(try XCTUnwrap(usageAAA.medianMealGapDays), 6.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(usageAAA.mealShare), 0.5, accuracy: 0.001)
 
-        let usageBBB = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "BBB"))
-        XCTAssertEqual(usageBBB.timesCooked, 1)
-        XCTAssertNil(usageBBB.lastCookedAt)
+        XCTAssertNil(try store.fetchRecipeUsageStats(uid: "BBB"))
         XCTAssertNil(try store.fetchRecipeUsageStats(uid: "CCC"))
+
+        let totalMealCount = try await store.dbQueue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: """
+                SELECT total_meal_count
+                FROM recipe_usage_summary
+                WHERE summary_key = 'current'
+                """
+            )
+        }
+        XCTAssertEqual(totalMealCount, 4)
 
         let stats = try store.indexStats()
         XCTAssertEqual(stats.recipeSearchDocumentCount, 2)
@@ -160,8 +193,10 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(stats.recipeIngredientRecipeCount, 2)
         XCTAssertEqual(stats.recipeIngredientLineCount, 4)
         XCTAssertEqual(stats.recipeIngredientTokenCount, 4)
-        XCTAssertEqual(stats.recipeUsageStatsCount, 2)
-        XCTAssertEqual(stats.recipeUsageStatsWithLastCookedCount, 1)
+        XCTAssertEqual(stats.recipeUsageStatsCount, 1)
+        XCTAssertEqual(stats.recipeUsageStatsWithLastMealAtCount, 1)
+        XCTAssertEqual(stats.recipeUsageStatsWithGapArrayCount, 1)
+        XCTAssertEqual(stats.recipeUsageTotalMealCount, 4)
         XCTAssertTrue(stats.recipeSearchReady)
         XCTAssertTrue(stats.recipeFeaturesReady)
         XCTAssertTrue(stats.recipeIngredientIndexReady)
@@ -173,7 +208,111 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(stats.lastRecipeIngredientRun?.status, .success)
         XCTAssertEqual(stats.lastRecipeIngredientRun?.recipeCount, 2)
         XCTAssertEqual(stats.lastRecipeUsageRun?.status, .success)
-        XCTAssertEqual(stats.lastRecipeUsageRun?.recipeCount, 2)
+        XCTAssertEqual(stats.lastRecipeUsageRun?.recipeCount, 1)
+    }
+
+    func testRecipeIndexesRebuildDerivesOrderedMealHistoryFactsAndMedian() async throws {
+        let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Soup A", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Soup B", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Soup C", sourceFingerprint: "hash-ccc"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeSourceRecipeForUsageTest(uid: "AAA", name: "Soup A", starRating: 5, isFavorite: true),
+                "BBB": makeSourceRecipeForUsageTest(uid: "BBB", name: "Soup B", starRating: 4, isFavorite: false),
+                "CCC": makeSourceRecipeForUsageTest(uid: "CCC", name: "Soup C", starRating: 3, isFavorite: false),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "Soup A", scheduledAt: "2026-04-05 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M2", name: "Soup A", scheduledAt: "2026-04-01 12:00:00", mealType: "Lunch", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M3", name: "Soup A", scheduledAt: "2026-04-01 20:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M4", name: "Soup A", scheduledAt: "2026-04-03 12:00:00", mealType: "Lunch", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M5", name: "Soup B", scheduledAt: "2026-04-02 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Soup B"),
+                SourceMeal(uid: "M6", name: "Soup B", scheduledAt: "2026-04-02 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Soup B"),
+                SourceMeal(uid: "M7", name: "Soup B", scheduledAt: "2026-04-06 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Soup B"),
+                SourceMeal(uid: "M8", name: "Soup C", scheduledAt: "2026-04-04 18:00:00", mealType: "Dinner", recipeUID: "CCC", recipeName: "Soup C"),
+                SourceMeal(uid: "M9", name: "Loose Dinner", scheduledAt: "2026-04-07 18:00:00", mealType: "Dinner", recipeUID: nil, recipeName: nil),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(
+            from: source,
+            now: {
+                referenceDate
+            }
+        )
+
+        let usageAAA = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "AAA"))
+        XCTAssertEqual(usageAAA.mealCount, 4)
+        XCTAssertEqual(usageAAA.firstMealAt, "2026-04-01 12:00:00")
+        XCTAssertEqual(usageAAA.lastMealAt, "2026-04-05 18:00:00")
+        XCTAssertEqual(usageAAA.mealGapDays, [0, 2, 2])
+        XCTAssertEqual(usageAAA.daysSpannedByMeals, 4)
+        XCTAssertEqual(try XCTUnwrap(usageAAA.medianMealGapDays), 2.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(usageAAA.mealShare), 4.0 / 9.0, accuracy: 0.0001)
+
+        let usageBBB = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "BBB"))
+        XCTAssertEqual(usageBBB.mealCount, 3)
+        XCTAssertEqual(usageBBB.mealGapDays, [0, 4])
+        XCTAssertEqual(usageBBB.daysSpannedByMeals, 4)
+        XCTAssertEqual(try XCTUnwrap(usageBBB.medianMealGapDays), 2.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(usageBBB.mealShare), 3.0 / 9.0, accuracy: 0.0001)
+
+        let usageCCC = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "CCC"))
+        XCTAssertEqual(usageCCC.mealCount, 1)
+        XCTAssertEqual(usageCCC.firstMealAt, "2026-04-04 18:00:00")
+        XCTAssertEqual(usageCCC.lastMealAt, "2026-04-04 18:00:00")
+        XCTAssertNil(usageCCC.mealGapDays)
+        XCTAssertNil(usageCCC.daysSpannedByMeals)
+        XCTAssertNil(usageCCC.medianMealGapDays)
+        XCTAssertEqual(try XCTUnwrap(usageCCC.mealShare), 1.0 / 9.0, accuracy: 0.0001)
+    }
+
+    func testRecipeIndexesRebuildPersistsTotalMealCountWithoutLinkedUsageRows() async throws {
+        let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Soup A", sourceFingerprint: "hash-aaa"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeSourceRecipeForUsageTest(uid: "AAA", name: "Soup A", starRating: nil, isFavorite: false),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "Loose Dinner", scheduledAt: "2026-04-07 18:00:00", mealType: "Dinner", recipeUID: nil, recipeName: nil),
+                SourceMeal(uid: "M2", name: "Future Dinner", scheduledAt: "2026-04-15 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M3", name: "Undated Dinner", scheduledAt: nil, mealType: "Dinner", recipeUID: "AAA", recipeName: "Soup A"),
+                SourceMeal(uid: "M4", name: "Deleted Dinner", scheduledAt: "2026-04-06 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Soup A", isDeleted: true),
+            ]
+        )
+
+        let summary = try await store.rebuildRecipeIndexes(
+            from: source,
+            now: {
+                referenceDate
+            }
+        )
+
+        XCTAssertEqual(summary.recipeUsageStatsCount, 0)
+        XCTAssertEqual(summary.linkedMealCount, 0)
+        XCTAssertNil(try store.fetchRecipeUsageStats(uid: "AAA"))
+
+        let totalMealCount = try await store.dbQueue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: """
+                SELECT total_meal_count
+                FROM recipe_usage_summary
+                WHERE summary_key = 'current'
+                """
+            )
+        }
+        XCTAssertEqual(totalMealCount, 1)
     }
 
     func testSearchNormalizesPlainQueriesForFTS() async throws {
@@ -355,8 +494,8 @@ final class PantrySidecarStoreTests: XCTestCase {
             limit: 20
         )
         XCTAssertEqual(relevanceResults.map(\.uid), ["AAA", "BBB", "CCC"])
-        XCTAssertEqual(relevanceResults[0].usageStats?.timesCooked, 3)
-        XCTAssertEqual(relevanceResults[1].usageStats?.timesCooked, 1)
+        XCTAssertEqual(relevanceResults[0].usageStats?.mealCount, 3)
+        XCTAssertEqual(relevanceResults[1].usageStats?.mealCount, 1)
         XCTAssertNil(relevanceResults[2].usageStats)
 
         let usageResults = try store.searchRecipes(
@@ -897,5 +1036,16 @@ final class PantrySidecarStoreTests: XCTestCase {
             sourceFingerprint: "hash-\(uid)",
             rawJSON: "{}"
         )
+    }
+
+    private func mealHistoryReferenceDate() -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = .current
+        components.year = 2026
+        components.month = 4
+        components.day = 10
+        components.hour = 12
+        return components.date ?? Date(timeIntervalSince1970: 0)
     }
 }

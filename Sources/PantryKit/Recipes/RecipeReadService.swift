@@ -344,16 +344,16 @@ public struct RecipeReadService: Sendable {
     }
 
     private static func compareByUsage(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool? {
-        if let timesCookedDecision = compareOptionalDescending(
-            lhs.usageStats?.timesCooked,
-            rhs.usageStats?.timesCooked
+        if let mealCountDecision = compareOptionalDescending(
+            lhs.usageStats?.mealCount,
+            rhs.usageStats?.mealCount
         ) {
-            return timesCookedDecision
+            return mealCountDecision
         }
 
-        let lhsLastCookedAt = lhs.usageStats?.lastCookedAt
-        let rhsLastCookedAt = rhs.usageStats?.lastCookedAt
-        switch (lhsLastCookedAt, rhsLastCookedAt) {
+        let lhsLastMealAt = lhs.usageStats?.lastMealAt
+        let rhsLastMealAt = rhs.usageStats?.lastMealAt
+        switch (lhsLastMealAt, rhsLastMealAt) {
         case let (lhsValue?, rhsValue?) where lhsValue != rhsValue:
             return lhsValue > rhsValue
         case (nil, .some):
