@@ -1,13 +1,10 @@
 # TODO
 
-- [ ] Build an explicit `paprika-pantry` SKILL for agents so coding agents and local assistants have a clear, repo-native usage contract.
-
 Active backlog only. Architectural direction and durable constraints live in `AGENTS.md`.
 Completed work should leave this file.
 
 ## Now
 
-- [ ] Align output philosophy with `protect-cadence` and `karivis`: compact human output by default, `--format json` as the preferred structured interface, `--json` as shorthand, and clean human/json/csv behavior under one explicit format model.
 - [ ] Add source/cookbook usage summaries derived from linked meal history where the evidence is strong enough to report cleanly.
 - [ ] Add ingredient co-occurrence / pairing tables with inspectable evidence.
 
