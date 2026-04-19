@@ -1,6 +1,6 @@
 ---
 name: paprika-pantry
-description: Local read/query access to Paprika data and cooking-pattern evidence.
+description: Local read/query access to Paprika recipe, meal, grocery, and pantry data plus derived cooking-pattern evidence. Use when answering questions about what recipes exist, what has been cooked, what ingredients are on hand, or what cooking preferences can be inferred from local Paprika data.
 ---
 
 # paprika-pantry
@@ -11,9 +11,9 @@ Local, read-only access to Paprika's data plus derived usage patterns. Paprika i
 
 Entities:
 - recipe (canonical, often includes cookbook/web site source)
-- meal (cooked/planned instance)
-- groceries (shopping list)
-- pantry (on-hand)
+- meal (planned or cooked occurrence, distinct from a recipe)
+- grocery item (shopping list entry)
+- pantry item (on-hand inventory)
 
 Data types:
 - canonical: direct Paprika facts (recipes, meals, ratings, etc.)
