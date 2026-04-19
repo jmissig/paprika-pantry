@@ -1,64 +1,97 @@
 ---
 name: paprika-pantry
-description: Work with the paprika-pantry CLI and codebase. Use when building, debugging, testing, documenting, or operating paprika-pantry, and when answering questions about local Paprika reads, sidecar indexing, query commands, source freshness, or output conventions.
+description: Local read/query access to Paprika data and cooking-pattern evidence.
 ---
 
-# Paprika Pantry
+# paprika-pantry
 
-Treat `paprika-pantry` as a small local-first Paprika query and analysis CLI.
+Local, read-only access to Paprika's data plus derived usage patterns. Paprika is an app that helps you organize your recipes, make meal plans, and create grocery lists.
 
-## Core rules
+## Model
 
-- Keep reads from Paprika local SQLite read-only.
-- Do not write to the real `Paprika.sqlite`.
-- Treat the sidecar as secondary and inspectable.
-- Keep evidence separate from judgment.
-- Prefer a small, legible command surface.
+Entities:
+- recipe (canonical, often includes cookbook/web site source)
+- meal (cooked/planned instance)
+- groceries (shopping list)
+- pantry (on-hand)
 
-## Output
+Data types:
+- canonical: direct Paprika facts (recipes, meals, ratings, etc.)
+- derived: patterns from behavior (repeat cooking, recency, source affinity, ingredient patterns)
 
-- Prefer `--format json` for agent and script use.
-- Use CSV only for row-oriented reports.
-- Keep default human output compact.
-- Preserve the distinction between canonical source reads, derived sidecar facts, and doctor/source-status output.
+## Core behavior
 
-## Common commands
+- retrieve first, then interpret
+- prefer canonical data for facts
+- use derived data for patterns/preferences
+- keep facts separate from inference
+- structured output often available for LLM processing
 
-```bash
-paprika-pantry doctor --format json
-paprika-pantry source last-sync-time
-paprika-pantry source cookbooks --format json
-paprika-pantry index stats --format json
-paprika-pantry index update
-paprika-pantry recipes list --format json
-paprika-pantry recipes search risotto --format json
-paprika-pantry recipes show "Mushroom Risotto" --format json
-paprika-pantry meals list --format json
-paprika-pantry groceries list --format json
-paprika-pantry pantry list --format json
-```
+## Core commands (illustrative)
 
-## Working style
+- `paprika-pantry doctor --format json`
+- `paprika-pantry recipes search "..." --format json`
+- `paprika-pantry recipes show "..." --format json`
+- `paprika-pantry meals list --format json`
+- `paprika-pantry pantry list --format json`
 
-- Read `README.md` and `AGENTS.md` first.
-- Keep the Paprika adapter boundary narrow.
-- Prefer small, useful slices.
-- Run focused tests, then `swift test` before finishing substantial code changes.
-- Update docs when command shapes or output contracts change.
+Not exhaustive. Use `--help` and adapt to the current interface.
 
-## Architecture
+## Recipe policy
 
-Keep the system legible as:
+When asked for a recipe:
+1. query local Paprika first
+2. present best matches (count depends on context)
 
-1. Paprika read adapter
-2. domain/query layer
-3. sidecar store/index
-4. CLI presentation
+If no results:
+- broaden once
+- if still none: say so, then offer:
+  - pantry-based idea
+  - novel recipe
+  - external search (perhaps based on sources found in paprika-pantry)
 
-Keep Paprika Core Data oddities inside the adapter layer.
+Do not skip local lookup unless explicitly requested.
 
-## Success criterion
+## Preference reasoning
 
-Build a small, quiet, trustworthy pantry reader with a useful sidecar.
+Infer taste from:
+- repeat cooking cadence
+- recency
+- ratings/favorites
+- source/cookbook patterns
+- ingredient & ingredient-combo recurrence
 
-Do not build a Paprika empire.
+Use this to reason about:
+- what is actually liked
+- trusted sources
+- recurring flavor patterns
+- changes over time
+
+Rules:
+- describe evidence briefly
+- separate fact vs inference
+- surface conflicts (e.g. high rating, no repeats)
+- frequency ≠ absolute quality
+
+## Taste reasoning style
+
+Use concise culinary or sensory language to describe patterns.
+
+- ground descriptions in observed data
+- do not introduce unsupported ingredients or flavors
+- avoid absolute or authoritative claims
+
+Make it feel experiential, but keep it evidence-based.
+
+## Response
+
+- concise
+- evidence-backed
+- indicate inferred vs observed
+- acknowledge weak or missing data
+
+## Style
+
+retrieve → interpret → respond  
+few strong results over long lists  
+tool provides evidence, not conclusions
