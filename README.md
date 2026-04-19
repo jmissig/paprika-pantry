@@ -31,6 +31,12 @@ If you want a different install location:
 sudo make install PREFIX="/usr/local"
 ```
 
+To install the repo's OpenClaw skill separately:
+
+```bash
+make install-skill
+```
+
 ## First Run
 
 The normal first check is:

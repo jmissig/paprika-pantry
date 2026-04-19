@@ -5,10 +5,8 @@ BUILD_DIR ?= build
 CONFIGURATION ?= debug
 PREFIX ?= $(HOME)
 BINDIR ?= $(PREFIX)/bin
-SKILL_INSTALL ?= skill-install
-SKILL_SCOPE ?= user
-# OpenClaw's generic/default-ish skill-install target is named "portable".
-SKILL_AGENT ?= portable
+OPENCLAW_SKILLS_DIR ?= $(HOME)/.openclaw/skills
+SKILL_DEST := $(OPENCLAW_SKILLS_DIR)/$(SKILL_NAME)
 
 .PHONY: build release test install install-skill clean show-bin
 
@@ -28,9 +26,10 @@ install: release
 
 install-skill:
 	@test -f "$(SKILL_DIR)/SKILL.md" || (echo "Missing $(SKILL_DIR)/SKILL.md" && exit 1)
-	@command -v "$(SKILL_INSTALL)" >/dev/null 2>&1 || (echo "skill-install not found at $(SKILL_INSTALL)" && exit 1)
-	"$(SKILL_INSTALL)" "$(SKILL_DIR)" --agent "$(SKILL_AGENT)" --scope "$(SKILL_SCOPE)" --force
-	@echo "Installed skill $(SKILL_NAME) via OpenClaw"
+	mkdir -p "$(OPENCLAW_SKILLS_DIR)"
+	rm -rf "$(SKILL_DEST)"
+	cp -R "$(SKILL_DIR)" "$(SKILL_DEST)"
+	@echo "Installed skill $(SKILL_NAME) to $(SKILL_DEST)"
 
 clean:
 	rm -rf $(BUILD_DIR)
