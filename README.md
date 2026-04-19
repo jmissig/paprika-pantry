@@ -217,7 +217,7 @@ This is useful for questions like:
 - which sources have the best ratings?
 - which cookbook clusters are strong enough to trust?
 
-## What This Tool Is And Is Not
+## What This Tool Is and Is Not
 
 `paprika-pantry` is:
 
