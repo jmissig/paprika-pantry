@@ -662,7 +662,9 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
     public let resultCount: Int
     public let results: [IngredientPairEvidenceSummary]
     public let ingredientPairLastSuccessAt: Date?
+    public let routineIndexLastSuccessAt: Date?
     public let ingredientPairFreshnessSeconds: Int?
+    public let ingredientPairEvidenceMayBeStale: Bool
     public let paths: PantryPathReport
 
     public init(
@@ -677,6 +679,7 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
         readPath: String = "sidecar-ingredient-pair-index",
         basis: String = PantrySidecarStore.ingredientPairEvidenceBasis,
         ingredientPairLastSuccessAt: Date? = nil,
+        routineIndexLastSuccessAt: Date? = nil,
         ingredientPairFreshnessSeconds: Int? = nil
     ) {
         self.command = "recipes pairings"
@@ -691,7 +694,11 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
         self.resultCount = results.count
         self.results = results
         self.ingredientPairLastSuccessAt = ingredientPairLastSuccessAt
+        self.routineIndexLastSuccessAt = routineIndexLastSuccessAt
         self.ingredientPairFreshnessSeconds = ingredientPairFreshnessSeconds
+        self.ingredientPairEvidenceMayBeStale = ingredientPairLastSuccessAt.map { pairDate in
+            routineIndexLastSuccessAt.map { pairDate < $0 } ?? false
+        } ?? false
         self.paths = paths.report
     }
 
@@ -706,6 +713,15 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
             lastSuccessAt: ingredientPairLastSuccessAt,
             freshnessSeconds: ingredientPairFreshnessSeconds
         ))
+        if let routineIndexLastSuccessAt {
+            lines.append("routine_index_last_success_at: \(renderedTimestamp(routineIndexLastSuccessAt))")
+        }
+        if ingredientPairEvidenceMayBeStale {
+            lines.append("ingredient_pair_evidence_may_be_stale: yes")
+            lines.append("ingredient_pair_evidence_note: pairings were built before the latest routine index update; run `paprika-pantry index rebuild` to refresh pairings")
+        } else {
+            lines.append("ingredient_pair_evidence_may_be_stale: no")
+        }
 
         if let token {
             lines.append("token: \(token)")
@@ -721,7 +737,10 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
         lines.append("evidence_limit: \(evidenceLimit)")
 
         if results.isEmpty {
-            lines.append("No ingredient token pairs matched.")
+            lines.append("No ingredient token pairs matched in the built pairing index.")
+            if ingredientPairEvidenceMayBeStale {
+                lines.append("If this should exist after recent source changes, run `paprika-pantry index rebuild` to refresh pairings.")
+            }
             lines.append(renderedPaths(paths))
             return lines.joined(separator: "\n")
         }

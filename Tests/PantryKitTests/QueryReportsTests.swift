@@ -479,6 +479,7 @@ final class QueryReportsTests: XCTestCase {
             sort: .meals,
             paths: makePaths(),
             ingredientPairLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            routineIndexLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_100),
             ingredientPairFreshnessSeconds: 60
         )
 
@@ -486,6 +487,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-ingredient-pair-index"))
         XCTAssertTrue(report.humanDescription.contains("basis: recipe-token-cooccurrence-v1"))
         XCTAssertTrue(report.humanDescription.contains("ingredient_pair_index_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("routine_index_last_success_at:"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_pair_evidence_may_be_stale: no"))
         XCTAssertTrue(report.humanDescription.contains("token: tomatoes"))
         XCTAssertTrue(report.humanDescription.contains("with_token: basil"))
         XCTAssertTrue(report.humanDescription.contains("sort: meals"))
@@ -497,6 +500,27 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(rendered.contains("\"readPath\" : \"sidecar-ingredient-pair-index\""))
         XCTAssertTrue(rendered.contains("\"recipeEvidence\""))
         XCTAssertTrue(rendered.contains("\"tokenBLineNumbers\""))
+        XCTAssertTrue(rendered.contains("\"ingredientPairEvidenceMayBeStale\" : false"))
+    }
+
+    func testRecipesPairingsReportWarnsWhenPairEvidenceIsOlderThanRoutineIndex() throws {
+        let report = RecipesPairingsReport(
+            results: [],
+            token: "tomato",
+            paths: makePaths(),
+            ingredientPairLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_000),
+            routineIndexLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            ingredientPairFreshnessSeconds: 120
+        )
+
+        XCTAssertTrue(report.ingredientPairEvidenceMayBeStale)
+        XCTAssertTrue(report.humanDescription.contains("ingredient_pair_evidence_may_be_stale: yes"))
+        XCTAssertTrue(report.humanDescription.contains("pairings were built before the latest routine index update"))
+        XCTAssertTrue(report.humanDescription.contains("No ingredient token pairs matched in the built pairing index."))
+        XCTAssertTrue(report.humanDescription.contains("run `paprika-pantry index rebuild` to refresh pairings"))
+
+        let rendered = try JSONOutput.render(report)
+        XCTAssertTrue(rendered.contains("\"ingredientPairEvidenceMayBeStale\" : true"))
     }
 
     func testSourceCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {

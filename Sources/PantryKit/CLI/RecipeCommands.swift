@@ -482,7 +482,7 @@ public struct RecipesPairingsCommand: PantryLeafCommand {
         let store = try context.makeSidecarStore()
         let indexStats = try store.indexStats()
         guard indexStats.ingredientPairEvidenceReady else {
-            throw ValidationError("Ingredient pair evidence index is not ready. Run `paprika-pantry index rebuild` first.")
+            throw ValidationError("Ingredient pair evidence index is not ready. No ingredient pairings have been built yet; run `paprika-pantry index rebuild` to build pairings.")
         }
 
         let results = try store.listIngredientPairEvidence(
@@ -505,6 +505,7 @@ public struct RecipesPairingsCommand: PantryLeafCommand {
                 sort: sort,
                 paths: context.paths,
                 ingredientPairLastSuccessAt: indexStats.lastSuccessfulIngredientPairRun.map { $0.finishedAt ?? $0.startedAt },
+                routineIndexLastSuccessAt: latestRoutineIndexSuccessDate(from: indexStats),
                 ingredientPairFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulIngredientPairRun, now: now)
             )
         )
@@ -517,6 +518,17 @@ private func renderedFreshnessSeconds(since run: PantryIndexRun?, now: Date) -> 
     }
 
     return max(0, Int(now.timeIntervalSince(run.finishedAt ?? run.startedAt)))
+}
+
+private func latestRoutineIndexSuccessDate(from stats: PantryIndexStats) -> Date? {
+    [
+        stats.lastSuccessfulRecipeSearchRun,
+        stats.lastSuccessfulRecipeFeatureRun,
+        stats.lastSuccessfulRecipeIngredientRun,
+        stats.lastSuccessfulRecipeUsageRun,
+    ]
+    .compactMap { $0?.finishedAt ?? $0?.startedAt }
+    .max()
 }
 
 private func validateIngredientPairTokenOption(_ rawValue: String, optionName: String) throws {

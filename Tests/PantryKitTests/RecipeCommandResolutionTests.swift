@@ -351,6 +351,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
 
         XCTAssertThrowsError(try command.run()) { error in
             XCTAssertTrue(String(describing: error).contains("Ingredient pair evidence index is not ready"))
+            XCTAssertTrue(String(describing: error).contains("run `paprika-pantry index rebuild` to build pairings"))
         }
     }
 
