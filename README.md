@@ -56,7 +56,9 @@ paprika-pantry source last-sync-time
 paprika-pantry index update
 ```
 
-On Macs where Paprika is not being actively used, you can nudge a sync first, then rebuild:
+`index update` is the normal path: it refreshes search, derived recipe features, usage stats, and ingredient tokens. `index rebuild` does that plus the heavier ingredient-pairing evidence used by `recipes pairings`; run it occasionally when you want pairings refreshed too.
+
+On Macs where Paprika is not being actively used, you can nudge a sync first, then update:
 
 ```bash
 paprika-pantry source launch-app --wait-for-sync
@@ -124,6 +126,7 @@ paprika-pantry recipes search risotto
 paprika-pantry recipes search "crispy tofu" --min-rating 4 --format json
 paprika-pantry recipes features "Mushroom Risotto"
 paprika-pantry recipes ingredients "Mushroom Risotto"
+paprika-pantry recipes pairings --token tomato --sort meals
 
 paprika-pantry meals list
 paprika-pantry meals list --format csv
@@ -187,6 +190,14 @@ To inspect the derived layer for one recipe:
 paprika-pantry recipes features "Weeknight Pasta"
 paprika-pantry recipes ingredients "Weeknight Pasta"
 ```
+
+To inspect ingredient token pairings across recipes:
+
+```bash
+paprika-pantry recipes pairings --token tomato --sort meals
+```
+
+Pairings are evidence, not recommendations. They come from `index rebuild`, and the command will warn if the pairing evidence is older than the routine index.
 
 ## Meals, Groceries, and Pantry
 

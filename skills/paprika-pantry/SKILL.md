@@ -34,6 +34,8 @@ Data types:
 - `paprika-pantry recipes show "..." --format json`
 - `paprika-pantry meals list --format json`
 - `paprika-pantry pantry list --format json`
+- `paprika-pantry source cookbooks --format json`
+- `paprika-pantry recipes pairings --token tomato --sort meals --format json`
 
 Not exhaustive. Use `--help` and adapt to the current interface.
 
@@ -52,6 +54,10 @@ If no results:
 
 Do not skip local lookup unless explicitly requested.
 
+## Index freshness
+
+Use `paprika-pantry index update` for routine refreshes. Use `paprika-pantry index rebuild` when ingredient pairing evidence needs refreshing; pairings are heavier and may intentionally lag routine indexes. If `recipes pairings` warns that pairing evidence is stale or missing, say that clearly before interpreting it.
+
 ## Preference reasoning
 
 Infer taste from:
@@ -60,6 +66,8 @@ Infer taste from:
 - ratings/favorites
 - source/cookbook patterns
 - ingredient & ingredient-combo recurrence
+
+For ingredient pairings, treat `recipes pairings` output as inspectable evidence only: counts, meal usage, ratings/favorites, and recipe examples. Do not turn it into unsupported substitution or flavor claims.
 
 Use this to reason about:
 - what is actually liked
