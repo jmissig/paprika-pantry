@@ -1,7 +1,7 @@
 import ArgumentParser
 
 // VERSION-SYNC-START
-private let pantryCLIVersion = "1.0.0"
+private let pantryCLIVersion = "1.1.0"
 // VERSION-SYNC-END
 
 public struct PantryCLI: ParsableCommand {
