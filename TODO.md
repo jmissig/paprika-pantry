@@ -10,6 +10,7 @@ Completed work should leave this file.
 
 - [ ] Add `first_cooked_at` usage stats
 - [ ] Investigate partial index updates behind `paprika-pantry index update` so unchanged recipes do not require a full rebuild.
+- [ ] Investigate incremental updates for ingredient pairings so `index rebuild` is not the only way to refresh pairing evidence.
 
 ## Later
 

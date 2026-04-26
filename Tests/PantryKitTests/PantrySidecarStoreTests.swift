@@ -678,6 +678,49 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertTrue(ratingSorted.allSatisfy(\.recipeEvidence.isEmpty))
     }
 
+    func testIndexUpdateSkipsAndPreservesIngredientPairEvidence() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Basil Pasta", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Creamy Tomato Soup", sourceFingerprint: "hash-bbb"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForPairEvidence(uid: "AAA", name: "Tomato Basil Pasta", ingredients: "Tomato\nBasil", starRating: 5, isFavorite: true),
+                "BBB": makeRecipeForPairEvidence(uid: "BBB", name: "Creamy Tomato Soup", ingredients: "Tomato\nBasil\nCream", starRating: 4, isFavorite: false),
+            ],
+            meals: []
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let initialStats = try store.indexStats()
+        XCTAssertTrue(initialStats.ingredientPairEvidenceReady)
+        XCTAssertEqual(initialStats.ingredientPairSummaryCount, 3)
+        let initialPairRunID = initialStats.lastIngredientPairRun?.id
+
+        let updateSource = InMemoryPantrySource(
+            stubs: [SourceRecipeStub(uid: "DDD", name: "Solo Salt", sourceFingerprint: "hash-ddd")],
+            categories: [],
+            recipesByUID: [
+                "DDD": makeRecipeForPairEvidence(uid: "DDD", name: "Solo Salt", ingredients: "Salt", starRating: nil, isFavorite: false),
+            ],
+            meals: []
+        )
+        let updateSummary = try await store.rebuildRecipeIndexes(from: updateSource, refreshIngredientPairEvidence: false)
+
+        XCTAssertFalse(updateSummary.refreshedIngredientPairEvidence)
+        XCTAssertEqual(updateSummary.ingredientPairSummaryCount, 0)
+        XCTAssertEqual(updateSummary.recipeSearchDocumentCount, 1)
+
+        let updatedStats = try store.indexStats()
+        XCTAssertEqual(updatedStats.recipeSearchDocumentCount, 1)
+        XCTAssertEqual(updatedStats.ingredientPairSummaryCount, initialStats.ingredientPairSummaryCount)
+        XCTAssertEqual(updatedStats.ingredientPairRecipeEvidenceCount, initialStats.ingredientPairRecipeEvidenceCount)
+        XCTAssertEqual(updatedStats.lastIngredientPairRun?.id, initialPairRunID)
+        XCTAssertEqual(try store.listIngredientPairEvidence(token: "tomato", withToken: "basil").first?.recipeCount, 2)
+    }
+
     func testListCookbookAggregatesGroupsTrimmedSourceNamesAndUnlabeledRows() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(

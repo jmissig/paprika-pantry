@@ -452,16 +452,19 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
     public let summary: RecipeIndexesRebuildSummary
     public let paths: PantryPathReport
 
-    public init(summary: RecipeIndexesRebuildSummary, paths: PantryPaths) {
-        self.command = "index rebuild"
+    public init(command: String = "index rebuild", summary: RecipeIndexesRebuildSummary, paths: PantryPaths) {
+        self.command = command
         self.summary = summary
         self.paths = paths.report
     }
 
     public var humanDescription: String {
         let rebuildDurationMilliseconds = max(0, Int((summary.finishedAt.timeIntervalSince(summary.startedAt) * 1_000).rounded()))
+        let action = summary.refreshedIngredientPairEvidence
+            ? "Rebuilt owned recipe search, feature, usage, ingredient-token, and ingredient-pair evidence indexes."
+            : "Updated owned recipe search, feature, usage, and ingredient-token indexes; ingredient-pair evidence was not refreshed."
         var lines = [
-            "\(command): Rebuilt owned recipe search, feature, usage, and ingredient indexes.",
+            "\(command): \(action)",
             "duration_ms: \(rebuildDurationMilliseconds)",
             "recipe_search_documents: \(summary.recipeSearchDocumentCount)",
             "recipe_feature_rows: \(summary.recipeFeatureCount)",
@@ -475,9 +478,16 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_usage_rows_with_gap_arrays: \(summary.recipeUsageStatsWithGapArrayCount)",
             "linked_meals_with_recipe_uid: \(summary.linkedMealCount)",
             "total_qualifying_meals: \(summary.totalMealCount)",
-            "ingredient_pair_summaries: \(summary.ingredientPairSummaryCount)",
-            "ingredient_pair_recipe_evidence_rows: \(summary.ingredientPairRecipeEvidenceCount)",
         ]
+
+        if summary.refreshedIngredientPairEvidence {
+            lines.append("ingredient_pair_evidence_refreshed: yes")
+            lines.append("ingredient_pair_summaries: \(summary.ingredientPairSummaryCount)")
+            lines.append("ingredient_pair_recipe_evidence_rows: \(summary.ingredientPairRecipeEvidenceCount)")
+        } else {
+            lines.append("ingredient_pair_evidence_refreshed: no")
+            lines.append("ingredient_pair_evidence_note: skipped by `index update`; run `paprika-pantry index rebuild` to refresh pairings")
+        }
 
         if let sourceState = summary.sourceState {
             lines.append("source_state_observed_at: \(renderedTimestamp(sourceState.observedAt))")
