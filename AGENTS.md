@@ -1,107 +1,158 @@
 # AGENTS.md
 
-## Purpose
+This file gives coding agents the durable context they need to work safely and consistently in this repository.
 
-`paprika-pantry` is a local-first Paprika query and analysis CLI.
+Preserve `paprika-pantry`’s purpose. Do not broaden scope or invent a platform unless Julian explicitly asks.
 
-Its job is to:
-- read Paprika data safely from the local Paprika 3 SQLite database
-- expose fast local query commands over canonical Paprika data
-- maintain an optional sidecar SQLite database for indexing, derived facts, and agent-oriented analysis
-- make source health, freshness, and sidecar state legible to humans and agents
+## Project posture
 
-It is not just a thin database browser.
-It is not a general Paprika app replacement.
-It is not a kitchen UI.
+Current posture: **in use**
 
-The center of gravity should be the local Paprika database plus our sidecar.
-The CLI is attached to those read models.
+`paprika-pantry` is a working local-first CLI and OpenClaw-facing tool. Prefer careful evolution over churn, but do not preserve stale paths out of inertia.
 
-## Project shape
+Project posture controls how aggressive architecture, schema, dependency, and cleanup changes should be.
 
-This project should feel temperamentally similar to `protect-cadence` and `clime`:
-- small local-first CLI
-- explicit local SQLite store
-- compact human output
-- structured JSON when useful
-- a narrow, legible command surface
-- simple install/build/test flow
-- clear diagnostic commands
+- **In use** — prefer careful evolution. Debate sweeping architecture, schema, dependency, or command-surface changes before making them; if accepted, commit fully, document migration steps, and remove old paths cleanly.
+- Prefer current recommended patterns and tools over preserving old approaches.
+- Backwards compatibility is not a default goal unless this file, `README.md`, or a specific operator workflow says it is.
 
-But unlike those tools, `paprika-pantry` is more explicitly a read-adapter plus derived-index tool.
+Underlying philosophy: **software is ephemeral**. Old code should earn its keep. Keep the tool alive by letting it change deliberately.
 
-A useful framing:
-- `protect-cadence` is a local observation pipeline with query commands
-- `clime` is a local evidence store with import and query commands
-- `paprika-pantry` should be a local Paprika adapter with query, indexing, and analysis commands
+## Project brief
 
-## Primary goals
+`paprika-pantry` is a small local CLI for reading Paprika 3 data directly from the real local Paprika SQLite database and querying it as compact local evidence.
 
-The tool should make it easy to:
-- read recipes, meals, groceries, and categories directly from Paprika's local DB
-- search and analyze that data quickly without mutating the source DB
-- build and query derived local indexes when useful
-- understand whether the local source is available and whether sidecar indexes are current
-- give OpenClaw and other local tools a fast, trustworthy local source of truth
+This project is:
+- a local-first Paprika reader and query CLI
+- an agent-facing evidence tool for OpenClaw/Robut
+- a Swift Package Manager project with a `PantryKit` library and `paprika-pantry` executable
+- a local index / sidecar store for search and derived cooking-pattern evidence we actually use
+- a safe way to inspect recipes, meals, groceries, pantry items, cookbook/source rollups, and source freshness without writing to the real Paprika DB
 
-The system should produce:
-- safe read-only source access
-- durable local derived storage where it adds value
-- clear source and index metadata
-- query surfaces optimized for extraction, not narration
-- outputs that keep evidence separate from judgment
-- a CLI that works as a reliable tool for an LLM or other downstream agent
-
-Useful question shapes include:
+It helps answer questions like:
 - what are our favorite risottos?
-- which cookbook have we consistently liked best?
+- which cookbook or source has consistently worked well?
 - which main can I make in 30 minutes with the fewest ingredients?
-- what is a good side that uses up avocados and goes with risotto?
-- what have we found to be a good substitution for yams?
+- what side uses up avocados and goes with risotto?
+- what substitutions or pairings have evidence in our cooking history?
 
-## Non-goals
+Source of truth:
+- Canonical data: the real local Paprika 3 SQLite database, opened read-only
+- Owned/derived data: `paprika-pantry`’s local sidecar/index database, rebuildable from Paprika source data and derived analysis
+- Human-facing usage guide: `README.md`
+- Active backlog: `TODO.md`
+- Architecture notes/specs: `docs/`
+- OpenClaw tool skill: `skills/paprika-pantry/SKILL.md`
 
-Avoid building, at least initially:
-- a GUI
-- a full Paprika replacement app
-- a broad Paprika SDK meant for every possible integration
-- background daemons before there is a clear need
-- any write path into the real Paprika database
-- embedded recommendations or cooking judgment in the CLI
+Never write to:
+- the real Paprika database (`Paprika.sqlite` or equivalent local source DB)
+- Paprika cloud/server state
+- installed binaries, installed OpenClaw skills, or ambient user config during routine tests
+- non-fixture user data unless Julian explicitly asks to exercise real local state
 
-The CLI should expose evidence.
-OpenClaw or downstream tools can do interpretation.
+Non-goals / anti-goals:
+- not a full Paprika replacement app
+- not a GUI or kitchen UI
+- not a write path into Paprika
+- not a background sync daemon or scheduler
+- not a generic Paprika SDK for every possible integration
+- not a remote-auth or mirror-first product direction
+- not an opaque recommendation engine
+- not a generic cooking AI; the CLI exposes evidence and OpenClaw/downstream tools do judgment
 
-Design for an LLM-assisted workflow:
-- let the LLM handle fuzzy interpretation, semantic grouping, and judgment calls
-- let the CLI handle reliable retrieval, filtering, thresholds, sorting, and evidence display
-- prefer canonical filters like rating, favorite status, category membership, and time bounds over embedding opaque reasoning into the CLI
-- keep outputs inspectable enough that an LLM can cite why an item matched
+## Current state
 
-## Read-only first
+Current stack:
+- Swift 6 package targeting macOS 13+
+- `PantryKit` library target
+- `paprika-pantry` executable target
+- `PantryKitTests` test target
+- `swift-argument-parser` for CLI parsing
+- GRDB for SQLite access
+- `Makefile` wrappers for build/test/install/version sync
 
-Be conservative about touching the real Paprika database.
+Current command surface includes:
+- `paprika-pantry doctor`
+- `paprika-pantry source last-sync-time`
+- `paprika-pantry source stats`
+- `paprika-pantry source cookbooks`
+- `paprika-pantry source launch-app [--wait-for-sync]`
+- `paprika-pantry recipes list|show|search|features|ingredients`
+- `paprika-pantry meals list`
+- `paprika-pantry groceries list`
+- `paprika-pantry pantry list`
+- `paprika-pantry index stats|update|rebuild`
 
-Implementation priority should be:
-1. read-only local DB access
-2. stable internal domain mapping
-3. sidecar index / derived-data storage
-4. fast local search and query
-5. source doctor / index-health reporting
-6. only then, consider whether any local mirror of canonical rows is actually needed
+Current source layout:
+- `Sources/PantryKit/CLI`: command definitions and runtime options
+- `Sources/PantryKit/Source`: Paprika source adapters and source-state/stat reporting
+- `Sources/PantryKit/Store`: sidecar/index database and store logic
+- `Sources/PantryKit/Recipes`, `Meals`, `Groceries`, `PantryItems`: read/query services
+- `Sources/PantryKit/Model`: report and domain-ish output models
+- `Sources/PantryKit/Support`: output formats, config, paths, helpers
+- `Sources/paprika-pantry`: executable entry point
+- `Tests/PantryKitTests`: unit/integration tests
+- `docs/`: architecture notes and focused implementation specs
 
-Do not write to the real `Paprika.sqlite`.
-Anything that could modify original Paprika data should be treated as out of scope unless Julian explicitly changes that requirement.
+## Validation
 
-## Architectural direction
+Routine checks:
+
+```bash
+make build
+make test
+```
+
+Direct Swift equivalents:
+
+```bash
+swift build --build-path build --product paprika-pantry
+swift test --build-path build
+```
+
+Useful smoke checks when the binary exists:
+
+```bash
+.build/debug/paprika-pantry --help
+build/debug/paprika-pantry --help
+```
+
+Use whichever build path matches the command used. `make build` writes to `build/`.
+
+Do not run during routine verification:
+- `make install`
+- `make install-skill`
+- commands that write to real operator config or installed OpenClaw skill directories
+- commands that mutate the real Paprika database
+- destructive cleanup of sidecar databases outside repo-local/temp/fixture paths
+
+Use repo-local, fixture, sandboxed, or temporary paths for tests. Do not rely on the human’s live Paprika database during routine verification unless Julian explicitly asks for a live-data smoke test.
+
+## Core principles
+
+- Keep the project narrow and purpose-built.
+- Prefer clarity over cleverness.
+- Prefer the smallest coherent implementation that supports real local queries.
+- Treat lines of code as a liability: more code means more surface area, more entanglement, and more future reading.
+- Prefer local, legible, inspectable state.
+- Keep source-of-truth boundaries explicit and documented.
+- Keep the Paprika-specific boundary narrow and replaceable.
+- Keep SQL legible.
+- Keep command shapes coherent across subcommands.
+- Preserve a clear distinction between evidence, source health, derived facts, and judgment.
+- Let OpenClaw or downstream agents do fuzzy interpretation and recommendations.
+- The CLI should retrieve, filter, threshold, sort, and show evidence.
+- Do not let this turn into a generic sync framework or Paprika empire.
+
+## Architecture guidance
 
 Preferred high-level flow:
 
 ```text
-Paprika 3 local SQLite (read-only)
-    -> read adapter / mapper
-    -> internal domain model
-    -> optional sidecar SQLite for indexes and derived facts
+Paprika 3 local SQLite database (read-only)
+    -> Paprika read adapter / mapper
+    -> stable internal domain/query model
+    -> optional sidecar SQLite store for indexes and derived facts
     -> query/search/report CLI
     -> local agent / OpenClaw
 ```
@@ -112,20 +163,28 @@ Keep the system split into four legible layers:
 3. sidecar store/index
 4. CLI presentation
 
-That separation matters because Paprika's Core Data schema is ugly and unstable-looking, while our internal domain and sidecar should stay legible.
+Rules:
+- Paprika’s Core Data schema may be ugly or unstable-looking; do not leak raw `Z...` schema details outside adapter boundaries.
+- Separate ingestion/source reads, domain interpretation, derived storage, and presentation.
+- Keep external API details, Paprika schema quirks, and local filesystem discovery out of command presentation code.
+- Use protocol or adapter seams where they make testing and replacement easier, but avoid deep abstraction for its own sake.
+- Prefer explicit schemas and data flow over hidden state or magical background behavior.
+- After a directional change, make the new path the real path. Delete or clearly retire superseded code, docs, files, TODOs, and stale architectural discussion unless needed for migration or recovery.
 
-## Technology preferences
+## Tool and dependency posture
 
 Preferred stack unless a strong reason appears otherwise:
-- language: Swift
-- package model: Swift Package Manager
-- CLI parsing: `swift-argument-parser`
-- local store: SQLite
-- SQLite layer: GRDB, used lightly
+- Swift
+- Swift Package Manager
+- `swift-argument-parser`
+- SQLite
+- GRDB, used lightly
+- `Makefile` wrappers for common commands
 
 Use GRDB for:
-- opening the databases
-- migrations
+- opening SQLite databases
+- read-only source access
+- sidecar migrations
 - parameterized queries
 - straightforward row decoding
 - FTS integration if useful
@@ -133,19 +192,82 @@ Use GRDB for:
 Avoid:
 - elaborate ORM patterns
 - abstraction that hides SQL shape
+- large dependency surfaces for a small local tool
 - framework-heavy designs
-- clever async architecture without a concrete need
+- clever async/background architecture without a concrete need
+- dependency sprawl that obscures simple data flow
 
-## Local store guidance
+For major architecture choices — persistence, indexing, CLI parsing, output formats, sync observation, auth, testing — do a quick current tool/library scan before inventing custom infrastructure.
 
-SQLite sidecar storage is for things we own.
+## CLI / local tool guidance
+
+This tool should feel like Julian’s other local-first CLIs:
+- small command surface
+- explicit local store/source boundary
+- compact human output by default
+- structured output for agents and scripts
+- narrow extraction-oriented commands
+- clear diagnostic / doctor / status commands
+
+Preferred command families:
+- `source`
+- `index`
+- `recipes`
+- `meals`
+- `groceries`
+- `pantry`
+- `doctor`
+
+Keep the command surface small and coherent. Do not explode it prematurely.
+
+Default output should be concise and useful to a human operator.
+
+Structured output:
+- use `--format json` for machine-readable output
+- `--json` may exist as shorthand, but docs and examples should prefer `--format json`
+- use CSV only for row-oriented reports that flatten honestly
+- detail/diagnostic commands may support only human and JSON if CSV would be misleading
+
+Output should expose evidence rather than narrating conclusions. OpenClaw or downstream tools interpret it.
+
+For config and docs:
+- config files should optimize for humans
+- if writing JSON config, avoid unnecessary escaped slashes like `\/`
+- install docs should prefer `PREFIX` style examples over raw `BINDIR=...`
+  - canonical alternate install example: `make install PREFIX="$HOME/.local"`
+
+## Data and persistence
+
+### Read-only Paprika source
+
+This project is read-only against Paprika.
+
+Users should be able to trust:
+- canonical facts came directly from Paprika
+- derived facts came from `paprika-pantry`’s sidecar/index layer
+- indexes can be rebuilt/refreshed on request
+- source health and freshness are visible
+
+Preferred read strategy:
+- open Paprika SQLite read-only
+- detect expected schema flavor
+- map `Z...` tables into stable internal models
+- keep direct queries direct when possible
+- build sidecar indexes only for capabilities that need them
+
+The hard part is not opening SQLite. The hard part is maintaining a sane boundary between Paprika’s Core Data schema and our own stable internal model.
+
+### Sidecar/index store
+
+SQLite sidecar storage is for things this project owns.
 
 The sidecar should store only data that adds value beyond direct Paprika reads, for example:
 - FTS/search indexes
 - denormalized helper tables
-- derived recipe feature tables like time, ingredient count, and meal-role hints
+- derived recipe feature tables such as time, ingredient count, and meal-role hints
 - source/cookbook aggregate tables
 - ingredient normalization artifacts
+- recipe/meal history facts
 - pattern-detection outputs
 - cached derived facts
 - index/update bookkeeping
@@ -158,142 +280,147 @@ The system should make these questions easy to answer:
 - what derived facts are based on stale source reads?
 
 Prefer explicit, inspectable tables over opaque blobs.
+
 Do not duplicate whole canonical Paprika entities into the sidecar unless a concrete need proves that duplication is worth the drift risk.
-If a sidecar-derived answer would be surprising, the CLI should be able to show what evidence, counts, or contributing recipes led to it.
 
-## Source model guidance
+If a sidecar-derived answer would be surprising, the CLI should be able to show the evidence, counts, or contributing recipes/meals that led to it.
 
-This project is read-only against Paprika.
+### Sync observation
 
-That means users should be able to trust:
-- show me the canonical Paprika facts
-- tell me whether they came directly from Paprika or from sidecar-derived analysis
-- rebuild or refresh indexes if I ask
+The sync-related behavior is observational, not a real sync API.
 
-Preferred read strategy for v0:
-- open Paprika.sqlite read-only
-- map `Z...` tables into stable internal models
-- keep direct queries direct when possible
-- build sidecar indexes only for capabilities that need them
+Today that means:
+- `source last-sync-time` reads the locally observed Paprika last-sync marker
+- `source launch-app` launches the Mac Paprika app
+- `source launch-app --wait-for-sync` waits for the observed last-sync timestamp to advance
 
-The hard part is not opening SQLite.
-The hard part is maintaining a sane boundary between Paprika's Core Data schema and our own stable internal model.
+Do not represent this as authoritative Paprika sync control. It is a practical local helper because Paprika often syncs on launch.
 
 ## Query and search guidance
 
 Search/query is a primary feature, not an afterthought.
 
-Support should eventually include:
-- recipe listing
-- recipe lookup by ID or name
+Support should continue to emphasize:
+- recipe listing and lookup by ID or name
 - full-text recipe search
 - category filtering
-- feature-constrained queries like fast mains with few ingredients
+- favorite/rating filters
+- ingredient include/exclude filters
+- feature-constrained queries such as fast mains with few ingredients
 - source/cookbook aggregate queries
 - ingredient-oriented search
 - substitution/pairing evidence queries
 - meals lookup
 - groceries lookup
+- pantry item lookup
 - source doctor and index status reporting
 
-Prefer a coherent command grammar over a pile of one-off verbs.
+Prefer canonical filters like rating, favorite status, category membership, ingredient membership, and time bounds over embedding opaque reasoning into the CLI.
 
-Default output should be compact and pleasant for humans.
-When structured downstream use matters, a format argument should provide LLM-appropriate output such as JSON or CSV.
-There is a strong product desire to deep-link directly into individual Paprika recipes, but thorough investigation so far did not find a reliable way to do that. Treat direct recipe deep links as desirable but currently unsupported unless new evidence appears.
 Default ranking should prefer meaningful evidence over alphabetical ordering where possible. When multiple strong candidates exist, usage is usually a better tie-breaker than name.
 
-When choosing between a smart CLI and a useful CLI, prefer a useful CLI.
-The right split is usually: the model decides what the human meant, and the CLI returns trustworthy evidence-bounded candidates and filters.
+There is a strong product desire to deep-link directly into individual Paprika recipes, but investigation so far did not find a reliable way to do that. Treat direct recipe deep links as desirable but currently unsupported unless new evidence appears.
 
-## CLI direction
+When choosing between a smart CLI and a useful CLI, prefer useful. The model decides what the human meant; the CLI returns trustworthy evidence-bounded candidates and filters.
 
-Likely command families:
-- `source`
-- `index`
-- `recipes`
-- `meals`
-- `groceries`
-- `db`
-- `doctor`
+## Layering rules
 
-Plausible early command surface:
-- `paprika-pantry source doctor`
-- `paprika-pantry recipes list`
-- `paprika-pantry recipes show <uid|name>`
-- `paprika-pantry recipes search <query>`
-- `paprika-pantry meals list`
-- `paprika-pantry groceries list`
-- `paprika-pantry index stats`
-- `paprika-pantry index rebuild`
-- `paprika-pantry db stats`
-- `paprika-pantry doctor`
+- CLI commands should parse options and call services; they should not own Paprika schema details.
+- Paprika source adapters should map raw rows into stable internal/report models at the boundary.
+- Sidecar schema and migrations belong in the store/index layer.
+- Feature services should not scatter repair or migration policy when a centralized store/index boundary exists.
+- If malformed source or sidecar state appears, prefer clear diagnostics and doctor/index-health reporting over silent magical repair.
+- Keep business/domain logic testable without the live Paprika database, network, account, or ambient filesystem side effects.
 
-The command surface should stay small and legible.
-Do not explode it prematurely.
+## Testing and verification
 
-## Output and UX guidance
+Use the documented validation commands before declaring success. If they are missing or stale, update them as part of the work.
 
-Borrow the good habits from sibling tools:
-- default to compact human-readable output for operators
-- use `--format json` for agent and script consumption
-- `--json` is acceptable shorthand, but prefer `--format json` in guidance and examples
-- diagnostics that explain what is wrong without drama
-- defaults optimized for local use, not cloud-hosted multi-user deployments
+Prefer tests for:
+- source schema detection
+- read-only source access behavior
+- raw Paprika row -> stable model mapping
+- sidecar schema and migrations
+- index rebuild/update semantics
+- recipe search/filter/ranking semantics
+- output format contracts: human/JSON/CSV where applicable
+- source health / doctor diagnostics
+- path/config selection
+- data-loss or accidental-write regressions
 
-For `paprika-pantry`, this means the output surface should converge on an explicit `--format` model that can represent human-readable output, JSON, and CSV cleanly, while keeping the human default compact.
+Testing rules:
+- Use repo-local, temp, fixture, or explicitly supplied paths.
+- Do not mutate ambient/default operator state during routine verification.
+- Do not require the live Paprika database in normal tests.
+- Do not install or publish as part of normal validation unless explicitly asked.
+- Keep tests seam-focused and deterministic.
+- Avoid broad tests that just freeze incidental human-readable copy.
 
-For config and docs, carry forward these established preferences:
-- config files should optimize for humans
-- if writing JSON config, avoid unnecessary escaped slashes like `\/`
-- install docs should prefer `PREFIX` style examples over raw `BINDIR=...`
-  - canonical alternate install example: `make install PREFIX="$HOME/.local"`
+## Failure signals
 
-## Working style for contributors and agents
+Agents should add or refine this section over time when the project reveals what bad drift looks like.
 
-- Prefer the smallest real slice that yields useful direct reads.
-- Be suspicious of architecture that is impressive but unnecessary.
-- Keep the Paprika-specific boundary narrow and replaceable.
-- Keep SQL legible.
-- Keep command shapes coherent across subcommands.
-- Preserve a clear distinction between evidence, source health, and judgment.
-- Do not let this turn into a generic sync framework.
-
-Success looks like:
-- a small tool that reads Paprika data safely and directly
-- local search that feels fast
-- derived indexes that are clearly secondary, useful, and inspectable
-- a query surface that agents can use reliably
-
-Failure signals:
-- the project becomes mostly about Paprika schema archaeology leaking everywhere
+Watch for:
+- the project becomes mostly Paprika schema archaeology leaking everywhere
 - the CLI becomes a mirror of raw `Z...` tables
 - sidecar duplication outruns actual use cases
 - index state is hard to explain
-- direct reads from Paprika become unsafe or accidental writes slip in
+- direct reads from Paprika become unsafe, or accidental writes slip in
+- install/config commands run during routine tests
+- commands narrate opaque recommendations without exposing evidence
+- the command surface grows as one-off verbs instead of coherent command families
+- source health, sidecar freshness, and derived-fact provenance become hard to distinguish
+- `AGENTS.md` becomes a backlog or philosophy dump instead of durable operating guidance
 
-## Project-document hygiene
+## Documentation and project hygiene
 
-- `README.md` is the human-facing usage guide. Write it for a person who wants to install the tool, understand what it is for, and run the normal commands successfully.
-- `README.md` should favor practical examples and operator guidance over implementation detail.
-- `TODO.md` is the literal active backlog and near-term parking lot, not a full roadmap or philosophy dump.
-- Completed work should leave `TODO.md` and live in git history, tests, and code.
-- Durable architectural direction, constraints, and product-shaping guidance belong here in `AGENTS.md`.
-- If a future idea is real but not soon, keep it brief and clearly marked as later work rather than mixing it into the active backlog.
+Use this docs split:
+- `README.md` — human-facing usage guide: install, purpose, normal commands, practical examples
+- `TODO.md` — active backlog / near-term parking lot, not a philosophy dump
+- `AGENTS.md` — durable architecture, constraints, source-of-truth boundaries, project posture, validation, and agent guidance
+- `docs/` — focused architecture notes/specs when details would bloat `AGENTS.md`
+- `skills/paprika-pantry/SKILL.md` — OpenClaw skill instructions for using the installed tool
 
-## Initial implementation priorities
+Completed work should leave `TODO.md` and live in git history, tests, code, and release notes if relevant.
 
-Suggested sequence:
-1. create the Swift package and basic CLI skeleton
-2. implement read-only Paprika DB adapter and schema detection
-3. map recipes and categories into stable internal models
-4. add direct recipe search and lookup
-5. add sidecar schema and indexing only where it adds clear value
-6. add derived recipe features and source/cookbook aggregates
-7. add ingredient normalization and evidence-backed pattern tables
-8. add meals, groceries, and categories
-9. add source / index / doctor reporting
-10. consider heavier caching only if direct-read performance or stability proves inadequate
+When architecture choices change, update a decision section or relevant docs with:
+- date
+- decision
+- alternatives considered
+- rationale
+- migration impact
+
+If unresolved, mark it as `OPEN` with the next checkpoint.
+
+## When to update AGENTS.md
+
+Update this file when agent behavior should change in future sessions.
+
+Good reasons to update it:
+- project posture changes
+- validation commands change
+- source-of-truth boundaries change
+- a durable architecture or schema decision changes
+- a recurring agent mistake needs a guardrail
+- a new failure signal becomes clear
+- a project-specific constraint would otherwise need to be repeated in prompts
+
+Agents may update `AGENTS.md` proactively for small durable guardrails, corrected validation commands, clarified source-of-truth boundaries, or newly obvious failure signals.
+
+Agents should propose or confirm before making larger changes to project philosophy, posture, architecture direction, or scope boundaries.
+
+Do not use `AGENTS.md` as a changelog or scratchpad. Keep it concise, durable, and action-guiding.
+
+## Working style for contributors and agents
+
+- Start by reading `AGENTS.md`, `README.md`, `TODO.md`, and focused docs under `docs/` when relevant.
+- Prefer the smallest real slice that yields useful direct reads or derived evidence.
+- Be suspicious of architecture that is impressive but unnecessary.
+- Keep SQL legible.
+- Keep command shapes coherent across subcommands.
+- Preserve the distinction between evidence, source health, derived facts, and judgment.
+- Challenge scope drift kindly and directly.
+- When uncertain, choose the narrower interpretation and ask before broadening scope.
 
 ## Final rule
 
