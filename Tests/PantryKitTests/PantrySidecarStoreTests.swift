@@ -580,6 +580,12 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(aggregates[0].recipeCount, 2)
         XCTAssertEqual(aggregates[0].ratedRecipeCount, 2)
         XCTAssertEqual(aggregates[0].favoriteRecipeCount, 1)
+        XCTAssertEqual(aggregates[0].usedRecipeCount, 0)
+        XCTAssertEqual(aggregates[0].unusedRecipeCount, 2)
+        XCTAssertEqual(aggregates[0].mealCount, 0)
+        XCTAssertEqual(aggregates[0].mealShare, 0)
+        XCTAssertNil(aggregates[0].firstMealAt)
+        XCTAssertNil(aggregates[0].lastMealAt)
         XCTAssertEqual(try XCTUnwrap(aggregates[0].averageStarRating), 4.5, accuracy: 0.001)
         XCTAssertEqual(aggregates[0].ratingDistribution.fiveStarCount, 1)
         XCTAssertEqual(aggregates[0].ratingDistribution.fourStarCount, 1)
@@ -597,6 +603,55 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(aggregates[2].favoriteRecipeCount, 1)
         XCTAssertEqual(try XCTUnwrap(aggregates[2].averageStarRating), 3.0, accuracy: 0.001)
         XCTAssertEqual(aggregates[2].ratingDistribution.threeStarCount, 1)
+    }
+
+    func testListCookbookAggregatesIncludesMealUsageEvidence() async throws {
+        let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "A", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "B", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "C", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "D", sourceFingerprint: "hash-ddd"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForAggregate(uid: "AAA", sourceName: "Serious Eats", starRating: 5, isFavorite: true),
+                "BBB": makeRecipeForAggregate(uid: "BBB", sourceName: "Serious Eats", starRating: 4, isFavorite: false),
+                "CCC": makeRecipeForAggregate(uid: "CCC", sourceName: "Smitten Kitchen", starRating: 5, isFavorite: true),
+                "DDD": makeRecipeForAggregate(uid: "DDD", sourceName: "Serious Eats", starRating: nil, isFavorite: false),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "A", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "A"),
+                SourceMeal(uid: "M2", name: "A", scheduledAt: "2026-04-07 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "A"),
+                SourceMeal(uid: "M3", name: "B", scheduledAt: "2026-04-03 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "B"),
+                SourceMeal(uid: "M4", name: "C", scheduledAt: "2026-04-05 18:00:00", mealType: "Dinner", recipeUID: "CCC", recipeName: "C"),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(
+            from: source,
+            now: {
+                referenceDate
+            }
+        )
+
+        let aggregates = try store.listCookbookAggregates(sort: .name, limit: 20)
+        let seriousEats = try XCTUnwrap(aggregates.first { $0.sourceName == "Serious Eats" })
+        XCTAssertEqual(seriousEats.recipeCount, 3)
+        XCTAssertEqual(seriousEats.usedRecipeCount, 2)
+        XCTAssertEqual(seriousEats.unusedRecipeCount, 1)
+        XCTAssertEqual(seriousEats.mealCount, 3)
+        XCTAssertEqual(seriousEats.mealShare, 0.75, accuracy: 0.001)
+        XCTAssertEqual(seriousEats.firstMealAt, "2026-04-01 18:00:00")
+        XCTAssertEqual(seriousEats.lastMealAt, "2026-04-07 18:00:00")
+
+        let smittenKitchen = try XCTUnwrap(aggregates.first { $0.sourceName == "Smitten Kitchen" })
+        XCTAssertEqual(smittenKitchen.usedRecipeCount, 1)
+        XCTAssertEqual(smittenKitchen.unusedRecipeCount, 0)
+        XCTAssertEqual(smittenKitchen.mealCount, 1)
+        XCTAssertEqual(smittenKitchen.mealShare, 0.25, accuracy: 0.001)
     }
 
     func testListCookbookAggregatesSupportsMinimumRatedRecipesAndAverageRatingSort() async throws {

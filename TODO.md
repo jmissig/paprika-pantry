@@ -5,7 +5,6 @@ Completed work should leave this file.
 
 ## Now
 
-- [ ] Add source/cookbook usage summaries derived from linked meal history where the evidence is strong enough to report cleanly.
 - [ ] Add ingredient co-occurrence / pairing tables with inspectable evidence.
 
 

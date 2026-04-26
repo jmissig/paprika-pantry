@@ -157,6 +157,12 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
     public let ratedRecipeCount: Int
     public let unratedRecipeCount: Int
     public let favoriteRecipeCount: Int
+    public let usedRecipeCount: Int
+    public let unusedRecipeCount: Int
+    public let mealCount: Int
+    public let mealShare: Double
+    public let firstMealAt: String?
+    public let lastMealAt: String?
     public let averageStarRating: Double?
     public let ratedRecipeShare: Double
     public let favoriteRecipeShare: Double
@@ -169,6 +175,12 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
         ratedRecipeCount: Int,
         unratedRecipeCount: Int,
         favoriteRecipeCount: Int,
+        usedRecipeCount: Int = 0,
+        unusedRecipeCount: Int? = nil,
+        mealCount: Int = 0,
+        mealShare: Double = 0,
+        firstMealAt: String? = nil,
+        lastMealAt: String? = nil,
         averageStarRating: Double?,
         ratedRecipeShare: Double,
         favoriteRecipeShare: Double,
@@ -180,6 +192,12 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
         self.ratedRecipeCount = ratedRecipeCount
         self.unratedRecipeCount = unratedRecipeCount
         self.favoriteRecipeCount = favoriteRecipeCount
+        self.usedRecipeCount = usedRecipeCount
+        self.unusedRecipeCount = unusedRecipeCount ?? max(0, recipeCount - usedRecipeCount)
+        self.mealCount = mealCount
+        self.mealShare = mealShare
+        self.firstMealAt = firstMealAt
+        self.lastMealAt = lastMealAt
         self.averageStarRating = averageStarRating
         self.ratedRecipeShare = ratedRecipeShare
         self.favoriteRecipeShare = favoriteRecipeShare
@@ -600,30 +618,45 @@ public struct PantrySidecarStore: @unchecked Sendable {
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                WITH grouped AS (
+                WITH usage_summary AS (
+                    SELECT COALESCE((
+                        SELECT total_meal_count
+                        FROM recipe_usage_summary
+                        WHERE summary_key = ?
+                        LIMIT 1
+                    ), 0) AS total_meal_count
+                ),
+                grouped AS (
                     SELECT
                         CASE
-                            WHEN TRIM(COALESCE(source_name, '')) = '' THEN NULL
-                            ELSE TRIM(source_name)
+                            WHEN TRIM(COALESCE(recipe_search_documents.source_name, '')) = '' THEN NULL
+                            ELSE TRIM(recipe_search_documents.source_name)
                         END AS source_name,
                         CASE
-                            WHEN TRIM(COALESCE(source_name, '')) = '' THEN 1
+                            WHEN TRIM(COALESCE(recipe_search_documents.source_name, '')) = '' THEN 1
                             ELSE 0
                         END AS is_unlabeled,
                         COUNT(*) AS recipe_count,
-                        COUNT(star_rating) AS rated_recipe_count,
-                        COUNT(*) - COUNT(star_rating) AS unrated_recipe_count,
-                        SUM(CASE WHEN is_favorite THEN 1 ELSE 0 END) AS favorite_recipe_count,
-                        AVG(CAST(star_rating AS REAL)) AS average_star_rating,
-                        SUM(CASE WHEN star_rating = 1 THEN 1 ELSE 0 END) AS one_star_count,
-                        SUM(CASE WHEN star_rating = 2 THEN 1 ELSE 0 END) AS two_star_count,
-                        SUM(CASE WHEN star_rating = 3 THEN 1 ELSE 0 END) AS three_star_count,
-                        SUM(CASE WHEN star_rating = 4 THEN 1 ELSE 0 END) AS four_star_count,
-                        SUM(CASE WHEN star_rating = 5 THEN 1 ELSE 0 END) AS five_star_count
+                        COUNT(recipe_search_documents.star_rating) AS rated_recipe_count,
+                        COUNT(*) - COUNT(recipe_search_documents.star_rating) AS unrated_recipe_count,
+                        SUM(CASE WHEN recipe_search_documents.is_favorite THEN 1 ELSE 0 END) AS favorite_recipe_count,
+                        SUM(CASE WHEN COALESCE(recipe_usage_stats.meal_count, 0) > 0 THEN 1 ELSE 0 END) AS used_recipe_count,
+                        SUM(CASE WHEN COALESCE(recipe_usage_stats.meal_count, 0) = 0 THEN 1 ELSE 0 END) AS unused_recipe_count,
+                        COALESCE(SUM(recipe_usage_stats.meal_count), 0) AS meal_count,
+                        MIN(recipe_usage_stats.first_meal_at) AS first_meal_at,
+                        MAX(recipe_usage_stats.last_meal_at) AS last_meal_at,
+                        AVG(CAST(recipe_search_documents.star_rating AS REAL)) AS average_star_rating,
+                        SUM(CASE WHEN recipe_search_documents.star_rating = 1 THEN 1 ELSE 0 END) AS one_star_count,
+                        SUM(CASE WHEN recipe_search_documents.star_rating = 2 THEN 1 ELSE 0 END) AS two_star_count,
+                        SUM(CASE WHEN recipe_search_documents.star_rating = 3 THEN 1 ELSE 0 END) AS three_star_count,
+                        SUM(CASE WHEN recipe_search_documents.star_rating = 4 THEN 1 ELSE 0 END) AS four_star_count,
+                        SUM(CASE WHEN recipe_search_documents.star_rating = 5 THEN 1 ELSE 0 END) AS five_star_count
                     FROM recipe_search_documents
+                    LEFT JOIN recipe_usage_stats
+                        ON recipe_usage_stats.uid = recipe_search_documents.uid
                     GROUP BY CASE
-                        WHEN TRIM(COALESCE(source_name, '')) = '' THEN NULL
-                        ELSE TRIM(source_name)
+                        WHEN TRIM(COALESCE(recipe_search_documents.source_name, '')) = '' THEN NULL
+                        ELSE TRIM(recipe_search_documents.source_name)
                     END
                 )
                 SELECT
@@ -633,6 +666,15 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     rated_recipe_count,
                     unrated_recipe_count,
                     favorite_recipe_count,
+                    used_recipe_count,
+                    unused_recipe_count,
+                    meal_count,
+                    CASE
+                        WHEN usage_summary.total_meal_count > 0 THEN CAST(meal_count AS REAL) / usage_summary.total_meal_count
+                        ELSE 0
+                    END AS meal_share,
+                    first_meal_at,
+                    last_meal_at,
                     average_star_rating,
                     CAST(rated_recipe_count AS REAL) / recipe_count AS rated_recipe_share,
                     CAST(favorite_recipe_count AS REAL) / recipe_count AS favorite_recipe_share,
@@ -642,11 +684,12 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     four_star_count,
                     five_star_count
                 FROM grouped
+                CROSS JOIN usage_summary
                 WHERE recipe_count >= ? AND rated_recipe_count >= ?
                 ORDER BY \(Self.cookbookAggregateOrderClause(sort: sort))
                 LIMIT ?
                 """,
-                arguments: [max(1, minRecipeCount), max(0, minRatedRecipeCount), max(1, limit)]
+                arguments: [Self.recipeUsageSummaryKey, max(1, minRecipeCount), max(0, minRatedRecipeCount), max(1, limit)]
             )
 
             return rows.map { row in
@@ -657,6 +700,12 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     ratedRecipeCount: row["rated_recipe_count"],
                     unratedRecipeCount: row["unrated_recipe_count"],
                     favoriteRecipeCount: row["favorite_recipe_count"],
+                    usedRecipeCount: row["used_recipe_count"],
+                    unusedRecipeCount: row["unused_recipe_count"],
+                    mealCount: row["meal_count"],
+                    mealShare: row["meal_share"],
+                    firstMealAt: row["first_meal_at"],
+                    lastMealAt: row["last_meal_at"],
                     averageStarRating: row["average_star_rating"],
                     ratedRecipeShare: row["rated_recipe_share"],
                     favoriteRecipeShare: row["favorite_recipe_share"],

@@ -459,6 +459,12 @@ final class QueryReportsTests: XCTestCase {
                     ratedRecipeCount: 3,
                     unratedRecipeCount: 1,
                     favoriteRecipeCount: 2,
+                    usedRecipeCount: 2,
+                    unusedRecipeCount: 2,
+                    mealCount: 5,
+                    mealShare: 0.25,
+                    firstMealAt: "2026-03-01 18:00:00",
+                    lastMealAt: "2026-04-01 18:00:00",
                     averageStarRating: 4.33,
                     ratedRecipeShare: 0.75,
                     favoriteRecipeShare: 0.5,
@@ -477,6 +483,10 @@ final class QueryReportsTests: XCTestCase {
                     ratedRecipeCount: 0,
                     unratedRecipeCount: 2,
                     favoriteRecipeCount: 1,
+                    usedRecipeCount: 0,
+                    unusedRecipeCount: 2,
+                    mealCount: 0,
+                    mealShare: 0,
                     averageStarRating: nil,
                     ratedRecipeShare: 0,
                     favoriteRecipeShare: 0.5,
@@ -501,7 +511,9 @@ final class QueryReportsTests: XCTestCase {
                 lastRecipeSearchRun: searchRun,
                 lastSuccessfulRecipeSearchRun: searchRun,
                 lastRecipeFeatureRun: nil,
-                lastSuccessfulRecipeFeatureRun: nil
+                lastSuccessfulRecipeFeatureRun: nil,
+                lastRecipeUsageRun: searchRun,
+                lastSuccessfulRecipeUsageRun: searchRun
             ),
             paths: makePaths(),
             now: Date(timeIntervalSince1970: 1_712_736_180)
@@ -511,8 +523,9 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
         XCTAssertTrue(report.humanDescription.contains("sort: average-rating"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: 1m old"))
-        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | avg_rating=4.33 | ratings=5:2,3:1"))
-        XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | recipes=2 | rated=0 | unrated=2 | favorites=1 | avg_rating=unrated | is_unlabeled=yes"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | used_recipes=2 | unused_recipes=2 | meals=5 | meal_share=0.25 | first_meal=2026-03-01 18:00:00 | last_meal=2026-04-01 18:00:00 | avg_rating=4.33 | ratings=5:2,3:1"))
+        XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | recipes=2 | rated=0 | unrated=2 | favorites=1 | used_recipes=0 | unused_recipes=2 | meals=0 | meal_share=0.00 | avg_rating=unrated | is_unlabeled=yes"))
     }
 
     private func makePaths() -> PantryPaths {

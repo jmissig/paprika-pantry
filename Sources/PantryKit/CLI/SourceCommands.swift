@@ -256,6 +256,10 @@ public struct SourceCookbooksCommand: PantryLeafCommand {
             throw ValidationError("Cookbook/source aggregates require the recipe search index. Run `paprika-pantry index rebuild` first.")
         }
 
+        guard indexStats.recipeUsageStatsReady else {
+            throw ValidationError("Cookbook/source usage summaries require the recipe usage index. Run `paprika-pantry index rebuild` first.")
+        }
+
         let aggregates = try store.listCookbookAggregates(
             sort: sort,
             limit: limit,

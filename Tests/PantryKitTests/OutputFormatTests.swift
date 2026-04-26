@@ -100,6 +100,12 @@ final class OutputFormatTests: XCTestCase {
                     ratedRecipeCount: 3,
                     unratedRecipeCount: 1,
                     favoriteRecipeCount: 2,
+                    usedRecipeCount: 2,
+                    unusedRecipeCount: 2,
+                    mealCount: 5,
+                    mealShare: 0.25,
+                    firstMealAt: "2026-03-01 18:00:00",
+                    lastMealAt: "2026-04-01 18:00:00",
                     averageStarRating: 4.33,
                     ratedRecipeShare: 0.75,
                     favoriteRecipeShare: 0.5,
@@ -130,8 +136,8 @@ final class OutputFormatTests: XCTestCase {
             now: Date(timeIntervalSince1970: 1_712_736_180)
         )
 
-        XCTAssertTrue(report.csvDescription.contains("source_name,is_unlabeled,recipe_count"))
-        XCTAssertTrue(report.csvDescription.contains("Serious Eats,false,4,3,1,2,4.33,0.75,0.50,2,0,1,0,0"))
+        XCTAssertTrue(report.csvDescription.contains("source_name,is_unlabeled,recipe_count,rated_recipe_count,unrated_recipe_count,favorite_recipe_count,used_recipe_count,unused_recipe_count,meal_count,meal_share,first_meal_at,last_meal_at"))
+        XCTAssertTrue(report.csvDescription.contains("Serious Eats,false,4,3,1,2,2,2,5,0.25,2026-03-01 18:00:00,2026-04-01 18:00:00,4.33,0.75,0.50,2,0,1,0,0"))
     }
 
     func testConsoleOutputRejectsUnsupportedCSVForCommandReport() {

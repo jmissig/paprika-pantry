@@ -170,6 +170,8 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
     public let minRatedRecipeCount: Int
     public let recipeSearchLastSuccessAt: Date?
     public let recipeSearchFreshnessSeconds: Int?
+    public let recipeUsageLastSuccessAt: Date?
+    public let recipeUsageFreshnessSeconds: Int?
     public let aggregates: [CookbookAggregateSummary]
     public let paths: PantryPathReport
 
@@ -193,6 +195,10 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
         self.minRatedRecipeCount = minRatedRecipeCount
         self.recipeSearchLastSuccessAt = indexStats.lastSuccessfulRecipeSearchRun?.finishedAt ?? indexStats.lastSuccessfulRecipeSearchRun?.startedAt
         self.recipeSearchFreshnessSeconds = recipeSearchLastSuccessAt.map {
+            max(0, Int(now.timeIntervalSince($0)))
+        }
+        self.recipeUsageLastSuccessAt = indexStats.lastSuccessfulRecipeUsageRun?.finishedAt ?? indexStats.lastSuccessfulRecipeUsageRun?.startedAt
+        self.recipeUsageFreshnessSeconds = recipeUsageLastSuccessAt.map {
             max(0, Int(now.timeIntervalSince($0)))
         }
         self.aggregates = aggregates
@@ -219,6 +225,16 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
             lines.append("recipe_search_freshness: never-built")
         }
 
+        if let recipeUsageLastSuccessAt {
+            lines.append("recipe_usage_last_success_at: \(renderedTimestamp(recipeUsageLastSuccessAt))")
+        }
+
+        if let recipeUsageFreshnessSeconds {
+            lines.append("recipe_usage_freshness: \(renderedDuration(seconds: recipeUsageFreshnessSeconds)) old")
+        } else {
+            lines.append("recipe_usage_freshness: never-built")
+        }
+
         if aggregates.isEmpty {
             lines.append("No cookbook/source groups matched.")
             lines.append(renderedPaths(paths))
@@ -231,6 +247,18 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
             parts.append("rated=\(aggregate.ratedRecipeCount)")
             parts.append("unrated=\(aggregate.unratedRecipeCount)")
             parts.append("favorites=\(aggregate.favoriteRecipeCount)")
+            parts.append("used_recipes=\(aggregate.usedRecipeCount)")
+            parts.append("unused_recipes=\(aggregate.unusedRecipeCount)")
+            parts.append("meals=\(aggregate.mealCount)")
+            parts.append("meal_share=\(renderedDecimal(aggregate.mealShare))")
+
+            if let firstMealAt = aggregate.firstMealAt {
+                parts.append("first_meal=\(firstMealAt)")
+            }
+
+            if let lastMealAt = aggregate.lastMealAt {
+                parts.append("last_meal=\(lastMealAt)")
+            }
 
             if let averageStarRating = aggregate.averageStarRating {
                 parts.append("avg_rating=\(renderedDecimal(averageStarRating))")
@@ -262,6 +290,12 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
             "rated_recipe_count",
             "unrated_recipe_count",
             "favorite_recipe_count",
+            "used_recipe_count",
+            "unused_recipe_count",
+            "meal_count",
+            "meal_share",
+            "first_meal_at",
+            "last_meal_at",
             "average_star_rating",
             "rated_recipe_share",
             "favorite_recipe_share",
@@ -282,6 +316,12 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
                 String(aggregate.ratedRecipeCount),
                 String(aggregate.unratedRecipeCount),
                 String(aggregate.favoriteRecipeCount),
+                String(aggregate.usedRecipeCount),
+                String(aggregate.unusedRecipeCount),
+                String(aggregate.mealCount),
+                renderedDecimal(aggregate.mealShare),
+                aggregate.firstMealAt ?? "",
+                aggregate.lastMealAt ?? "",
                 aggregate.averageStarRating.map(renderedDecimal) ?? "",
                 renderedDecimal(aggregate.ratedRecipeShare),
                 renderedDecimal(aggregate.favoriteRecipeShare),
