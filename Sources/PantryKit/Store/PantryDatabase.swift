@@ -215,6 +215,50 @@ public struct PantrySidecarDatabase {
             }
         }
 
+        migrator.registerMigration("ingredient-pairs-v1") { db in
+            try db.create(table: "ingredient_pair_summaries") { table in
+                table.column("basis", .text).notNull()
+                table.column("token_a", .text).notNull()
+                table.column("token_b", .text).notNull()
+                table.column("derived_at", .text).notNull()
+                table.column("recipe_count", .integer).notNull()
+                table.column("cooked_recipe_count", .integer).notNull()
+                table.column("cooked_meal_count", .integer).notNull()
+                table.column("favorite_recipe_count", .integer).notNull()
+                table.column("rated_recipe_count", .integer).notNull()
+                table.column("average_star_rating", .double)
+                table.column("first_meal_at", .text)
+                table.column("last_meal_at", .text)
+                table.primaryKey(["basis", "token_a", "token_b"])
+            }
+
+            try db.create(index: "ingredient_pair_summaries_on_token_a", on: "ingredient_pair_summaries", columns: ["token_a"])
+            try db.create(index: "ingredient_pair_summaries_on_token_b", on: "ingredient_pair_summaries", columns: ["token_b"])
+            try db.create(index: "ingredient_pair_summaries_on_recipe_count", on: "ingredient_pair_summaries", columns: ["recipe_count"])
+            try db.create(index: "ingredient_pair_summaries_on_cooked_meal_count", on: "ingredient_pair_summaries", columns: ["cooked_meal_count"])
+
+            try db.create(table: "ingredient_pair_recipe_evidence") { table in
+                table.column("basis", .text).notNull()
+                table.column("token_a", .text).notNull()
+                table.column("token_b", .text).notNull()
+                table.column("recipe_uid", .text).notNull()
+                table.column("recipe_name", .text).notNull()
+                table.column("source_name", .text)
+                table.column("token_a_line_numbers_json", .text).notNull()
+                table.column("token_b_line_numbers_json", .text).notNull()
+                table.column("is_favorite", .boolean).notNull()
+                table.column("star_rating", .integer)
+                table.column("meal_count", .integer).notNull()
+                table.column("first_meal_at", .text)
+                table.column("last_meal_at", .text)
+                table.column("derived_at", .text).notNull()
+                table.primaryKey(["basis", "token_a", "token_b", "recipe_uid"])
+            }
+
+            try db.create(index: "ingredient_pair_recipe_evidence_on_recipe_uid", on: "ingredient_pair_recipe_evidence", columns: ["recipe_uid"])
+            try db.create(index: "ingredient_pair_recipe_evidence_on_pair", on: "ingredient_pair_recipe_evidence", columns: ["basis", "token_a", "token_b"])
+        }
+
         return migrator
     }
 

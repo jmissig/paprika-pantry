@@ -11,6 +11,7 @@ public struct RecipesCommand: ParsableCommand {
             RecipesSearchCommand.self,
             RecipesFeaturesCommand.self,
             RecipesIngredientsCommand.self,
+            RecipesPairingsCommand.self,
         ]
     )
 
@@ -424,12 +425,110 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
     }
 }
 
+public struct RecipesPairingsCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "pairings",
+        abstract: "List sidecar-derived ingredient token co-occurrence evidence across recipes."
+    )
+
+    @Option(name: .long, help: "Only include pairs containing this normalized ingredient token after conservative normalization.")
+    public var token: String?
+
+    @Option(name: .customLong("with-token"), help: "Only include the pair between --token and this normalized ingredient token after conservative normalization.")
+    public var withToken: String?
+
+    @Option(name: .customLong("min-recipes"), help: "Only include token pairs that occur in at least this many recipes.")
+    public var minRecipes: Int = 1
+
+    @Option(name: .long, help: "Maximum token pairs to return.")
+    public var limit: Int = 20
+
+    @Option(name: .customLong("evidence-limit"), help: "Maximum recipe evidence rows to show for each token pair.")
+    public var evidenceLimit: Int = 3
+
+    @Option(name: .long, help: "Sort order for returned token pairs: \(IngredientPairEvidenceSort.allCases.map(\.rawValue).joined(separator: ", ")).")
+    public var sort: IngredientPairEvidenceSort = .recipes
+
+    public init() {}
+
+    public mutating func validate() throws {
+        if let token {
+            try validateIngredientPairTokenOption(token, optionName: "--token")
+        }
+
+        if let withToken {
+            try validateIngredientPairTokenOption(withToken, optionName: "--with-token")
+        }
+
+        if withToken != nil && token == nil {
+            throw ValidationError("--with-token requires --token.")
+        }
+
+        if minRecipes < 1 {
+            throw ValidationError("--min-recipes must be at least 1.")
+        }
+
+        if limit < 1 {
+            throw ValidationError("--limit must be greater than zero.")
+        }
+
+        if evidenceLimit < 0 {
+            throw ValidationError("--evidence-limit must be zero or greater.")
+        }
+    }
+
+    public mutating func run() throws {
+        let context = try makeContext()
+        let store = try context.makeSidecarStore()
+        let indexStats = try store.indexStats()
+        guard indexStats.ingredientPairEvidenceReady else {
+            throw ValidationError("Ingredient pair evidence index is not ready. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let results = try store.listIngredientPairEvidence(
+            token: token,
+            withToken: withToken,
+            minRecipes: minRecipes,
+            sort: sort,
+            limit: limit,
+            evidenceLimit: evidenceLimit
+        )
+        let now = Date()
+        try context.write(
+            RecipesPairingsReport(
+                results: results,
+                token: token,
+                withToken: withToken,
+                minRecipes: minRecipes,
+                limit: limit,
+                evidenceLimit: evidenceLimit,
+                sort: sort,
+                paths: context.paths,
+                ingredientPairLastSuccessAt: indexStats.lastSuccessfulIngredientPairRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientPairFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulIngredientPairRun, now: now)
+            )
+        )
+    }
+}
+
 private func renderedFreshnessSeconds(since run: PantryIndexRun?, now: Date) -> Int? {
     guard let run else {
         return nil
     }
 
     return max(0, Int(now.timeIntervalSince(run.finishedAt ?? run.startedAt)))
+}
+
+private func validateIngredientPairTokenOption(_ rawValue: String, optionName: String) throws {
+    let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        throw ValidationError("\(optionName) must not be empty.")
+    }
+
+    let tokens = IngredientNormalizer.normalizedQueryTokens(from: [trimmed])
+    guard tokens.count == 1 else {
+        throw ValidationError("\(optionName) must normalize to exactly one ingredient token.")
+    }
 }
 
 private func validateRecipeQueryOptions(minRating: Int?, maxRating: Int?, categories: [String]) throws {

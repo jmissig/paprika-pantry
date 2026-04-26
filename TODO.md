@@ -5,8 +5,6 @@ Completed work should leave this file.
 
 ## Now
 
-- [ ] Add ingredient co-occurrence / pairing tables with inspectable evidence.
-
 
 ## Next
 

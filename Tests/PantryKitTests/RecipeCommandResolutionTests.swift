@@ -1,8 +1,19 @@
+import ArgumentParser
 import Foundation
 import XCTest
 @testable import PantryKit
 
 final class RecipeCommandResolutionTests: XCTestCase {
+    private var temporaryDirectoryURL: URL?
+
+    override func tearDownWithError() throws {
+        if let temporaryDirectoryURL {
+            try? FileManager.default.removeItem(at: temporaryDirectoryURL)
+        }
+        temporaryDirectoryURL = nil
+        RuntimeConfiguration.setCurrent(try RuntimeOptionsHarness.parse([]).runtimeOptions)
+    }
+
     func testResolveRecipePrefersUIDBeforeNameMatch() throws {
         let service = makeRecipeReadService(
             stubs: [
@@ -294,6 +305,22 @@ final class RecipeCommandResolutionTests: XCTestCase {
         XCTAssertThrowsError(
             try RecipesSearchCommand.parseAsRoot(["risotto", "--max-ingredient-lines", "0"])
         )
+
+        XCTAssertThrowsError(
+            try RecipesPairingsCommand.parseAsRoot(["--with-token", "basil"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesPairingsCommand.parseAsRoot(["--token", "green onions"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesPairingsCommand.parseAsRoot(["--min-recipes", "0"])
+        )
+
+        XCTAssertThrowsError(
+            try RecipesPairingsCommand.parseAsRoot(["--evidence-limit", "-1"])
+        )
     }
 
     func testRecipeQueryCommandParsingCapturesIngredientMatchAndExclusions() throws {
@@ -310,6 +337,21 @@ final class RecipeCommandResolutionTests: XCTestCase {
         XCTAssertEqual(command.ingredient, ["green onions", "basil"])
         XCTAssertEqual(command.excludeIngredient, ["anchovy"])
         XCTAssertEqual(command.ingredientMatch, .any)
+    }
+
+    func testRecipesPairingsCommandReportsMissingIndexReadiness() throws {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        temporaryDirectoryURL = directoryURL
+        let options = try RuntimeOptionsHarness.parse([
+            "--db-path", directoryURL.appendingPathComponent("pantry.sqlite").path,
+        ]).runtimeOptions
+        RuntimeConfiguration.setCurrent(options)
+
+        var command = try XCTUnwrap(RecipesPairingsCommand.parseAsRoot([]) as? RecipesPairingsCommand)
+
+        XCTAssertThrowsError(try command.run()) { error in
+            XCTAssertTrue(String(describing: error).contains("Ingredient pair evidence index is not ready"))
+        }
     }
 
     private func makeRecipeReadService(
@@ -354,4 +396,8 @@ final class RecipeCommandResolutionTests: XCTestCase {
             rawJSON: #"{"uid":"test"}"#
         )
     }
+}
+
+private struct RuntimeOptionsHarness: ParsableCommand {
+    @OptionGroup var runtimeOptions: RuntimeOptions
 }

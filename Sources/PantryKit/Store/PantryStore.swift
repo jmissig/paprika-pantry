@@ -48,6 +48,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let recipeUsageStatsWithLastMealAtCount: Int
     public let recipeUsageStatsWithGapArrayCount: Int
     public let recipeUsageTotalMealCount: Int
+    public let ingredientPairSummaryCount: Int
+    public let ingredientPairRecipeEvidenceCount: Int
     public let lastRecipeSearchRun: PantryIndexRun?
     public let lastSuccessfulRecipeSearchRun: PantryIndexRun?
     public let lastRecipeFeatureRun: PantryIndexRun?
@@ -56,6 +58,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     public let lastSuccessfulRecipeIngredientRun: PantryIndexRun?
     public let lastRecipeUsageRun: PantryIndexRun?
     public let lastSuccessfulRecipeUsageRun: PantryIndexRun?
+    public let lastIngredientPairRun: PantryIndexRun?
+    public let lastSuccessfulIngredientPairRun: PantryIndexRun?
     public let sourceState: PantryStoredSourceState?
 
     public init(
@@ -70,6 +74,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         recipeUsageStatsWithLastMealAtCount: Int = 0,
         recipeUsageStatsWithGapArrayCount: Int = 0,
         recipeUsageTotalMealCount: Int = 0,
+        ingredientPairSummaryCount: Int = 0,
+        ingredientPairRecipeEvidenceCount: Int = 0,
         lastRecipeSearchRun: PantryIndexRun?,
         lastSuccessfulRecipeSearchRun: PantryIndexRun?,
         lastRecipeFeatureRun: PantryIndexRun?,
@@ -78,6 +84,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         lastSuccessfulRecipeIngredientRun: PantryIndexRun? = nil,
         lastRecipeUsageRun: PantryIndexRun? = nil,
         lastSuccessfulRecipeUsageRun: PantryIndexRun? = nil,
+        lastIngredientPairRun: PantryIndexRun? = nil,
+        lastSuccessfulIngredientPairRun: PantryIndexRun? = nil,
         sourceState: PantryStoredSourceState? = nil
     ) {
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
@@ -91,6 +99,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.recipeUsageStatsWithLastMealAtCount = recipeUsageStatsWithLastMealAtCount
         self.recipeUsageStatsWithGapArrayCount = recipeUsageStatsWithGapArrayCount
         self.recipeUsageTotalMealCount = recipeUsageTotalMealCount
+        self.ingredientPairSummaryCount = ingredientPairSummaryCount
+        self.ingredientPairRecipeEvidenceCount = ingredientPairRecipeEvidenceCount
         self.lastRecipeSearchRun = lastRecipeSearchRun
         self.lastSuccessfulRecipeSearchRun = lastSuccessfulRecipeSearchRun
         self.lastRecipeFeatureRun = lastRecipeFeatureRun
@@ -99,6 +109,8 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.lastSuccessfulRecipeIngredientRun = lastSuccessfulRecipeIngredientRun
         self.lastRecipeUsageRun = lastRecipeUsageRun
         self.lastSuccessfulRecipeUsageRun = lastSuccessfulRecipeUsageRun
+        self.lastIngredientPairRun = lastIngredientPairRun
+        self.lastSuccessfulIngredientPairRun = lastSuccessfulIngredientPairRun
         self.sourceState = sourceState
     }
 
@@ -116,6 +128,98 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
 
     public var recipeUsageStatsReady: Bool {
         lastSuccessfulRecipeUsageRun != nil
+    }
+
+    public var ingredientPairEvidenceReady: Bool {
+        lastSuccessfulIngredientPairRun != nil
+    }
+}
+
+public enum IngredientPairEvidenceSort: String, CaseIterable, Codable, Sendable, ExpressibleByArgument {
+    case recipes
+    case meals
+    case favorites
+    case rating
+    case name
+}
+
+public struct IngredientPairRecipeEvidence: Codable, Equatable, Sendable {
+    public let recipeUID: String
+    public let recipeName: String
+    public let sourceName: String?
+    public let tokenALineNumbers: [Int]
+    public let tokenBLineNumbers: [Int]
+    public let isFavorite: Bool
+    public let starRating: Int?
+    public let mealCount: Int
+    public let firstMealAt: String?
+    public let lastMealAt: String?
+
+    public init(
+        recipeUID: String,
+        recipeName: String,
+        sourceName: String?,
+        tokenALineNumbers: [Int],
+        tokenBLineNumbers: [Int],
+        isFavorite: Bool,
+        starRating: Int?,
+        mealCount: Int,
+        firstMealAt: String?,
+        lastMealAt: String?
+    ) {
+        self.recipeUID = recipeUID
+        self.recipeName = recipeName
+        self.sourceName = sourceName
+        self.tokenALineNumbers = tokenALineNumbers
+        self.tokenBLineNumbers = tokenBLineNumbers
+        self.isFavorite = isFavorite
+        self.starRating = starRating
+        self.mealCount = mealCount
+        self.firstMealAt = firstMealAt
+        self.lastMealAt = lastMealAt
+    }
+}
+
+public struct IngredientPairEvidenceSummary: Codable, Equatable, Sendable {
+    public let basis: String
+    public let tokenA: String
+    public let tokenB: String
+    public let recipeCount: Int
+    public let cookedRecipeCount: Int
+    public let cookedMealCount: Int
+    public let favoriteRecipeCount: Int
+    public let ratedRecipeCount: Int
+    public let averageStarRating: Double?
+    public let firstMealAt: String?
+    public let lastMealAt: String?
+    public let recipeEvidence: [IngredientPairRecipeEvidence]
+
+    public init(
+        basis: String,
+        tokenA: String,
+        tokenB: String,
+        recipeCount: Int,
+        cookedRecipeCount: Int,
+        cookedMealCount: Int,
+        favoriteRecipeCount: Int,
+        ratedRecipeCount: Int,
+        averageStarRating: Double?,
+        firstMealAt: String?,
+        lastMealAt: String?,
+        recipeEvidence: [IngredientPairRecipeEvidence] = []
+    ) {
+        self.basis = basis
+        self.tokenA = tokenA
+        self.tokenB = tokenB
+        self.recipeCount = recipeCount
+        self.cookedRecipeCount = cookedRecipeCount
+        self.cookedMealCount = cookedMealCount
+        self.favoriteRecipeCount = favoriteRecipeCount
+        self.ratedRecipeCount = ratedRecipeCount
+        self.averageStarRating = averageStarRating
+        self.firstMealAt = firstMealAt
+        self.lastMealAt = lastMealAt
+        self.recipeEvidence = recipeEvidence
     }
 }
 
@@ -251,6 +355,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let recipeUsageStatsWithGapArrayCount: Int
     public let linkedMealCount: Int
     public let totalMealCount: Int
+    public let ingredientPairSummaryCount: Int
+    public let ingredientPairRecipeEvidenceCount: Int
     public let sourceState: PantryStoredSourceState?
 
     public init(
@@ -268,6 +374,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         recipeUsageStatsWithGapArrayCount: Int = 0,
         linkedMealCount: Int = 0,
         totalMealCount: Int = 0,
+        ingredientPairSummaryCount: Int = 0,
+        ingredientPairRecipeEvidenceCount: Int = 0,
         sourceState: PantryStoredSourceState? = nil
     ) {
         self.startedAt = startedAt
@@ -284,6 +392,8 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.recipeUsageStatsWithGapArrayCount = recipeUsageStatsWithGapArrayCount
         self.linkedMealCount = linkedMealCount
         self.totalMealCount = totalMealCount
+        self.ingredientPairSummaryCount = ingredientPairSummaryCount
+        self.ingredientPairRecipeEvidenceCount = ingredientPairRecipeEvidenceCount
         self.sourceState = sourceState
     }
 }
@@ -453,6 +563,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     """,
                     arguments: [Self.recipeUsageSummaryKey]
                 ) ?? 0,
+                ingredientPairSummaryCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ingredient_pair_summaries") ?? 0,
+                ingredientPairRecipeEvidenceCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ingredient_pair_recipe_evidence") ?? 0,
                 lastRecipeSearchRun: try latestIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastSuccessfulRecipeSearchRun: try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db),
                 lastRecipeFeatureRun: try latestIndexRun(named: Self.recipeFeatureIndexName, db: db),
@@ -461,6 +573,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 lastSuccessfulRecipeIngredientRun: try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db),
                 lastRecipeUsageRun: try latestIndexRun(named: Self.recipeUsageIndexName, db: db),
                 lastSuccessfulRecipeUsageRun: try latestSuccessfulIndexRun(named: Self.recipeUsageIndexName, db: db),
+                lastIngredientPairRun: try latestIndexRun(named: Self.ingredientPairIndexName, db: db),
+                lastSuccessfulIngredientPairRun: try latestSuccessfulIndexRun(named: Self.ingredientPairIndexName, db: db),
                 sourceState: try fetchStoredSourceState(db: db)
             )
         }
@@ -947,6 +1061,100 @@ public struct PantrySidecarStore: @unchecked Sendable {
         }
     }
 
+    public func listIngredientPairEvidence(
+        token: String? = nil,
+        withToken: String? = nil,
+        minRecipes: Int = 1,
+        sort: IngredientPairEvidenceSort = .recipes,
+        limit: Int = 20,
+        evidenceLimit: Int = 3
+    ) throws -> [IngredientPairEvidenceSummary] {
+        let normalizedToken = token.flatMap(Self.normalizedSingleIngredientToken)
+        let normalizedWithToken = withToken.flatMap(Self.normalizedSingleIngredientToken)
+        let boundedLimit = max(1, limit)
+        let boundedEvidenceLimit = max(0, evidenceLimit)
+        if token != nil && normalizedToken == nil {
+            return []
+        }
+        if withToken != nil && normalizedWithToken == nil {
+            return []
+        }
+
+        return try dbQueue.read { db in
+            var conditions = [
+                "basis = ?",
+                "recipe_count >= ?",
+            ]
+            var arguments: StatementArguments = [
+                Self.ingredientPairEvidenceBasis,
+                max(1, minRecipes),
+            ]
+
+            if let normalizedToken, let normalizedWithToken {
+                let ordered = Self.orderedPair(normalizedToken, normalizedWithToken)
+                conditions.append("token_a = ?")
+                conditions.append("token_b = ?")
+                arguments += [ordered.0, ordered.1]
+            } else if let normalizedToken {
+                conditions.append("(token_a = ? OR token_b = ?)")
+                arguments += [normalizedToken, normalizedToken]
+            }
+
+            arguments += [boundedLimit]
+            let summaries = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT
+                    basis,
+                    token_a,
+                    token_b,
+                    recipe_count,
+                    cooked_recipe_count,
+                    cooked_meal_count,
+                    favorite_recipe_count,
+                    rated_recipe_count,
+                    average_star_rating,
+                    first_meal_at,
+                    last_meal_at
+                FROM ingredient_pair_summaries
+                WHERE \(conditions.joined(separator: " AND "))
+                ORDER BY \(Self.ingredientPairOrderClause(sort: sort))
+                LIMIT ?
+                """,
+                arguments: arguments
+            ).map(Self.decodeIngredientPairSummary)
+
+            guard boundedEvidenceLimit > 0 else {
+                return summaries
+            }
+
+            return try summaries.map { summary in
+                var summary = summary
+                let evidence = try Self.fetchIngredientPairRecipeEvidence(
+                    tokenA: summary.tokenA,
+                    tokenB: summary.tokenB,
+                    limit: boundedEvidenceLimit,
+                    db: db
+                )
+                summary = IngredientPairEvidenceSummary(
+                    basis: summary.basis,
+                    tokenA: summary.tokenA,
+                    tokenB: summary.tokenB,
+                    recipeCount: summary.recipeCount,
+                    cookedRecipeCount: summary.cookedRecipeCount,
+                    cookedMealCount: summary.cookedMealCount,
+                    favoriteRecipeCount: summary.favoriteRecipeCount,
+                    ratedRecipeCount: summary.ratedRecipeCount,
+                    averageStarRating: summary.averageStarRating,
+                    firstMealAt: summary.firstMealAt,
+                    lastMealAt: summary.lastMealAt,
+                    recipeEvidence: evidence
+                )
+                return summary
+            }
+        }
+    }
+
     public func rebuildRecipeIndexes(
         from source: any PantrySource,
         now: @escaping @Sendable () -> Date = Date.init
@@ -956,6 +1164,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
         let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
         let ingredientRunID = try startIndexRun(named: Self.recipeIngredientIndexName, startedAt: startedAt)
         let usageRunID = try startIndexRun(named: Self.recipeUsageIndexName, startedAt: startedAt)
+        let ingredientPairRunID = try startIndexRun(named: Self.ingredientPairIndexName, startedAt: startedAt)
 
         do {
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
@@ -1016,11 +1225,36 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 }
             }
 
-            let finishedAt = now()
+            let indexedAt = now()
+            let indexedAtString = DatabaseTimestamp.encode(indexedAt)
             let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
             let sortedFeatures = features.sorted { $0.uid < $1.uid }
             let sortedIngredientIndexes = ingredientIndexes.sorted { $0.uid < $1.uid }
             let sortedUsageStats = usageStats.stats.sorted { $0.uid < $1.uid }
+            let ingredientPairDerivation = Self.deriveIngredientPairEvidence(
+                ingredientIndexes: sortedIngredientIndexes,
+                documents: sortedDocuments,
+                usageStats: sortedUsageStats,
+                derivedAt: indexedAt
+            )
+            let sortedIngredientPairSummaries = ingredientPairDerivation.summaries.sorted {
+                if $0.tokenA != $1.tokenA {
+                    return $0.tokenA < $1.tokenA
+                }
+
+                return $0.tokenB < $1.tokenB
+            }
+            let sortedIngredientPairEvidence = ingredientPairDerivation.recipeEvidence.sorted {
+                if $0.tokenA != $1.tokenA {
+                    return $0.tokenA < $1.tokenA
+                }
+
+                if $0.tokenB != $1.tokenB {
+                    return $0.tokenB < $1.tokenB
+                }
+
+                return $0.recipeUID < $1.recipeUID
+            }
             let recipeSearchDocumentCount = sortedDocuments.count
             let recipeFeatureCount = sortedFeatures.count
             let recipeFeaturesWithTotalTimeCount = sortedFeatures.filter { $0.totalTimeMinutes != nil }.count
@@ -1045,8 +1279,12 @@ public struct PantrySidecarStore: @unchecked Sendable {
             }
             let linkedMealCount = usageStats.linkedMealCount
             let totalMealCount = usageStats.totalMealCount
-            let sourceState = Self.makeStoredSourceState(from: source, observedAt: finishedAt)
-            try await dbQueue.write { db in
+            let ingredientPairSummaryCount = sortedIngredientPairSummaries.count
+            let ingredientPairRecipeEvidenceCount = sortedIngredientPairEvidence.count
+            let sourceState = Self.makeStoredSourceState(from: source, observedAt: indexedAt)
+            let transactionFinishedAt = try await dbQueue.write { db in
+                try Self.dropIngredientPairSecondaryIndexes(in: db)
+
                 try db.execute(sql: "DELETE FROM recipe_search_documents")
                 try db.execute(sql: "DELETE FROM recipe_search_fts")
                 try db.execute(sql: "DELETE FROM recipe_features")
@@ -1054,6 +1292,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
                 try db.execute(sql: "DELETE FROM recipe_usage_stats")
                 try db.execute(sql: "DELETE FROM recipe_usage_summary")
+                try db.execute(sql: "DELETE FROM ingredient_pair_recipe_evidence")
+                try db.execute(sql: "DELETE FROM ingredient_pair_summaries")
                 try db.execute(sql: "DELETE FROM source_state")
 
                 for document in sortedDocuments {
@@ -1080,7 +1320,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             document.ingredients,
                             document.notes,
                             document.sourceFingerprint,
-                            DatabaseTimestamp.encode(finishedAt),
+                            indexedAtString,
                             document.isFavorite,
                             document.starRating,
                         ]
@@ -1126,7 +1366,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         arguments: [
                             feature.uid,
                             feature.sourceFingerprint,
-                            DatabaseTimestamp.encode(finishedAt),
+                            indexedAtString,
                             feature.prepTimeMinutes,
                             feature.cookTimeMinutes,
                             feature.totalTimeMinutes,
@@ -1156,7 +1396,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                                 line.sourceText,
                                 line.normalizedText,
                                 ingredientIndex.sourceFingerprint,
-                                DatabaseTimestamp.encode(finishedAt),
+                                indexedAtString,
                             ]
                         )
 
@@ -1200,7 +1440,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         """,
                         arguments: [
                             usageStat.uid,
-                            DatabaseTimestamp.encode(finishedAt),
+                            indexedAtString,
                             usageStat.mealCount,
                             usageStat.lastMealAt,
                             usageStat.mealCount,
@@ -1224,15 +1464,94 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     """,
                     arguments: [
                         Self.recipeUsageSummaryKey,
-                        DatabaseTimestamp.encode(finishedAt),
+                        indexedAtString,
                         totalMealCount,
                     ]
                 )
+
+                let insertIngredientPairSummaryStatement = try db.makeStatement(
+                    sql: """
+                    INSERT INTO ingredient_pair_summaries (
+                        basis,
+                        token_a,
+                        token_b,
+                        derived_at,
+                        recipe_count,
+                        cooked_recipe_count,
+                        cooked_meal_count,
+                        favorite_recipe_count,
+                        rated_recipe_count,
+                        average_star_rating,
+                        first_meal_at,
+                        last_meal_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+                )
+
+                for summary in sortedIngredientPairSummaries {
+                    try insertIngredientPairSummaryStatement.execute(arguments: [
+                        summary.basis,
+                        summary.tokenA,
+                        summary.tokenB,
+                        indexedAtString,
+                        summary.recipeCount,
+                        summary.cookedRecipeCount,
+                        summary.cookedMealCount,
+                        summary.favoriteRecipeCount,
+                        summary.ratedRecipeCount,
+                        summary.averageStarRating,
+                        summary.firstMealAt,
+                        summary.lastMealAt,
+                    ])
+                }
+
+                let insertIngredientPairRecipeEvidenceStatement = try db.makeStatement(
+                    sql: """
+                    INSERT INTO ingredient_pair_recipe_evidence (
+                        basis,
+                        token_a,
+                        token_b,
+                        recipe_uid,
+                        recipe_name,
+                        source_name,
+                        token_a_line_numbers_json,
+                        token_b_line_numbers_json,
+                        is_favorite,
+                        star_rating,
+                        meal_count,
+                        first_meal_at,
+                        last_meal_at,
+                        derived_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+                )
+
+                for evidence in sortedIngredientPairEvidence {
+                    try insertIngredientPairRecipeEvidenceStatement.execute(arguments: [
+                        evidence.basis,
+                        evidence.tokenA,
+                        evidence.tokenB,
+                        evidence.recipeUID,
+                        evidence.recipeName,
+                        evidence.sourceName,
+                        Self.encodeIntArrayJSON(evidence.tokenALineNumbers),
+                        Self.encodeIntArrayJSON(evidence.tokenBLineNumbers),
+                        evidence.isFavorite,
+                        evidence.starRating,
+                        evidence.mealCount,
+                        evidence.firstMealAt,
+                        evidence.lastMealAt,
+                        indexedAtString,
+                    ])
+                }
+
+                try Self.createIngredientPairSecondaryIndexes(in: db)
 
                 if let sourceState {
                     try writeStoredSourceState(sourceState, in: db)
                 }
 
+                let finishedAt = now()
                 try finishIndexRun(
                     id: searchRunID,
                     status: .success,
@@ -1265,7 +1584,17 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     errorMessage: nil,
                     in: db
                 )
+                try finishIndexRun(
+                    id: ingredientPairRunID,
+                    status: .success,
+                    finishedAt: finishedAt,
+                    recipeCount: ingredientPairSummaryCount,
+                    errorMessage: nil,
+                    in: db
+                )
+                return finishedAt
             }
+            let finishedAt = max(transactionFinishedAt, now())
 
             return RecipeIndexesRebuildSummary(
                 startedAt: startedAt,
@@ -1282,6 +1611,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 recipeUsageStatsWithGapArrayCount: recipeUsageStatsWithGapArrayCount,
                 linkedMealCount: linkedMealCount,
                 totalMealCount: totalMealCount,
+                ingredientPairSummaryCount: ingredientPairSummaryCount,
+                ingredientPairRecipeEvidenceCount: ingredientPairRecipeEvidenceCount,
                 sourceState: sourceState
             )
         } catch {
@@ -1308,6 +1639,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
             )
             try finishIndexRun(
                 id: usageRunID,
+                status: .failed,
+                finishedAt: now(),
+                recipeCount: 0,
+                errorMessage: String(describing: error)
+            )
+            try finishIndexRun(
+                id: ingredientPairRunID,
                 status: .failed,
                 finishedAt: now(),
                 recipeCount: 0,
@@ -1541,7 +1879,27 @@ public struct PantrySidecarStore: @unchecked Sendable {
     private static let recipeFeatureIndexName = "recipe-features"
     private static let recipeIngredientIndexName = "recipe-ingredients"
     private static let recipeUsageIndexName = "recipe-usage"
+    private static let ingredientPairIndexName = "ingredient-pairs"
+    public static let ingredientPairEvidenceBasis = "recipe-token-cooccurrence-v1"
     private static let recipeUsageSummaryKey = "current"
+
+    private static func dropIngredientPairSecondaryIndexes(in db: Database) throws {
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_summaries_on_token_a")
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_summaries_on_token_b")
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_summaries_on_recipe_count")
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_summaries_on_cooked_meal_count")
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_recipe_evidence_on_recipe_uid")
+        try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_recipe_evidence_on_pair")
+    }
+
+    private static func createIngredientPairSecondaryIndexes(in db: Database) throws {
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_summaries_on_token_a ON ingredient_pair_summaries(token_a)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_summaries_on_token_b ON ingredient_pair_summaries(token_b)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_summaries_on_recipe_count ON ingredient_pair_summaries(recipe_count)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_summaries_on_cooked_meal_count ON ingredient_pair_summaries(cooked_meal_count)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_recipe_evidence_on_recipe_uid ON ingredient_pair_recipe_evidence(recipe_uid)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS ingredient_pair_recipe_evidence_on_pair ON ingredient_pair_recipe_evidence(basis, token_a, token_b)")
+    }
 
     private static func sortSearchDocuments(lhs: RecipeSearchDocument, rhs: RecipeSearchDocument) -> Bool {
         if lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedSame {
@@ -1680,6 +2038,56 @@ public struct PantrySidecarStore: @unchecked Sendable {
         }
     }
 
+    private static func ingredientPairOrderClause(sort: IngredientPairEvidenceSort) -> String {
+        switch sort {
+        case .recipes:
+            return """
+            recipe_count DESC,
+            cooked_meal_count DESC,
+            favorite_recipe_count DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            token_a COLLATE NOCASE ASC,
+            token_b COLLATE NOCASE ASC
+            """
+        case .meals:
+            return """
+            cooked_meal_count DESC,
+            cooked_recipe_count DESC,
+            recipe_count DESC,
+            CASE WHEN last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            last_meal_at DESC,
+            token_a COLLATE NOCASE ASC,
+            token_b COLLATE NOCASE ASC
+            """
+        case .favorites:
+            return """
+            favorite_recipe_count DESC,
+            recipe_count DESC,
+            cooked_meal_count DESC,
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            token_a COLLATE NOCASE ASC,
+            token_b COLLATE NOCASE ASC
+            """
+        case .rating:
+            return """
+            CASE WHEN rated_recipe_count = 0 THEN 1 ELSE 0 END ASC,
+            average_star_rating DESC,
+            rated_recipe_count DESC,
+            favorite_recipe_count DESC,
+            recipe_count DESC,
+            token_a COLLATE NOCASE ASC,
+            token_b COLLATE NOCASE ASC
+            """
+        case .name:
+            return """
+            token_a COLLATE NOCASE ASC,
+            token_b COLLATE NOCASE ASC
+            """
+        }
+    }
+
     private static func decodeRecipeDerivedFeatures(row: Row) -> RecipeDerivedFeatures? {
         let derivedAtValue: String? = row["derived_at"]
         guard let derivedAtValue else {
@@ -1720,6 +2128,87 @@ public struct PantrySidecarStore: @unchecked Sendable {
             medianMealGapDays: row["median_meal_gap_days"],
             mealShare: row["meal_share"]
         )
+    }
+
+    private static func decodeIngredientPairSummary(row: Row) -> IngredientPairEvidenceSummary {
+        IngredientPairEvidenceSummary(
+            basis: row["basis"],
+            tokenA: row["token_a"],
+            tokenB: row["token_b"],
+            recipeCount: row["recipe_count"],
+            cookedRecipeCount: row["cooked_recipe_count"],
+            cookedMealCount: row["cooked_meal_count"],
+            favoriteRecipeCount: row["favorite_recipe_count"],
+            ratedRecipeCount: row["rated_recipe_count"],
+            averageStarRating: row["average_star_rating"],
+            firstMealAt: row["first_meal_at"],
+            lastMealAt: row["last_meal_at"]
+        )
+    }
+
+    private static func fetchIngredientPairRecipeEvidence(
+        tokenA: String,
+        tokenB: String,
+        limit: Int,
+        db: Database
+    ) throws -> [IngredientPairRecipeEvidence] {
+        try Row.fetchAll(
+            db,
+            sql: """
+            SELECT
+                recipe_uid,
+                recipe_name,
+                source_name,
+                token_a_line_numbers_json,
+                token_b_line_numbers_json,
+                is_favorite,
+                star_rating,
+                meal_count,
+                first_meal_at,
+                last_meal_at
+            FROM ingredient_pair_recipe_evidence
+            WHERE basis = ?
+                AND token_a = ?
+                AND token_b = ?
+            ORDER BY
+                meal_count DESC,
+                CASE WHEN last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+                last_meal_at DESC,
+                COALESCE(star_rating, 0) DESC,
+                is_favorite DESC,
+                recipe_name COLLATE NOCASE ASC,
+                recipe_uid ASC
+            LIMIT ?
+            """,
+            arguments: [
+                ingredientPairEvidenceBasis,
+                tokenA,
+                tokenB,
+                max(0, limit),
+            ]
+        ).map { row in
+            IngredientPairRecipeEvidence(
+                recipeUID: row["recipe_uid"],
+                recipeName: row["recipe_name"],
+                sourceName: row["source_name"],
+                tokenALineNumbers: decodeIntArrayJSON(row["token_a_line_numbers_json"]) ?? [],
+                tokenBLineNumbers: decodeIntArrayJSON(row["token_b_line_numbers_json"]) ?? [],
+                isFavorite: row["is_favorite"],
+                starRating: row["star_rating"],
+                mealCount: row["meal_count"],
+                firstMealAt: row["first_meal_at"],
+                lastMealAt: row["last_meal_at"]
+            )
+        }
+    }
+
+    private static func normalizedSingleIngredientToken(_ rawValue: String) -> String? {
+        let tokens = IngredientNormalizer.normalizedQueryTokens(from: [rawValue])
+        return tokens.count == 1 ? tokens[0] : nil
+    }
+
+    private static func orderedPair(_ lhs: String, _ rhs: String) -> (String, String) {
+        lhs <= rhs ? (lhs, rhs) : (rhs, lhs)
     }
 
     private static func normalizedSearchQuery(_ query: String) -> String {
@@ -1788,11 +2277,11 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     private static func encodeIntArrayJSON(_ values: [Int]?) -> String? {
-        guard let values, let data = try? JSONEncoder().encode(values) else {
+        guard let values else {
             return nil
         }
 
-        return String(data: data, encoding: .utf8)
+        return "[\(values.map(String.init).joined(separator: ","))]"
     }
 
     private static func decodeIntArrayJSON(_ value: String?) -> [Int]? {
@@ -1929,6 +2418,72 @@ public struct PantrySidecarStore: @unchecked Sendable {
         )
     }
 
+    private static func deriveIngredientPairEvidence(
+        ingredientIndexes: [RecipeIngredientIndex],
+        documents: [RecipeSearchDocument],
+        usageStats: [RecipeUsageStats],
+        derivedAt: Date
+    ) -> IngredientPairDerivation {
+        let documentsByUID = Dictionary(uniqueKeysWithValues: documents.map { ($0.uid, $0) })
+        let usageStatsByUID = Dictionary(uniqueKeysWithValues: usageStats.map { ($0.uid, $0) })
+        var evidenceRows = [IngredientPairRecipeEvidenceRow]()
+        var aggregates = [IngredientPairKey: IngredientPairAggregate]()
+
+        for ingredientIndex in ingredientIndexes {
+            guard let document = documentsByUID[ingredientIndex.uid] else {
+                continue
+            }
+
+            let lineNumbersByToken = ingredientIndex.lines.reduce(into: [String: Set<Int>]()) { partialResult, line in
+                for token in line.normalizedTokens {
+                    partialResult[token, default: []].insert(line.lineNumber)
+                }
+            }
+            let tokens = lineNumbersByToken.keys.sorted()
+            guard tokens.count > 1 else {
+                continue
+            }
+
+            let usage = usageStatsByUID[ingredientIndex.uid]
+            for firstIndex in tokens.indices.dropLast() {
+                for secondIndex in tokens.index(after: firstIndex) ..< tokens.endIndex {
+                    let tokenA = tokens[firstIndex]
+                    let tokenB = tokens[secondIndex]
+                    guard tokenA != tokenB else {
+                        continue
+                    }
+
+                    let key = IngredientPairKey(tokenA: tokenA, tokenB: tokenB)
+                    let evidence = IngredientPairRecipeEvidenceRow(
+                        basis: ingredientPairEvidenceBasis,
+                        tokenA: tokenA,
+                        tokenB: tokenB,
+                        recipeUID: ingredientIndex.uid,
+                        recipeName: document.name,
+                        sourceName: document.sourceName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                        tokenALineNumbers: (lineNumbersByToken[tokenA] ?? []).sorted(),
+                        tokenBLineNumbers: (lineNumbersByToken[tokenB] ?? []).sorted(),
+                        isFavorite: document.isFavorite,
+                        starRating: document.starRating,
+                        mealCount: usage?.mealCount ?? 0,
+                        firstMealAt: usage?.firstMealAt,
+                        lastMealAt: usage?.lastMealAt,
+                        derivedAt: derivedAt
+                    )
+                    evidenceRows.append(evidence)
+                    aggregates[key, default: IngredientPairAggregate(tokenA: tokenA, tokenB: tokenB)]
+                        .add(evidence)
+                }
+            }
+        }
+
+        let summaries = aggregates.values.map { aggregate in
+            aggregate.summary(basis: ingredientPairEvidenceBasis)
+        }
+
+        return IngredientPairDerivation(summaries: summaries, recipeEvidence: evidenceRows)
+    }
+
     private static func median(of values: [Int]?) -> Double? {
         guard let values, !values.isEmpty else {
             return nil
@@ -2052,6 +2607,92 @@ private struct RecipeSearchDocument: Equatable, Sendable {
     let sourceFingerprint: String?
     let isFavorite: Bool
     let starRating: Int?
+}
+
+private struct IngredientPairKey: Hashable, Sendable {
+    let tokenA: String
+    let tokenB: String
+}
+
+private struct IngredientPairDerivation: Sendable {
+    let summaries: [IngredientPairEvidenceSummary]
+    let recipeEvidence: [IngredientPairRecipeEvidenceRow]
+}
+
+private struct IngredientPairRecipeEvidenceRow: Equatable, Sendable {
+    let basis: String
+    let tokenA: String
+    let tokenB: String
+    let recipeUID: String
+    let recipeName: String
+    let sourceName: String?
+    let tokenALineNumbers: [Int]
+    let tokenBLineNumbers: [Int]
+    let isFavorite: Bool
+    let starRating: Int?
+    let mealCount: Int
+    let firstMealAt: String?
+    let lastMealAt: String?
+    let derivedAt: Date
+}
+
+private struct IngredientPairAggregate: Sendable {
+    let tokenA: String
+    let tokenB: String
+    var recipeCount = 0
+    var cookedRecipeCount = 0
+    var cookedMealCount = 0
+    var favoriteRecipeCount = 0
+    var ratedRecipeCount = 0
+    var starRatingTotal = 0
+    var firstMealAt: String?
+    var lastMealAt: String?
+
+    mutating func add(_ evidence: IngredientPairRecipeEvidenceRow) {
+        recipeCount += 1
+
+        if evidence.mealCount > 0 {
+            cookedRecipeCount += 1
+            cookedMealCount += evidence.mealCount
+        }
+
+        if evidence.isFavorite {
+            favoriteRecipeCount += 1
+        }
+
+        if let starRating = evidence.starRating {
+            ratedRecipeCount += 1
+            starRatingTotal += starRating
+        }
+
+        if let evidenceFirstMealAt = evidence.firstMealAt {
+            if firstMealAt == nil || evidenceFirstMealAt < firstMealAt! {
+                firstMealAt = evidenceFirstMealAt
+            }
+        }
+
+        if let evidenceLastMealAt = evidence.lastMealAt {
+            if lastMealAt == nil || evidenceLastMealAt > lastMealAt! {
+                lastMealAt = evidenceLastMealAt
+            }
+        }
+    }
+
+    func summary(basis: String) -> IngredientPairEvidenceSummary {
+        IngredientPairEvidenceSummary(
+            basis: basis,
+            tokenA: tokenA,
+            tokenB: tokenB,
+            recipeCount: recipeCount,
+            cookedRecipeCount: cookedRecipeCount,
+            cookedMealCount: cookedMealCount,
+            favoriteRecipeCount: favoriteRecipeCount,
+            ratedRecipeCount: ratedRecipeCount,
+            averageStarRating: ratedRecipeCount == 0 ? nil : Double(starRatingTotal) / Double(ratedRecipeCount),
+            firstMealAt: firstMealAt,
+            lastMealAt: lastMealAt
+        )
+    }
 }
 
 private struct RecipeUsageDerivation: Equatable, Sendable {

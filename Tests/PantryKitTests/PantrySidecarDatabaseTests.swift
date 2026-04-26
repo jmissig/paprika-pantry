@@ -24,6 +24,8 @@ final class PantrySidecarDatabaseTests: XCTestCase {
             XCTAssertTrue(try db.tableExists("recipe_ingredient_tokens"))
             XCTAssertTrue(try db.tableExists("recipe_usage_stats"))
             XCTAssertTrue(try db.tableExists("recipe_usage_summary"))
+            XCTAssertTrue(try db.tableExists("ingredient_pair_summaries"))
+            XCTAssertTrue(try db.tableExists("ingredient_pair_recipe_evidence"))
             XCTAssertTrue(try db.tableExists("source_state"))
             XCTAssertTrue(try db.tableExists("index_runs"))
 
@@ -41,6 +43,10 @@ final class PantrySidecarDatabaseTests: XCTestCase {
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("days_spanned_by_meals"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("median_meal_gap_days"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("meal_share"))
+            XCTAssertTrue(try columns(in: "ingredient_pair_summaries", db: db).contains("basis"))
+            XCTAssertTrue(try columns(in: "ingredient_pair_summaries", db: db).contains("average_star_rating"))
+            XCTAssertTrue(try columns(in: "ingredient_pair_recipe_evidence", db: db).contains("token_a_line_numbers_json"))
+            XCTAssertTrue(try columns(in: "ingredient_pair_recipe_evidence", db: db).contains("token_b_line_numbers_json"))
             XCTAssertTrue(try columns(in: "source_state", db: db).contains("source_type"))
         }
     }

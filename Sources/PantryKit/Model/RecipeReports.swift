@@ -304,6 +304,7 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public let recipeFeatureFreshnessSeconds: Int?
     public let recipeIngredientFreshnessSeconds: Int?
     public let recipeUsageFreshnessSeconds: Int?
+    public let ingredientPairFreshnessSeconds: Int?
     public let paths: PantryPathReport
 
     public init(stats: PantryIndexStats, paths: PantryPaths, now: Date) {
@@ -322,6 +323,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.recipeUsageFreshnessSeconds = stats.lastSuccessfulRecipeUsageRun.map {
+            max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
+        }
+        self.ingredientPairFreshnessSeconds = stats.lastSuccessfulIngredientPairRun.map {
             max(0, Int(now.timeIntervalSince($0.finishedAt ?? $0.startedAt)))
         }
         self.paths = paths.report
@@ -346,6 +350,9 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_usage_rows_with_last_meal_at: \(stats.recipeUsageStatsWithLastMealAtCount)",
             "recipe_usage_rows_with_gap_arrays: \(stats.recipeUsageStatsWithGapArrayCount)",
             "recipe_usage_total_meals: \(stats.recipeUsageTotalMealCount)",
+            "ingredient_pair_evidence_ready: \(stats.ingredientPairEvidenceReady ? "yes" : "no")",
+            "ingredient_pair_summaries: \(stats.ingredientPairSummaryCount)",
+            "ingredient_pair_recipe_evidence_rows: \(stats.ingredientPairRecipeEvidenceCount)",
         ]
 
         if let sourceState = stats.sourceState {
@@ -420,6 +427,21 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("recipe_usage_freshness: never-built")
         }
 
+        if let lastRun = stats.lastIngredientPairRun {
+            lines.append("ingredient_pairs_last_run_at: \(renderedTimestamp(lastRun.startedAt))")
+            lines.append("ingredient_pairs_last_run_status: \(lastRun.status.rawValue)")
+        }
+
+        if let lastSuccess = stats.lastSuccessfulIngredientPairRun {
+            lines.append("ingredient_pairs_last_success_at: \(renderedTimestamp(lastSuccess.finishedAt ?? lastSuccess.startedAt))")
+        }
+
+        if let ingredientPairFreshnessSeconds {
+            lines.append("ingredient_pairs_freshness: \(renderedDuration(seconds: ingredientPairFreshnessSeconds)) old")
+        } else {
+            lines.append("ingredient_pairs_freshness: never-built")
+        }
+
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
     }
@@ -453,6 +475,8 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
             "recipe_usage_rows_with_gap_arrays: \(summary.recipeUsageStatsWithGapArrayCount)",
             "linked_meals_with_recipe_uid: \(summary.linkedMealCount)",
             "total_qualifying_meals: \(summary.totalMealCount)",
+            "ingredient_pair_summaries: \(summary.ingredientPairSummaryCount)",
+            "ingredient_pair_recipe_evidence_rows: \(summary.ingredientPairRecipeEvidenceCount)",
         ]
 
         if let sourceState = summary.sourceState {
@@ -612,6 +636,143 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
 
     public var csvRows: [[String]] {
         results.map { [query] + recipeCSVRow(for: $0) }
+    }
+}
+
+public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
+    public let command: String
+    public let readPath: String
+    public let basis: String
+    public let token: String?
+    public let withToken: String?
+    public let minRecipes: Int
+    public let limit: Int
+    public let evidenceLimit: Int
+    public let sort: IngredientPairEvidenceSort
+    public let resultCount: Int
+    public let results: [IngredientPairEvidenceSummary]
+    public let ingredientPairLastSuccessAt: Date?
+    public let ingredientPairFreshnessSeconds: Int?
+    public let paths: PantryPathReport
+
+    public init(
+        results: [IngredientPairEvidenceSummary],
+        token: String? = nil,
+        withToken: String? = nil,
+        minRecipes: Int = 1,
+        limit: Int = 20,
+        evidenceLimit: Int = 3,
+        sort: IngredientPairEvidenceSort = .recipes,
+        paths: PantryPaths,
+        readPath: String = "sidecar-ingredient-pair-index",
+        basis: String = PantrySidecarStore.ingredientPairEvidenceBasis,
+        ingredientPairLastSuccessAt: Date? = nil,
+        ingredientPairFreshnessSeconds: Int? = nil
+    ) {
+        self.command = "recipes pairings"
+        self.readPath = readPath
+        self.basis = basis
+        self.token = token
+        self.withToken = withToken
+        self.minRecipes = minRecipes
+        self.limit = limit
+        self.evidenceLimit = evidenceLimit
+        self.sort = sort
+        self.resultCount = results.count
+        self.results = results
+        self.ingredientPairLastSuccessAt = ingredientPairLastSuccessAt
+        self.ingredientPairFreshnessSeconds = ingredientPairFreshnessSeconds
+        self.paths = paths.report
+    }
+
+    public var humanDescription: String {
+        var lines = [
+            "\(command): \(resultCount) token pairs",
+            "read_path: \(readPath)",
+            "basis: \(basis)",
+        ]
+        lines.append(contentsOf: renderedIndexFreshnessLines(
+            prefix: "ingredient_pair_index",
+            lastSuccessAt: ingredientPairLastSuccessAt,
+            freshnessSeconds: ingredientPairFreshnessSeconds
+        ))
+
+        if let token {
+            lines.append("token: \(token)")
+        }
+
+        if let withToken {
+            lines.append("with_token: \(withToken)")
+        }
+
+        lines.append("min_recipes: \(minRecipes)")
+        lines.append("sort: \(sort.rawValue)")
+        lines.append("limit: \(limit)")
+        lines.append("evidence_limit: \(evidenceLimit)")
+
+        if results.isEmpty {
+            lines.append("No ingredient token pairs matched.")
+            lines.append(renderedPaths(paths))
+            return lines.joined(separator: "\n")
+        }
+
+        for result in results {
+            var parts = [
+                "\(result.tokenA) + \(result.tokenB)",
+                "recipes=\(result.recipeCount)",
+                "cooked_recipes=\(result.cookedRecipeCount)",
+                "meals=\(result.cookedMealCount)",
+                "favorites=\(result.favoriteRecipeCount)",
+                "rated=\(result.ratedRecipeCount)",
+            ]
+
+            if let averageStarRating = result.averageStarRating {
+                parts.append("avg_rating=\(String(format: "%.2f", averageStarRating))")
+            } else {
+                parts.append("avg_rating=unrated")
+            }
+
+            if let firstMealAt = result.firstMealAt {
+                parts.append("first_meal=\(firstMealAt)")
+            }
+
+            if let lastMealAt = result.lastMealAt {
+                parts.append("last_meal=\(lastMealAt)")
+            }
+
+            lines.append(parts.joined(separator: " | "))
+
+            for evidence in result.recipeEvidence {
+                var evidenceParts = [
+                    "  evidence: \(evidence.recipeUID)  \(evidence.recipeName)",
+                    "\(result.tokenA)_lines=\(renderedLineNumbers(evidence.tokenALineNumbers))",
+                    "\(result.tokenB)_lines=\(renderedLineNumbers(evidence.tokenBLineNumbers))",
+                ]
+
+                if let sourceName = evidence.sourceName, !sourceName.isEmpty {
+                    evidenceParts.append("source=\(sourceName)")
+                }
+
+                if let starRating = evidence.starRating {
+                    evidenceParts.append("rating=\(starRating)")
+                }
+
+                if evidence.isFavorite {
+                    evidenceParts.append("favorite=yes")
+                }
+
+                evidenceParts.append("meals=\(evidence.mealCount)")
+
+                if let lastMealAt = evidence.lastMealAt {
+                    evidenceParts.append("last_meal=\(lastMealAt)")
+                }
+
+                lines.append(evidenceParts.joined(separator: " | "))
+            }
+        }
+
+        lines.append(renderedPaths(paths))
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -860,6 +1021,10 @@ func renderedIndexFreshnessLines(prefix: String, lastSuccessAt: Date?, freshness
     }
 
     return lines
+}
+
+func renderedLineNumbers(_ lineNumbers: [Int]) -> String {
+    lineNumbers.isEmpty ? "-" : lineNumbers.map(String.init).joined(separator: ",")
 }
 
 func renderedCanonicalRecipeFilters(_ filters: RecipeQueryFilters) -> [String] {

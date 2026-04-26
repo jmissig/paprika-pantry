@@ -550,6 +550,134 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(ingredientIndex.lines[2].normalizedTokens, ["kosher", "salt"])
     }
 
+    func testIngredientPairEvidenceDerivesUnorderedPairsWithProvenanceAndAggregates() async throws {
+        let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Basil Pasta", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Creamy Tomato Soup", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Cream Sauce", sourceFingerprint: "hash-ccc"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForPairEvidence(
+                    uid: "AAA",
+                    name: "Tomato Basil Pasta",
+                    ingredients: "Tomatoes\nTomato paste\nBasil",
+                    starRating: 5,
+                    isFavorite: true
+                ),
+                "BBB": makeRecipeForPairEvidence(
+                    uid: "BBB",
+                    name: "Creamy Tomato Soup",
+                    ingredients: "Tomato\nBasil\nCream",
+                    starRating: 4,
+                    isFavorite: false
+                ),
+                "CCC": makeRecipeForPairEvidence(
+                    uid: "CCC",
+                    name: "Tomato Cream Sauce",
+                    ingredients: "Tomato\nCream",
+                    starRating: nil,
+                    isFavorite: true
+                ),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "A", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Basil Pasta"),
+                SourceMeal(uid: "M2", name: "A", scheduledAt: "2026-04-07 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Basil Pasta"),
+                SourceMeal(uid: "M3", name: "B", scheduledAt: "2026-04-03 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Creamy Tomato Soup"),
+            ]
+        )
+
+        let summary = try await store.rebuildRecipeIndexes(
+            from: source,
+            now: {
+                referenceDate
+            }
+        )
+
+        XCTAssertEqual(summary.ingredientPairSummaryCount, 5)
+        XCTAssertEqual(summary.ingredientPairRecipeEvidenceCount, 7)
+
+        let stats = try store.indexStats()
+        XCTAssertTrue(stats.ingredientPairEvidenceReady)
+        XCTAssertEqual(stats.ingredientPairSummaryCount, 5)
+        XCTAssertEqual(stats.ingredientPairRecipeEvidenceCount, 7)
+        XCTAssertEqual(stats.lastIngredientPairRun?.status, .success)
+        XCTAssertEqual(stats.lastIngredientPairRun?.recipeCount, 5)
+
+        let allPairs = try store.listIngredientPairEvidence(sort: .name, limit: 20, evidenceLimit: 10)
+        XCTAssertEqual(allPairs.map { "\($0.tokenA)+\($0.tokenB)" }, [
+            "basil+cream",
+            "basil+paste",
+            "basil+tomato",
+            "cream+tomato",
+            "paste+tomato",
+        ])
+        XCTAssertFalse(allPairs.contains { $0.tokenA == $0.tokenB })
+
+        let basilTomato = try XCTUnwrap(allPairs.first { $0.tokenA == "basil" && $0.tokenB == "tomato" })
+        XCTAssertEqual(basilTomato.basis, PantrySidecarStore.ingredientPairEvidenceBasis)
+        XCTAssertEqual(basilTomato.recipeCount, 2)
+        XCTAssertEqual(basilTomato.cookedRecipeCount, 2)
+        XCTAssertEqual(basilTomato.cookedMealCount, 3)
+        XCTAssertEqual(basilTomato.favoriteRecipeCount, 1)
+        XCTAssertEqual(basilTomato.ratedRecipeCount, 2)
+        XCTAssertEqual(try XCTUnwrap(basilTomato.averageStarRating), 4.5, accuracy: 0.001)
+        XCTAssertEqual(basilTomato.firstMealAt, "2026-04-01 18:00:00")
+        XCTAssertEqual(basilTomato.lastMealAt, "2026-04-07 18:00:00")
+
+        let aaaEvidence = try XCTUnwrap(basilTomato.recipeEvidence.first { $0.recipeUID == "AAA" })
+        XCTAssertEqual(aaaEvidence.tokenALineNumbers, [3])
+        XCTAssertEqual(aaaEvidence.tokenBLineNumbers, [1, 2])
+        XCTAssertEqual(aaaEvidence.mealCount, 2)
+        XCTAssertEqual(aaaEvidence.starRating, 5)
+        XCTAssertTrue(aaaEvidence.isFavorite)
+    }
+
+    func testIngredientPairEvidenceQueryFiltersSortsAndLimits() async throws {
+        let store = try makeStore()
+        let referenceDate = mealHistoryReferenceDate()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Tomato Basil Pasta", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Creamy Tomato Soup", sourceFingerprint: "hash-bbb"),
+                SourceRecipeStub(uid: "CCC", name: "Tomato Cream Sauce", sourceFingerprint: "hash-ccc"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForPairEvidence(uid: "AAA", name: "Tomato Basil Pasta", ingredients: "Tomatoes\nTomato paste\nBasil", starRating: 5, isFavorite: true),
+                "BBB": makeRecipeForPairEvidence(uid: "BBB", name: "Creamy Tomato Soup", ingredients: "Tomato\nBasil\nCream", starRating: 4, isFavorite: false),
+                "CCC": makeRecipeForPairEvidence(uid: "CCC", name: "Tomato Cream Sauce", ingredients: "Tomato\nCream", starRating: nil, isFavorite: true),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "A", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Basil Pasta"),
+                SourceMeal(uid: "M2", name: "A", scheduledAt: "2026-04-07 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Tomato Basil Pasta"),
+                SourceMeal(uid: "M3", name: "B", scheduledAt: "2026-04-03 18:00:00", mealType: "Dinner", recipeUID: "BBB", recipeName: "Creamy Tomato Soup"),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(
+            from: source,
+            now: {
+                referenceDate
+            }
+        )
+
+        let tomatoPairs = try store.listIngredientPairEvidence(token: "tomatoes", minRecipes: 2, sort: .meals, limit: 10, evidenceLimit: 1)
+        XCTAssertEqual(tomatoPairs.map { "\($0.tokenA)+\($0.tokenB)" }, ["basil+tomato", "cream+tomato"])
+        XCTAssertEqual(tomatoPairs[0].recipeEvidence.count, 1)
+        XCTAssertEqual(tomatoPairs[0].recipeEvidence[0].recipeUID, "AAA")
+
+        let exactPair = try store.listIngredientPairEvidence(token: "basil", withToken: "tomatoes", sort: .name, limit: 10, evidenceLimit: 10)
+        XCTAssertEqual(exactPair.map { "\($0.tokenA)+\($0.tokenB)" }, ["basil+tomato"])
+
+        let ratingSorted = try store.listIngredientPairEvidence(sort: .rating, limit: 2, evidenceLimit: 0)
+        XCTAssertEqual(ratingSorted.map { "\($0.tokenA)+\($0.tokenB)" }, ["basil+paste", "paste+tomato"])
+        XCTAssertTrue(ratingSorted.allSatisfy(\.recipeEvidence.isEmpty))
+    }
+
     func testListCookbookAggregatesGroupsTrimmedSourceNamesAndUnlabeledRows() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(
@@ -1051,6 +1179,34 @@ final class PantrySidecarStoreTests: XCTestCase {
             categoryReferences: [],
             sourceName: sourceName,
             ingredients: nil,
+            directions: nil,
+            notes: nil,
+            starRating: starRating,
+            isFavorite: isFavorite,
+            prepTime: nil,
+            cookTime: nil,
+            totalTime: nil,
+            servings: nil,
+            createdAt: nil,
+            updatedAt: nil,
+            sourceFingerprint: "hash-\(uid)",
+            rawJSON: "{}"
+        )
+    }
+
+    private func makeRecipeForPairEvidence(
+        uid: String,
+        name: String,
+        ingredients: String,
+        starRating: Int?,
+        isFavorite: Bool
+    ) -> SourceRecipe {
+        SourceRecipe(
+            uid: uid,
+            name: name,
+            categoryReferences: [],
+            sourceName: "Test Kitchen",
+            ingredients: ingredients,
             directions: nil,
             notes: nil,
             starRating: starRating,

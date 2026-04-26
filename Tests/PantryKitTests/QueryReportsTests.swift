@@ -440,6 +440,65 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("2: source=\"fresh basil leaves\" | normalized_text=fresh basil leaves | normalized_tokens=fresh, basil, leaves"))
     }
 
+    func testRecipesPairingsReportShowsBasisAndCompactEvidence() throws {
+        let report = RecipesPairingsReport(
+            results: [
+                IngredientPairEvidenceSummary(
+                    basis: PantrySidecarStore.ingredientPairEvidenceBasis,
+                    tokenA: "basil",
+                    tokenB: "tomato",
+                    recipeCount: 2,
+                    cookedRecipeCount: 2,
+                    cookedMealCount: 3,
+                    favoriteRecipeCount: 1,
+                    ratedRecipeCount: 2,
+                    averageStarRating: 4.5,
+                    firstMealAt: "2026-04-01 18:00:00",
+                    lastMealAt: "2026-04-07 18:00:00",
+                    recipeEvidence: [
+                        IngredientPairRecipeEvidence(
+                            recipeUID: "AAA",
+                            recipeName: "Tomato Basil Pasta",
+                            sourceName: "Test Kitchen",
+                            tokenALineNumbers: [3],
+                            tokenBLineNumbers: [1, 2],
+                            isFavorite: true,
+                            starRating: 5,
+                            mealCount: 2,
+                            firstMealAt: "2026-04-01 18:00:00",
+                            lastMealAt: "2026-04-07 18:00:00"
+                        ),
+                    ]
+                )
+            ],
+            token: "tomatoes",
+            withToken: "basil",
+            minRecipes: 2,
+            limit: 10,
+            evidenceLimit: 1,
+            sort: .meals,
+            paths: makePaths(),
+            ingredientPairLastSuccessAt: Date(timeIntervalSince1970: 1_712_736_120),
+            ingredientPairFreshnessSeconds: 60
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("recipes pairings: 1 token pairs"))
+        XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-ingredient-pair-index"))
+        XCTAssertTrue(report.humanDescription.contains("basis: recipe-token-cooccurrence-v1"))
+        XCTAssertTrue(report.humanDescription.contains("ingredient_pair_index_freshness: 1m old"))
+        XCTAssertTrue(report.humanDescription.contains("token: tomatoes"))
+        XCTAssertTrue(report.humanDescription.contains("with_token: basil"))
+        XCTAssertTrue(report.humanDescription.contains("sort: meals"))
+        XCTAssertTrue(report.humanDescription.contains("basil + tomato | recipes=2 | cooked_recipes=2 | meals=3 | favorites=1 | rated=2 | avg_rating=4.50 | first_meal=2026-04-01 18:00:00 | last_meal=2026-04-07 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("evidence: AAA  Tomato Basil Pasta | basil_lines=3 | tomato_lines=1,2 | source=Test Kitchen | rating=5 | favorite=yes | meals=2 | last_meal=2026-04-07 18:00:00"))
+
+        let rendered = try JSONOutput.render(report)
+        XCTAssertTrue(rendered.contains("\"basis\" : \"recipe-token-cooccurrence-v1\""))
+        XCTAssertTrue(rendered.contains("\"readPath\" : \"sidecar-ingredient-pair-index\""))
+        XCTAssertTrue(rendered.contains("\"recipeEvidence\""))
+        XCTAssertTrue(rendered.contains("\"tokenBLineNumbers\""))
+    }
+
     func testSourceCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {
         let searchRun = PantryIndexRun(
             id: 9,
