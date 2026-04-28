@@ -142,11 +142,11 @@ paprika-pantry doctor
 paprika-pantry doctor --format json
 ```
 
-## Read-Only Audit
+## Read-Only Exploration
 
-For one-off inspection, debugging, or agent investigation across sidecar tables, see [docs/read-only-audit.md](docs/read-only-audit.md).
+For one-off inspection, debugging, or agent investigation across sidecar tables, see [docs/read-only-exploration.md](docs/read-only-exploration.md).
 
-Use the CLI first when a stable command answers the question. Use read-only SQL/Datasette for audit mode: coverage checks, freshness checks, provenance examples, and debugging surprising derived evidence.
+Use the CLI first when a stable command answers the question. Use read-only SQL/Datasette for exploration: coverage checks, freshness checks, provenance examples, and debugging surprising derived evidence.
 
 ## Source Readiness and Sync Observation
 

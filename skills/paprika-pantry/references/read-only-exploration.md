@@ -1,15 +1,15 @@
-# Read-Only Audit Surface
+# Read-Only Exploration Surface
 
 `paprika-pantry` has two normal ways to look at cooking evidence:
 
 1. **Stable CLI verbs** for normal Robut/chat answers and scripts.
-2. **Read-only SQLite/Datasette audit mode** for inspection, debugging, and discovering what a future CLI verb should expose.
+2. **Read-only SQLite/Datasette exploration** for inspection, debugging, and discovering what a future CLI verb should expose.
 
-Use the CLI first when the question fits an existing command. Use audit SQL when the question is about source coverage, sidecar shape, surprising output, missing evidence, or a one-off investigation that should not become the normal chat contract yet.
+Use the CLI first when the question fits an existing command. Use read-only SQL when the question is about source coverage, sidecar shape, surprising output, missing evidence, or a one-off investigation that should not become the normal chat contract yet.
 
 ## Boundaries
 
-Audit mode is for looking, not deciding.
+Read-only exploration is for looking, not deciding.
 
 Do:
 
@@ -46,8 +46,8 @@ For a safer scratch copy:
 
 ```bash
 mkdir -p .tmp
-cp "$HOME/Library/Application Support/paprika-pantry/pantry.sqlite" .tmp/pantry-audit.sqlite
-datasette .tmp/pantry-audit.sqlite --immutable
+cp "$HOME/Library/Application Support/paprika-pantry/pantry.sqlite" .tmp/pantry-exploration.sqlite
+datasette .tmp/pantry-exploration.sqlite --immutable
 ```
 
 If the configured home or database path is different, check:
@@ -302,19 +302,19 @@ Use this when a pair summary looks surprising. The examples are usually more use
 
 ## Agent guidance
 
-When using audit SQL as Robut or a coding agent:
+When using exploration SQL as Robut or a coding agent:
 
-1. State the audit question first.
+1. State the exploration question first.
 2. Check whether a CLI command already answers it.
 3. If SQL is needed, keep it read-only and narrow.
 4. Report counts, freshness, and caveats with the result.
 5. Do not turn one-off SQL into a stable user-facing behavior unless it graduates into a CLI command or documented workflow.
 
-Good audit question:
+Good exploration question:
 
 > Why did `recipes pairings --token tomato --sort meals` rank this pair highly?
 
-Bad audit question:
+Bad exploration question:
 
 > What should Julian cook tonight?
 

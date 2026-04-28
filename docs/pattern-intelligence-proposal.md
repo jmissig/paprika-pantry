@@ -6,7 +6,7 @@
 
 The next architecture should explicitly support two sibling surfaces:
 
-1. **Explore/audit surface** — SQLite/Datasette-style browsing over Paprika-derived sidecar/index data and safe read-only projections so humans and agents can inspect recipes, meals, ingredients, cookbooks, usage stats, pairings, freshness, and source coverage.
+1. **Explore/inspect surface** — SQLite/Datasette-style browsing over Paprika-derived sidecar/index data and safe read-only projections so humans and agents can inspect recipes, meals, ingredients, cookbooks, usage stats, pairings, freshness, and source coverage.
 2. **Stable verb / evidence-substrate surface** — stable `paprika-pantry` commands that return bounded JSON/source outputs for LLM grounding: safe defaults, explicit semantics, provenance, drill-down descriptors, correction hooks, and no improvised arbitrary SQL in normal conversation. Robut composes any decision-specific evidence packet above this layer.
 
 This adapts broader Dogsheep/Datasette and personal-informatics practice to the local cooking domain: keep the data owner in control, preserve evidence, make derived facts inspectable, and let Robut handle conversational judgment.
@@ -80,7 +80,7 @@ Paprika.sqlite read-only
 
 ## Two-surface design
 
-### 1. SQLite / Datasette explore-audit surface
+### 1. SQLite / Datasette explore-inspect surface
 
 Purpose: make cooking evidence browsable and debuggable without exposing arbitrary SQL as the normal LLM interface.
 
@@ -96,7 +96,7 @@ Recommended scope:
   - stale index/pairing freshness;
   - candidate evidence drill-downs.
 
-The audit surface is ideal for exploratory questions like “which cookbooks do we actually cook from?” or “what ingredient pairings are supported by real meals?” It can also debug whether a recommendation packet is missing a source or over-weighting stale data.
+The exploration surface is ideal for exploratory questions like “which cookbooks do we actually cook from?” or “what ingredient pairings are supported by real meals?” It can also debug whether a future recommendation packet is missing a source or over-weighting stale data.
 
 It should not become the default path for Robut’s dinner advice. Normal chat should use stable verbs and packet fields with known semantics.
 
@@ -173,7 +173,7 @@ These outputs support Robut saying “I’d do X if you want quick and use-up; Y
 Small, practical slices that build on current work:
 
 1. **Finish/use meal-history facts** — the `first_cooked_at`/meal-history TODO is foundational for lapsed favorites, recency, and rediscovery.
-2. **Document Datasette/read-only audit workflow** — start with the sidecar/index DB; include sample questions and canned queries.
+2. **Document Datasette/read-only exploration workflow** — start with the sidecar/index DB; include sample questions and canned queries.
 3. **Define packet contracts in docs before code** — `dinner_suggestions`, `use_up`, `pairings_context`, and `taste_profile_update` packets with required freshness/provenance/drill-down fields.
 4. **Add correction model sketch** — define correction scopes before implementation: recipe, ingredient, source, category/tag, person, family, context, time window.
 5. **Tighten pattern-report output** — align with the existing TODO: confidence limits and contributing evidence should be obvious.
@@ -216,4 +216,4 @@ Good `paprika-pantry` pattern outputs should let Robut answer cooking questions 
 - drill-down commands back to contributing recipes/meals/facts;
 - correction hooks for convenience vs preference and person/family context.
 
-If humans can browse/audit the sidecar through a Datasette-style surface while Robut normally consumes stable evidence outputs, `paprika-pantry` will sit cleanly in the broader local pattern-intelligence stack.
+If humans can browse/inspect the sidecar through a Datasette-style surface while Robut normally consumes stable evidence outputs, `paprika-pantry` will sit cleanly in the broader local pattern-intelligence stack.
