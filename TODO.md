@@ -7,7 +7,7 @@ Completed work should leave this file.
 
 
 ## Next
-- [ ] Use [docs/pattern-intelligence-proposal.md](docs/pattern-intelligence-proposal.md) to guide Datasette/read-only audit docs, cooking source/derived-output contracts, future Robut-composed House Cooking Almanac/Guide material, and scoped correction-model work.
+- [ ] Use [docs/pattern-intelligence-proposal.md](docs/pattern-intelligence-proposal.md) to guide cooking source/derived-output contracts, future Robut-composed House Cooking Almanac/Guide material, and scoped correction-model work.
 - [ ] If real timings show `derive.ingredient_pairs` or pairing writes are slow, investigate incremental updates for ingredient pairings so `index rebuild` is not the only way to refresh pairing evidence.
 
 ## Later

@@ -142,6 +142,12 @@ paprika-pantry doctor
 paprika-pantry doctor --format json
 ```
 
+## Read-Only Audit
+
+For one-off inspection, debugging, or agent investigation across sidecar tables, see [docs/read-only-audit.md](docs/read-only-audit.md).
+
+Use the CLI first when a stable command answers the question. Use read-only SQL/Datasette for audit mode: coverage checks, freshness checks, provenance examples, and debugging surprising derived evidence.
+
 ## Source Readiness and Sync Observation
 
 `paprika-pantry` is read-only against the real Paprika database.

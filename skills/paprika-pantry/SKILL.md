@@ -54,6 +54,20 @@ If no results:
 
 Do not skip local lookup unless explicitly requested.
 
+
+## Read-only audit mode
+
+Normal answers should use stable CLI verbs first. Before writing SQL, run `paprika-pantry --help` and relevant subcommand help when semantics are unclear.
+
+Use read-only SQL/Datasette only for audit questions: source coverage, sidecar freshness, provenance examples, debugging surprising output, or discovering a repeated pattern that may deserve a future CLI verb. The audit guide is `docs/read-only-audit.md` in the repo.
+
+Audit SQL rules:
+- open the sidecar read-only / immutable
+- keep queries narrow and explain the audit question
+- report counts, freshness, and caveats
+- do not treat ad hoc SQL as the normal chat contract
+- do not infer recommendations, substitutions, or preferences beyond returned evidence
+
 ## Index freshness
 
 Use `paprika-pantry index update` for routine refreshes. Use `paprika-pantry index rebuild` when ingredient pairing evidence needs refreshing; pairings are heavier and may intentionally lag routine indexes. If `recipes pairings` warns that pairing evidence is stale or missing, say that clearly before interpreting it.
