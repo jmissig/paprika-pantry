@@ -135,6 +135,18 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     }
 }
 
+public struct RecipeIndexPhaseTiming: Codable, Equatable, Sendable {
+    public let phase: String
+    public let durationMilliseconds: Int
+    public let itemCount: Int?
+
+    public init(phase: String, durationMilliseconds: Int, itemCount: Int? = nil) {
+        self.phase = phase
+        self.durationMilliseconds = durationMilliseconds
+        self.itemCount = itemCount
+    }
+}
+
 public enum IngredientPairEvidenceSort: String, CaseIterable, Codable, Sendable, ExpressibleByArgument {
     case recipes
     case meals
@@ -361,6 +373,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
     public let refreshedIngredientPairEvidence: Bool
     public let ingredientPairSummaryCount: Int
     public let ingredientPairRecipeEvidenceCount: Int
+    public let changedRecipeCount: Int
+    public let skippedRecipeCount: Int
+    public let deletedRecipeCount: Int
+    public let phaseTimings: [RecipeIndexPhaseTiming]
     public let sourceState: PantryStoredSourceState?
 
     public init(
@@ -381,6 +397,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         refreshedIngredientPairEvidence: Bool = true,
         ingredientPairSummaryCount: Int = 0,
         ingredientPairRecipeEvidenceCount: Int = 0,
+        changedRecipeCount: Int = 0,
+        skippedRecipeCount: Int = 0,
+        deletedRecipeCount: Int = 0,
+        phaseTimings: [RecipeIndexPhaseTiming] = [],
         sourceState: PantryStoredSourceState? = nil
     ) {
         self.startedAt = startedAt
@@ -400,6 +420,10 @@ public struct RecipeIndexesRebuildSummary: Codable, Equatable, Sendable {
         self.refreshedIngredientPairEvidence = refreshedIngredientPairEvidence
         self.ingredientPairSummaryCount = ingredientPairSummaryCount
         self.ingredientPairRecipeEvidenceCount = ingredientPairRecipeEvidenceCount
+        self.changedRecipeCount = changedRecipeCount
+        self.skippedRecipeCount = skippedRecipeCount
+        self.deletedRecipeCount = deletedRecipeCount
+        self.phaseTimings = phaseTimings
         self.sourceState = sourceState
     }
 }
@@ -1173,8 +1197,10 @@ public struct PantrySidecarStore: @unchecked Sendable {
     public func rebuildRecipeIndexes(
         from source: any PantrySource,
         refreshIngredientPairEvidence: Bool = true,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        phaseClock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) async throws -> RecipeIndexesRebuildSummary {
+        var phaseTimings = RecipeIndexPhaseTimingRecorder(clock: phaseClock)
         let startedAt = now()
         let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
         let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
@@ -1185,138 +1211,165 @@ public struct PantrySidecarStore: @unchecked Sendable {
             : nil
 
         do {
+            var phaseItemCounts = [RecipeIndexPhase: Int]()
+            let categoriesStartedAt = phaseClock()
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
+            phaseTimings.add(.sourceCategories, startedAt: categoriesStartedAt)
+            phaseItemCounts[.sourceCategories] = categoryNamesByUID.count
+
+            let stubsStartedAt = phaseClock()
             let stubs = try await source.listRecipeStubs()
+            phaseTimings.add(.sourceRecipeStubs, startedAt: stubsStartedAt)
             let activeStubs = stubs.filter { !$0.isDeleted }
+            phaseItemCounts[.sourceRecipeStubs] = stubs.count
             let activeRecipeUIDs = Set(activeStubs.map(\.uid))
+            let routineUpdatePlan = try makeRecipeRoutineUpdatePlan(
+                activeStubs: activeStubs,
+                usePartialUpdate: !refreshIngredientPairEvidence
+            )
+            let recipeStubsToFetch = refreshIngredientPairEvidence
+                ? activeStubs
+                : routineUpdatePlan.changedStubs
             let meals: [SourceMeal]
             if let mealsSource = source as? any MealsReadablePantrySource {
+                let mealsStartedAt = phaseClock()
                 meals = try await mealsSource.listMeals()
+                phaseTimings.add(.sourceMeals, startedAt: mealsStartedAt)
             } else {
                 meals = []
+                let mealsStartedAt = phaseClock()
+                phaseTimings.add(.sourceMeals, startedAt: mealsStartedAt)
             }
+            phaseItemCounts[.sourceMeals] = meals.count
 
             var documents = [RecipeSearchDocument]()
             var features = [RecipeDerivedFeatures]()
             var ingredientIndexes = [RecipeIngredientIndex]()
-            let usageStats = Self.deriveUsageStats(
-                from: meals,
-                activeRecipeUIDs: activeRecipeUIDs,
-                derivedAt: startedAt,
-                referenceDate: startedAt
-            )
+            let usageStats = phaseTimings.measure(.deriveUsageStats) {
+                Self.deriveUsageStats(
+                    from: meals,
+                    activeRecipeUIDs: activeRecipeUIDs,
+                    derivedAt: startedAt,
+                    referenceDate: startedAt
+                )
+            }
             documents.reserveCapacity(activeStubs.count)
             features.reserveCapacity(activeStubs.count)
             ingredientIndexes.reserveCapacity(activeStubs.count)
 
-            for stub in activeStubs {
+            if recipeStubsToFetch.isEmpty {
+                phaseTimings.add(.sourceFetchRecipes, startedAt: phaseClock())
+                phaseTimings.add(.deriveRecipeDocumentsFeaturesIngredients, startedAt: phaseClock())
+            }
+            for stub in recipeStubsToFetch {
+                let fetchRecipeStartedAt = phaseClock()
                 let recipe = try await source.fetchRecipe(uid: stub.uid)
-                documents.append(
-                    RecipeSearchDocument(
-                        uid: recipe.uid,
-                        name: recipe.name,
-                        categories: resolvedCategories(
-                            recipe.categoryReferences,
-                            categoryNamesByUID: categoryNamesByUID
-                        ),
-                        sourceName: recipe.sourceName,
-                        ingredients: recipe.ingredients,
-                        notes: recipe.notes,
-                        sourceFingerprint: recipe.sourceFingerprint,
-                        isFavorite: recipe.isFavorite,
-                        starRating: recipe.starRating
-                    )
-                )
-                features.append(
-                    Self.deriveFeatures(
-                        from: recipe,
-                        derivedAt: startedAt
-                    )
-                )
-                if let ingredientIndex = IngredientNormalizer.normalizeIngredientLines(
-                    recipeUID: recipe.uid,
-                    sourceFingerprint: recipe.sourceFingerprint,
-                    ingredients: recipe.ingredients,
+                phaseTimings.add(.sourceFetchRecipes, startedAt: fetchRecipeStartedAt)
+                let recipeDerivationStartedAt = phaseClock()
+                let rows = makeRoutineRecipeIndexRows(
+                    from: recipe,
+                    categoryNamesByUID: categoryNamesByUID,
                     derivedAt: startedAt
-                ) {
+                )
+                documents.append(rows.document)
+                features.append(rows.features)
+                if let ingredientIndex = rows.ingredientIndex {
                     ingredientIndexes.append(ingredientIndex)
                 }
+                phaseTimings.add(.deriveRecipeDocumentsFeaturesIngredients, startedAt: recipeDerivationStartedAt)
             }
+            phaseItemCounts[.sourceFetchRecipes] = recipeStubsToFetch.count
+            phaseItemCounts[.deriveRecipeDocumentsFeaturesIngredients] = recipeStubsToFetch.count
+            phaseItemCounts[.deriveUsageStats] = meals.count
 
             let indexedAt = now()
             let indexedAtString = DatabaseTimestamp.encode(indexedAt)
-            let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
-            let sortedFeatures = features.sorted { $0.uid < $1.uid }
-            let sortedIngredientIndexes = ingredientIndexes.sorted { $0.uid < $1.uid }
-            let sortedUsageStats = usageStats.stats.sorted { $0.uid < $1.uid }
+            let sortedDocuments: [RecipeSearchDocument]
+            let sortedFeatures: [RecipeDerivedFeatures]
+            let sortedIngredientIndexes: [RecipeIngredientIndex]
+            let sortedUsageStats: [RecipeUsageStats]
+            let recipeSearchDocumentCount: Int
+            (
+                sortedDocuments,
+                sortedFeatures,
+                sortedIngredientIndexes,
+                sortedUsageStats,
+                recipeSearchDocumentCount
+            ) = phaseTimings.measure(.sortAndCount) {
+                let sortedDocuments = documents.sorted(by: Self.sortSearchDocuments)
+                let sortedFeatures = features.sorted { $0.uid < $1.uid }
+                let sortedIngredientIndexes = ingredientIndexes.sorted { $0.uid < $1.uid }
+                let sortedUsageStats = usageStats.stats.sorted { $0.uid < $1.uid }
+                return (
+                    sortedDocuments,
+                    sortedFeatures,
+                    sortedIngredientIndexes,
+                    sortedUsageStats,
+                    sortedDocuments.count
+                )
+            }
+            phaseItemCounts[.sortAndCount] = recipeStubsToFetch.count
+
             let sortedIngredientPairSummaries: [IngredientPairEvidenceSummary]
             let sortedIngredientPairEvidence: [IngredientPairRecipeEvidenceRow]
             if refreshIngredientPairEvidence {
-                let ingredientPairDerivation = Self.deriveIngredientPairEvidence(
-                    ingredientIndexes: sortedIngredientIndexes,
-                    documents: sortedDocuments,
-                    usageStats: sortedUsageStats,
-                    derivedAt: indexedAt
-                )
-                sortedIngredientPairSummaries = ingredientPairDerivation.summaries.sorted {
-                    if $0.tokenA != $1.tokenA {
-                        return $0.tokenA < $1.tokenA
-                    }
+                (sortedIngredientPairSummaries, sortedIngredientPairEvidence) = phaseTimings.measure(.deriveIngredientPairs) {
+                    let ingredientPairDerivation = Self.deriveIngredientPairEvidence(
+                        ingredientIndexes: sortedIngredientIndexes,
+                        documents: sortedDocuments,
+                        usageStats: sortedUsageStats,
+                        derivedAt: indexedAt
+                    )
+                    let sortedIngredientPairSummaries = ingredientPairDerivation.summaries.sorted {
+                        if $0.tokenA != $1.tokenA {
+                            return $0.tokenA < $1.tokenA
+                        }
 
-                    return $0.tokenB < $1.tokenB
-                }
-                sortedIngredientPairEvidence = ingredientPairDerivation.recipeEvidence.sorted {
-                    if $0.tokenA != $1.tokenA {
-                        return $0.tokenA < $1.tokenA
-                    }
-
-                    if $0.tokenB != $1.tokenB {
                         return $0.tokenB < $1.tokenB
                     }
+                    let sortedIngredientPairEvidence = ingredientPairDerivation.recipeEvidence.sorted {
+                        if $0.tokenA != $1.tokenA {
+                            return $0.tokenA < $1.tokenA
+                        }
 
-                    return $0.recipeUID < $1.recipeUID
+                        if $0.tokenB != $1.tokenB {
+                            return $0.tokenB < $1.tokenB
+                        }
+
+                        return $0.recipeUID < $1.recipeUID
+                    }
+                    return (sortedIngredientPairSummaries, sortedIngredientPairEvidence)
                 }
             } else {
                 sortedIngredientPairSummaries = []
                 sortedIngredientPairEvidence = []
             }
-            let recipeSearchDocumentCount = sortedDocuments.count
-            let recipeFeatureCount = sortedFeatures.count
-            let recipeFeaturesWithTotalTimeCount = sortedFeatures.filter { $0.totalTimeMinutes != nil }.count
-            let recipeFeaturesWithIngredientLineCountCount = sortedFeatures.filter { $0.ingredientLineCount != nil }.count
-            let recipeIngredientRecipeCount = sortedIngredientIndexes.count
-            let recipeIngredientLineCount = sortedIngredientIndexes.reduce(into: 0) { partialResult, index in
-                partialResult += index.lines.count
-            }
-            let recipeIngredientTokenCount = sortedIngredientIndexes.reduce(into: 0) { partialResult, index in
-                partialResult += index.normalizedTokenCount
-            }
-            let recipeUsageStatsCount = sortedUsageStats.count
-            let recipeUsageStatsWithLastMealAtCount = sortedUsageStats.reduce(into: 0) { count, stats in
-                if stats.lastMealAt != nil {
-                    count += 1
-                }
-            }
-            let recipeUsageStatsWithGapArrayCount = sortedUsageStats.reduce(into: 0) { count, stats in
-                if stats.mealGapDays != nil {
-                    count += 1
-                }
-            }
             let linkedMealCount = usageStats.linkedMealCount
             let totalMealCount = usageStats.totalMealCount
             let ingredientPairSummaryCount = sortedIngredientPairSummaries.count
             let ingredientPairRecipeEvidenceCount = sortedIngredientPairEvidence.count
+            if refreshIngredientPairEvidence {
+                phaseItemCounts[.deriveIngredientPairs] = ingredientPairRecipeEvidenceCount
+            }
             let sourceState = Self.makeStoredSourceState(from: source, observedAt: indexedAt)
-            let transactionFinishedAt = try await dbQueue.write { db in
+            let writeTransactionStartedAt = phaseClock()
+            let transactionResult = try await dbQueue.write { db in
                 if refreshIngredientPairEvidence {
                     try Self.dropIngredientPairSecondaryIndexes(in: db)
                 }
 
-                try db.execute(sql: "DELETE FROM recipe_search_documents")
-                try db.execute(sql: "DELETE FROM recipe_search_fts")
-                try db.execute(sql: "DELETE FROM recipe_features")
-                try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
-                try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
+                if refreshIngredientPairEvidence {
+                    try db.execute(sql: "DELETE FROM recipe_search_documents")
+                    try db.execute(sql: "DELETE FROM recipe_search_fts")
+                    try db.execute(sql: "DELETE FROM recipe_features")
+                    try db.execute(sql: "DELETE FROM recipe_ingredient_tokens")
+                    try db.execute(sql: "DELETE FROM recipe_ingredient_lines")
+                } else {
+                    let replacedRecipeUIDs = Set(sortedDocuments.map(\.uid))
+                    let staleRecipeUIDs = replacedRecipeUIDs.union(routineUpdatePlan.deletedRecipeUIDs)
+                    try Self.deleteRecipeOwnedIndexRows(recipeUIDs: staleRecipeUIDs, in: db)
+                }
+
                 try db.execute(sql: "DELETE FROM recipe_usage_stats")
                 try db.execute(sql: "DELETE FROM recipe_usage_summary")
                 if refreshIngredientPairEvidence {
@@ -1584,12 +1637,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     try writeStoredSourceState(sourceState, in: db)
                 }
 
+                let storedCounts = try Self.fetchRecipeIndexStoredCounts(db: db)
                 let finishedAt = now()
                 try finishIndexRun(
                     id: searchRunID,
                     status: .success,
                     finishedAt: finishedAt,
-                    recipeCount: recipeSearchDocumentCount,
+                    recipeCount: storedCounts.recipeSearchDocumentCount,
                     errorMessage: nil,
                     in: db
                 )
@@ -1597,7 +1651,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     id: featureRunID,
                     status: .success,
                     finishedAt: finishedAt,
-                    recipeCount: recipeFeatureCount,
+                    recipeCount: storedCounts.recipeFeatureCount,
                     errorMessage: nil,
                     in: db
                 )
@@ -1605,7 +1659,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     id: ingredientRunID,
                     status: .success,
                     finishedAt: finishedAt,
-                    recipeCount: recipeIngredientRecipeCount,
+                    recipeCount: storedCounts.recipeIngredientRecipeCount,
                     errorMessage: nil,
                     in: db
                 )
@@ -1613,7 +1667,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     id: usageRunID,
                     status: .success,
                     finishedAt: finishedAt,
-                    recipeCount: recipeUsageStatsCount,
+                    recipeCount: storedCounts.recipeUsageStatsCount,
                     errorMessage: nil,
                     in: db
                 )
@@ -1627,28 +1681,37 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         in: db
                     )
                 }
-                return finishedAt
+                return (finishedAt: finishedAt, storedCounts: storedCounts)
             }
-            let finishedAt = max(transactionFinishedAt, now())
+            phaseTimings.add(.sidecarWriteTransaction, startedAt: writeTransactionStartedAt)
+            phaseItemCounts[.sidecarWriteTransaction] = refreshIngredientPairEvidence
+                ? recipeSearchDocumentCount
+                : routineUpdatePlan.changedStubs.count + routineUpdatePlan.deletedRecipeUIDs.count
+            let finishedAt = max(transactionResult.finishedAt, now())
+            let storedCounts = transactionResult.storedCounts
 
             return RecipeIndexesRebuildSummary(
                 startedAt: startedAt,
                 finishedAt: finishedAt,
-                recipeSearchDocumentCount: recipeSearchDocumentCount,
-                recipeFeatureCount: recipeFeatureCount,
-                recipeFeaturesWithTotalTimeCount: recipeFeaturesWithTotalTimeCount,
-                recipeFeaturesWithIngredientLineCountCount: recipeFeaturesWithIngredientLineCountCount,
-                recipeIngredientRecipeCount: recipeIngredientRecipeCount,
-                recipeIngredientLineCount: recipeIngredientLineCount,
-                recipeIngredientTokenCount: recipeIngredientTokenCount,
-                recipeUsageStatsCount: recipeUsageStatsCount,
-                recipeUsageStatsWithLastMealAtCount: recipeUsageStatsWithLastMealAtCount,
-                recipeUsageStatsWithGapArrayCount: recipeUsageStatsWithGapArrayCount,
+                recipeSearchDocumentCount: storedCounts.recipeSearchDocumentCount,
+                recipeFeatureCount: storedCounts.recipeFeatureCount,
+                recipeFeaturesWithTotalTimeCount: storedCounts.recipeFeaturesWithTotalTimeCount,
+                recipeFeaturesWithIngredientLineCountCount: storedCounts.recipeFeaturesWithIngredientLineCountCount,
+                recipeIngredientRecipeCount: storedCounts.recipeIngredientRecipeCount,
+                recipeIngredientLineCount: storedCounts.recipeIngredientLineCount,
+                recipeIngredientTokenCount: storedCounts.recipeIngredientTokenCount,
+                recipeUsageStatsCount: storedCounts.recipeUsageStatsCount,
+                recipeUsageStatsWithLastMealAtCount: storedCounts.recipeUsageStatsWithLastMealAtCount,
+                recipeUsageStatsWithGapArrayCount: storedCounts.recipeUsageStatsWithGapArrayCount,
                 linkedMealCount: linkedMealCount,
                 totalMealCount: totalMealCount,
                 refreshedIngredientPairEvidence: refreshIngredientPairEvidence,
                 ingredientPairSummaryCount: ingredientPairSummaryCount,
                 ingredientPairRecipeEvidenceCount: ingredientPairRecipeEvidenceCount,
+                changedRecipeCount: refreshIngredientPairEvidence ? 0 : routineUpdatePlan.changedStubs.count,
+                skippedRecipeCount: refreshIngredientPairEvidence ? 0 : routineUpdatePlan.skippedRecipeCount,
+                deletedRecipeCount: refreshIngredientPairEvidence ? 0 : routineUpdatePlan.deletedRecipeUIDs.count,
+                phaseTimings: phaseTimings.timings(itemCounts: phaseItemCounts),
                 sourceState: sourceState
             )
         } catch {
@@ -1906,6 +1969,120 @@ public struct PantrySidecarStore: @unchecked Sendable {
         )
     }
 
+    private func makeRecipeRoutineUpdatePlan(
+        activeStubs: [SourceRecipeStub],
+        usePartialUpdate: Bool
+    ) throws -> RecipeRoutineUpdatePlan {
+        guard usePartialUpdate else {
+            return RecipeRoutineUpdatePlan(
+                changedStubs: activeStubs,
+                skippedRecipeCount: 0,
+                deletedRecipeUIDs: []
+            )
+        }
+
+        let activeRecipeUIDs = Set(activeStubs.map(\.uid))
+        return try dbQueue.read { db in
+            guard
+                try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db) != nil,
+                try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db) != nil,
+                try latestSuccessfulIndexRun(named: Self.recipeIngredientIndexName, db: db) != nil
+            else {
+                return RecipeRoutineUpdatePlan(
+                    changedStubs: activeStubs,
+                    skippedRecipeCount: 0,
+                    deletedRecipeUIDs: []
+                )
+            }
+
+            let existingRows = try Self.fetchExistingRoutineRecipeIndexRows(db: db)
+            var changedStubs = [SourceRecipeStub]()
+            var skippedRecipeCount = 0
+
+            for stub in activeStubs {
+                guard
+                    let sourceFingerprint = stub.sourceFingerprint,
+                    let existingRow = existingRows[stub.uid],
+                    existingRow.searchSourceFingerprint == sourceFingerprint,
+                    existingRow.featureSourceFingerprint == sourceFingerprint
+                else {
+                    changedStubs.append(stub)
+                    continue
+                }
+
+                skippedRecipeCount += 1
+            }
+
+            return RecipeRoutineUpdatePlan(
+                changedStubs: changedStubs,
+                skippedRecipeCount: skippedRecipeCount,
+                deletedRecipeUIDs: Set(existingRows.keys).subtracting(activeRecipeUIDs)
+            )
+        }
+    }
+
+    private static func fetchExistingRoutineRecipeIndexRows(
+        db: Database
+    ) throws -> [String: ExistingRoutineRecipeIndexRow] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT
+                recipe_search_documents.uid,
+                recipe_search_documents.source_fingerprint AS search_source_fingerprint,
+                recipe_features.source_fingerprint AS feature_source_fingerprint
+            FROM recipe_search_documents
+            LEFT JOIN recipe_features
+                ON recipe_features.uid = recipe_search_documents.uid
+            """
+        )
+
+        return Dictionary(
+            uniqueKeysWithValues: rows.map { row in
+                (
+                    row["uid"],
+                    ExistingRoutineRecipeIndexRow(
+                        searchSourceFingerprint: row["search_source_fingerprint"],
+                        featureSourceFingerprint: row["feature_source_fingerprint"]
+                    )
+                )
+            }
+        )
+    }
+
+    private func makeRoutineRecipeIndexRows(
+        from recipe: SourceRecipe,
+        categoryNamesByUID: [String: String],
+        derivedAt: Date
+    ) -> RoutineRecipeIndexRows {
+        RoutineRecipeIndexRows(
+            document: RecipeSearchDocument(
+                uid: recipe.uid,
+                name: recipe.name,
+                categories: resolvedCategories(
+                    recipe.categoryReferences,
+                    categoryNamesByUID: categoryNamesByUID
+                ),
+                sourceName: recipe.sourceName,
+                ingredients: recipe.ingredients,
+                notes: recipe.notes,
+                sourceFingerprint: recipe.sourceFingerprint,
+                isFavorite: recipe.isFavorite,
+                starRating: recipe.starRating
+            ),
+            features: Self.deriveFeatures(
+                from: recipe,
+                derivedAt: derivedAt
+            ),
+            ingredientIndex: IngredientNormalizer.normalizeIngredientLines(
+                recipeUID: recipe.uid,
+                sourceFingerprint: recipe.sourceFingerprint,
+                ingredients: recipe.ingredients,
+                derivedAt: derivedAt
+            )
+        )
+    }
+
     private func resolvedCategories(
         _ references: [String],
         categoryNamesByUID: [String: String]
@@ -1920,6 +2097,85 @@ public struct PantrySidecarStore: @unchecked Sendable {
     private static let ingredientPairIndexName = "ingredient-pairs"
     public static let ingredientPairEvidenceBasis = "recipe-token-cooccurrence-v1"
     private static let recipeUsageSummaryKey = "current"
+
+    private static func deleteRecipeOwnedIndexRows(
+        recipeUIDs: Set<String>,
+        in db: Database
+    ) throws {
+        let sortedUIDs = recipeUIDs.sorted()
+        guard !sortedUIDs.isEmpty else {
+            return
+        }
+
+        var arguments = Self.statementArguments(for: sortedUIDs)
+        let placeholders = sqlPlaceholders(count: sortedUIDs.count)
+        try db.execute(
+            sql: "DELETE FROM recipe_search_documents WHERE uid IN (\(placeholders))",
+            arguments: arguments
+        )
+
+        arguments = Self.statementArguments(for: sortedUIDs)
+        try db.execute(
+            sql: "DELETE FROM recipe_search_fts WHERE uid IN (\(placeholders))",
+            arguments: arguments
+        )
+
+        arguments = Self.statementArguments(for: sortedUIDs)
+        try db.execute(
+            sql: "DELETE FROM recipe_features WHERE uid IN (\(placeholders))",
+            arguments: arguments
+        )
+
+        arguments = Self.statementArguments(for: sortedUIDs)
+        try db.execute(
+            sql: "DELETE FROM recipe_ingredient_tokens WHERE recipe_uid IN (\(placeholders))",
+            arguments: arguments
+        )
+
+        arguments = Self.statementArguments(for: sortedUIDs)
+        try db.execute(
+            sql: "DELETE FROM recipe_ingredient_lines WHERE recipe_uid IN (\(placeholders))",
+            arguments: arguments
+        )
+    }
+
+    private static func statementArguments(for values: [String]) -> StatementArguments {
+        var arguments = StatementArguments()
+        for value in values {
+            arguments += [value]
+        }
+        return arguments
+    }
+
+    private static func fetchRecipeIndexStoredCounts(db: Database) throws -> RecipeIndexStoredCounts {
+        RecipeIndexStoredCounts(
+            recipeSearchDocumentCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents") ?? 0,
+            recipeFeatureCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_features") ?? 0,
+            recipeFeaturesWithTotalTimeCount: try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM recipe_features WHERE total_time_minutes IS NOT NULL"
+            ) ?? 0,
+            recipeFeaturesWithIngredientLineCountCount: try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM recipe_features WHERE ingredient_line_count IS NOT NULL"
+            ) ?? 0,
+            recipeIngredientRecipeCount: try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(DISTINCT recipe_uid) FROM recipe_ingredient_lines"
+            ) ?? 0,
+            recipeIngredientLineCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_lines") ?? 0,
+            recipeIngredientTokenCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_tokens") ?? 0,
+            recipeUsageStatsCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_usage_stats") ?? 0,
+            recipeUsageStatsWithLastMealAtCount: try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE last_meal_at IS NOT NULL"
+            ) ?? 0,
+            recipeUsageStatsWithGapArrayCount: try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM recipe_usage_stats WHERE meal_gap_days_json IS NOT NULL"
+            ) ?? 0
+        )
+    }
 
     private static func dropIngredientPairSecondaryIndexes(in db: Database) throws {
         try db.execute(sql: "DROP INDEX IF EXISTS ingredient_pair_summaries_on_token_a")
@@ -2617,6 +2873,54 @@ public struct PantrySidecarStore: @unchecked Sendable {
 
 public typealias PantryStore = PantrySidecarStore
 
+private enum RecipeIndexPhase: String, CaseIterable {
+    case sourceCategories = "source.categories"
+    case sourceRecipeStubs = "source.recipe_stubs"
+    case sourceMeals = "source.meals"
+    case deriveUsageStats = "derive.usage_stats"
+    case sourceFetchRecipes = "source.fetch_recipes"
+    case deriveRecipeDocumentsFeaturesIngredients = "derive.recipe_documents_features_ingredients"
+    case sortAndCount = "sort_and_count"
+    case deriveIngredientPairs = "derive.ingredient_pairs"
+    case sidecarWriteTransaction = "sidecar.write_transaction"
+}
+
+private struct RecipeIndexPhaseTimingRecorder {
+    private let clock: @Sendable () -> TimeInterval
+    private var durationsByPhase = [RecipeIndexPhase: TimeInterval]()
+
+    init(clock: @escaping @Sendable () -> TimeInterval) {
+        self.clock = clock
+    }
+
+    mutating func add(_ phase: RecipeIndexPhase, startedAt start: TimeInterval) {
+        let duration = max(0, clock() - start)
+        durationsByPhase[phase, default: 0] += duration
+    }
+
+    mutating func measure<T>(_ phase: RecipeIndexPhase, _ work: () throws -> T) rethrows -> T {
+        let start = clock()
+        defer {
+            add(phase, startedAt: start)
+        }
+        return try work()
+    }
+
+    func timings(itemCounts: [RecipeIndexPhase: Int]) -> [RecipeIndexPhaseTiming] {
+        RecipeIndexPhase.allCases.compactMap { phase in
+            guard let duration = durationsByPhase[phase] else {
+                return nil
+            }
+
+            return RecipeIndexPhaseTiming(
+                phase: phase.rawValue,
+                durationMilliseconds: Int((duration * 1_000).rounded()),
+                itemCount: itemCounts[phase]
+            )
+        }
+    }
+}
+
 private struct IndexRunRow: FetchableRecord, Decodable {
     let id: Int64
     let startedAt: String
@@ -2647,6 +2951,36 @@ private struct RecipeSearchDocument: Equatable, Sendable {
     let sourceFingerprint: String?
     let isFavorite: Bool
     let starRating: Int?
+}
+
+private struct RoutineRecipeIndexRows: Sendable {
+    let document: RecipeSearchDocument
+    let features: RecipeDerivedFeatures
+    let ingredientIndex: RecipeIngredientIndex?
+}
+
+private struct RecipeRoutineUpdatePlan: Sendable {
+    let changedStubs: [SourceRecipeStub]
+    let skippedRecipeCount: Int
+    let deletedRecipeUIDs: Set<String>
+}
+
+private struct ExistingRoutineRecipeIndexRow: Sendable {
+    let searchSourceFingerprint: String?
+    let featureSourceFingerprint: String?
+}
+
+private struct RecipeIndexStoredCounts: Sendable {
+    let recipeSearchDocumentCount: Int
+    let recipeFeatureCount: Int
+    let recipeFeaturesWithTotalTimeCount: Int
+    let recipeFeaturesWithIngredientLineCountCount: Int
+    let recipeIngredientRecipeCount: Int
+    let recipeIngredientLineCount: Int
+    let recipeIngredientTokenCount: Int
+    let recipeUsageStatsCount: Int
+    let recipeUsageStatsWithLastMealAtCount: Int
+    let recipeUsageStatsWithGapArrayCount: Int
 }
 
 private struct IngredientPairKey: Hashable, Sendable {

@@ -490,6 +490,15 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
         } else {
             lines.append("ingredient_pair_evidence_refreshed: no")
             lines.append("ingredient_pair_evidence_note: skipped by `index update`; run `paprika-pantry index rebuild` to refresh pairings")
+            lines.append("routine_recipe_rows_changed: \(summary.changedRecipeCount)")
+            lines.append("routine_recipe_rows_skipped: \(summary.skippedRecipeCount)")
+            lines.append("routine_recipe_rows_deleted: \(summary.deletedRecipeCount)")
+            lines.append("recipe_usage_refresh: full")
+            lines.append("recipe_usage_refresh_note: meal edits can change usage rows independently of recipe fingerprints")
+        }
+
+        if !summary.phaseTimings.isEmpty {
+            lines.append("phase_durations_ms: \(renderedPhaseTimings(summary.phaseTimings))")
         }
 
         if let sourceState = summary.sourceState {
@@ -499,6 +508,17 @@ public struct IndexRebuildReport: ConsoleRenderable, Equatable, Sendable {
         lines.append(contentsOf: renderedCapturedPaprikaSyncLines(summary.sourceState?.paprikaSync))
         lines.append(renderedPaths(paths))
         return lines.joined(separator: "\n")
+    }
+
+    private func renderedPhaseTimings(_ timings: [RecipeIndexPhaseTiming]) -> String {
+        timings.map { timing in
+            if let itemCount = timing.itemCount {
+                return "\(timing.phase)=\(timing.durationMilliseconds)(items=\(itemCount))"
+            }
+
+            return "\(timing.phase)=\(timing.durationMilliseconds)"
+        }
+        .joined(separator: ", ")
     }
 }
 

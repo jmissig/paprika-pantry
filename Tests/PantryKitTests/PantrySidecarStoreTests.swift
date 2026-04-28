@@ -131,7 +131,8 @@ final class PantrySidecarStoreTests: XCTestCase {
             from: source,
             now: {
                 referenceDate
-            }
+            },
+            phaseClock: { 0 }
         )
 
         XCTAssertEqual(summary.recipeSearchDocumentCount, 2)
@@ -143,6 +144,20 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(summary.recipeIngredientTokenCount, 4)
         XCTAssertEqual(summary.recipeUsageStatsCount, 1)
         XCTAssertEqual(summary.linkedMealCount, 2)
+        XCTAssertEqual(summary.phaseTimings.map(\.phase), [
+            "source.categories",
+            "source.recipe_stubs",
+            "source.meals",
+            "derive.usage_stats",
+            "source.fetch_recipes",
+            "derive.recipe_documents_features_ingredients",
+            "sort_and_count",
+            "derive.ingredient_pairs",
+            "sidecar.write_transaction",
+        ])
+        XCTAssertEqual(summary.phaseTimings.map(\.durationMilliseconds), Array(repeating: 0, count: 9))
+        XCTAssertEqual(summary.phaseTimings.first { $0.phase == "source.fetch_recipes" }?.itemCount, 2)
+        XCTAssertEqual(summary.phaseTimings.first { $0.phase == "derive.ingredient_pairs" }?.itemCount, 2)
 
         let results = try store.searchRecipes(query: "lemon", limit: 20)
         XCTAssertEqual(results.map(\.uid), ["AAA"])
@@ -710,11 +725,17 @@ final class PantrySidecarStoreTests: XCTestCase {
             ],
             meals: []
         )
-        let updateSummary = try await store.rebuildRecipeIndexes(from: updateSource, refreshIngredientPairEvidence: false)
+        let updateSummary = try await store.rebuildRecipeIndexes(
+            from: updateSource,
+            refreshIngredientPairEvidence: false,
+            phaseClock: { 0 }
+        )
 
         XCTAssertFalse(updateSummary.refreshedIngredientPairEvidence)
         XCTAssertEqual(updateSummary.ingredientPairSummaryCount, 0)
         XCTAssertEqual(updateSummary.recipeSearchDocumentCount, 1)
+        XCTAssertFalse(updateSummary.phaseTimings.contains { $0.phase == "derive.ingredient_pairs" })
+        XCTAssertEqual(updateSummary.phaseTimings.first { $0.phase == "source.fetch_recipes" }?.itemCount, 1)
 
         let updatedStats = try store.indexStats()
         XCTAssertEqual(updatedStats.recipeSearchDocumentCount, 1)
@@ -722,6 +743,129 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(updatedStats.ingredientPairRecipeEvidenceCount, initialStats.ingredientPairRecipeEvidenceCount)
         XCTAssertEqual(updatedStats.lastIngredientPairRun?.id, initialPairRunID)
         XCTAssertEqual(try store.listIngredientPairEvidence(token: "tomato", withToken: "basil").first?.recipeCount, 2)
+    }
+
+    func testIndexUpdatePartiallyRefreshesChangedNewAndDeletedRecipeRows() async throws {
+        let store = try makeStore()
+        let initialDate = mealHistoryReferenceDate()
+        let updateDate = initialDate.addingTimeInterval(86_400)
+        let initialSource = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Unchanged Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "Old Pasta", sourceFingerprint: "hash-bbb-v1"),
+                SourceRecipeStub(uid: "CCC", name: "Deleted Salad", sourceFingerprint: "hash-ccc"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeRecipeForPartialIndexTest(
+                    uid: "AAA",
+                    name: "Unchanged Soup",
+                    ingredients: "Beans\nBroth",
+                    notes: "Keep me",
+                    sourceFingerprint: "hash-aaa"
+                ),
+                "BBB": makeRecipeForPartialIndexTest(
+                    uid: "BBB",
+                    name: "Old Pasta",
+                    ingredients: "Pasta\nTomato",
+                    notes: "Old note",
+                    sourceFingerprint: "hash-bbb-v1"
+                ),
+                "CCC": makeRecipeForPartialIndexTest(
+                    uid: "CCC",
+                    name: "Deleted Salad",
+                    ingredients: "Greens",
+                    notes: nil,
+                    sourceFingerprint: "hash-ccc"
+                ),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "Unchanged Soup", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Unchanged Soup"),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(
+            from: initialSource,
+            now: { initialDate }
+        )
+
+        let initialSearchIndexedAt = try await store.dbQueue.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT indexed_at FROM recipe_search_documents WHERE uid = ?",
+                arguments: ["AAA"]
+            )
+        }
+        let initialFeatures = try XCTUnwrap(store.fetchRecipeFeatures(uid: "AAA"))
+        let initialIngredientIndex = try XCTUnwrap(store.fetchRecipeIngredientIndex(uid: "AAA"))
+
+        let updateSource = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Unchanged Soup", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "BBB", name: "New Pasta", sourceFingerprint: "hash-bbb-v2"),
+                SourceRecipeStub(uid: "DDD", name: "New Beans", sourceFingerprint: "hash-ddd"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "BBB": makeRecipeForPartialIndexTest(
+                    uid: "BBB",
+                    name: "New Pasta",
+                    ingredients: "Pasta\nTomato\nBasil",
+                    notes: "Updated note",
+                    sourceFingerprint: "hash-bbb-v2",
+                    totalTime: "25 min"
+                ),
+                "DDD": makeRecipeForPartialIndexTest(
+                    uid: "DDD",
+                    name: "New Beans",
+                    ingredients: "Beans\nLemon",
+                    notes: nil,
+                    sourceFingerprint: "hash-ddd"
+                ),
+            ],
+            meals: [
+                SourceMeal(uid: "M1", name: "Unchanged Soup", scheduledAt: "2026-04-01 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Unchanged Soup"),
+                SourceMeal(uid: "M2", name: "Unchanged Soup", scheduledAt: "2026-04-02 18:00:00", mealType: "Dinner", recipeUID: "AAA", recipeName: "Unchanged Soup"),
+            ]
+        )
+
+        let summary = try await store.rebuildRecipeIndexes(
+            from: updateSource,
+            refreshIngredientPairEvidence: false,
+            now: { updateDate },
+            phaseClock: { 0 }
+        )
+
+        XCTAssertEqual(summary.recipeSearchDocumentCount, 3)
+        XCTAssertEqual(summary.recipeFeatureCount, 3)
+        XCTAssertEqual(summary.changedRecipeCount, 2)
+        XCTAssertEqual(summary.skippedRecipeCount, 1)
+        XCTAssertEqual(summary.deletedRecipeCount, 1)
+        XCTAssertEqual(summary.phaseTimings.first { $0.phase == "source.fetch_recipes" }?.itemCount, 2)
+        XCTAssertEqual(summary.phaseTimings.first { $0.phase == "sidecar.write_transaction" }?.itemCount, 3)
+        XCTAssertEqual(updateSource.fetchedRecipeUIDs, ["BBB", "DDD"])
+
+        let updatedSearchIndexedAt = try await store.dbQueue.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT indexed_at FROM recipe_search_documents WHERE uid = ?",
+                arguments: ["AAA"]
+            )
+        }
+        XCTAssertEqual(updatedSearchIndexedAt, initialSearchIndexedAt)
+        XCTAssertEqual(try store.fetchRecipeFeatures(uid: "AAA")?.derivedAt, initialFeatures.derivedAt)
+        XCTAssertEqual(try store.fetchRecipeIngredientIndex(uid: "AAA")?.derivedAt, initialIngredientIndex.derivedAt)
+
+        let changedFeatures = try XCTUnwrap(store.fetchRecipeFeatures(uid: "BBB"))
+        XCTAssertEqual(changedFeatures.sourceFingerprint, "hash-bbb-v2")
+        XCTAssertEqual(changedFeatures.totalTimeMinutes, 25)
+        XCTAssertNotNil(try store.fetchRecipeFeatures(uid: "DDD"))
+        XCTAssertNil(try store.fetchRecipeFeatures(uid: "CCC"))
+        XCTAssertNil(try store.fetchRecipeIngredientIndex(uid: "CCC"))
+
+        let updatedUsage = try XCTUnwrap(store.fetchRecipeUsageStats(uid: "AAA"))
+        XCTAssertEqual(updatedUsage.derivedAt, updateDate)
+        XCTAssertEqual(updatedUsage.mealCount, 2)
     }
 
     func testListCookbookAggregatesGroupsTrimmedSourceNamesAndUnlabeledRows() async throws {
@@ -1264,6 +1408,35 @@ final class PantrySidecarStoreTests: XCTestCase {
             createdAt: nil,
             updatedAt: nil,
             sourceFingerprint: "hash-\(uid)",
+            rawJSON: "{}"
+        )
+    }
+
+    private func makeRecipeForPartialIndexTest(
+        uid: String,
+        name: String,
+        ingredients: String?,
+        notes: String?,
+        sourceFingerprint: String,
+        totalTime: String? = nil
+    ) -> SourceRecipe {
+        SourceRecipe(
+            uid: uid,
+            name: name,
+            categoryReferences: [],
+            sourceName: "Test Kitchen",
+            ingredients: ingredients,
+            directions: nil,
+            notes: notes,
+            starRating: nil,
+            isFavorite: false,
+            prepTime: nil,
+            cookTime: nil,
+            totalTime: totalTime,
+            servings: nil,
+            createdAt: nil,
+            updatedAt: nil,
+            sourceFingerprint: sourceFingerprint,
             rawJSON: "{}"
         )
     }

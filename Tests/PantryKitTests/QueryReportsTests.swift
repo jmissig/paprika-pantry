@@ -3,6 +3,64 @@ import XCTest
 @testable import PantryKit
 
 final class QueryReportsTests: XCTestCase {
+    func testIndexRebuildReportIncludesPhaseTimingsWhenPresent() {
+        let report = IndexRebuildReport(
+            command: "index rebuild",
+            summary: RecipeIndexesRebuildSummary(
+                startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                finishedAt: Date(timeIntervalSince1970: 1_712_736_002),
+                recipeSearchDocumentCount: 2,
+                recipeFeatureCount: 2,
+                recipeFeaturesWithTotalTimeCount: 1,
+                recipeFeaturesWithIngredientLineCountCount: 2,
+                recipeIngredientRecipeCount: 2,
+                recipeIngredientLineCount: 4,
+                recipeIngredientTokenCount: 4,
+                recipeUsageStatsCount: 1,
+                linkedMealCount: 1,
+                totalMealCount: 2,
+                ingredientPairSummaryCount: 2,
+                ingredientPairRecipeEvidenceCount: 2,
+                phaseTimings: [
+                    RecipeIndexPhaseTiming(phase: "source.recipe_stubs", durationMilliseconds: 12, itemCount: 3),
+                    RecipeIndexPhaseTiming(phase: "derive.ingredient_pairs", durationMilliseconds: 34, itemCount: 2),
+                ]
+            ),
+            paths: makePaths()
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("duration_ms: 2000"))
+        XCTAssertTrue(report.humanDescription.contains("phase_durations_ms: source.recipe_stubs=12(items=3), derive.ingredient_pairs=34(items=2)"))
+    }
+
+    func testIndexUpdateReportIncludesPartialUpdateCountsAndUsageRefreshNote() {
+        let report = IndexRebuildReport(
+            command: "index update",
+            summary: RecipeIndexesRebuildSummary(
+                startedAt: Date(timeIntervalSince1970: 1_712_736_000),
+                finishedAt: Date(timeIntervalSince1970: 1_712_736_001),
+                recipeSearchDocumentCount: 3,
+                recipeFeatureCount: 3,
+                recipeFeaturesWithTotalTimeCount: 1,
+                recipeFeaturesWithIngredientLineCountCount: 3,
+                recipeIngredientRecipeCount: 3,
+                recipeIngredientLineCount: 6,
+                recipeIngredientTokenCount: 6,
+                recipeUsageStatsCount: 1,
+                refreshedIngredientPairEvidence: false,
+                changedRecipeCount: 2,
+                skippedRecipeCount: 1,
+                deletedRecipeCount: 1
+            ),
+            paths: makePaths()
+        )
+
+        XCTAssertTrue(report.humanDescription.contains("routine_recipe_rows_changed: 2"))
+        XCTAssertTrue(report.humanDescription.contains("routine_recipe_rows_skipped: 1"))
+        XCTAssertTrue(report.humanDescription.contains("routine_recipe_rows_deleted: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipe_usage_refresh: full"))
+    }
+
     func testRecipesListReportIncludesSummaryMetadata() {
         let report = RecipesListReport(
             recipes: [
