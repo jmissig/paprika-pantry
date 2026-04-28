@@ -1,7 +1,5 @@
 # Read-Only Audit Surface
 
-> Skill copy: this audit guide is also bundled at `skills/paprika-pantry/references/read-only-audit.md` so agents can use it without access to the source repo. Keep the two copies in sync when editing audit guidance.
-
 `paprika-pantry` has two normal ways to look at cooking evidence:
 
 1. **Stable CLI verbs** for normal Robut/chat answers and scripts.

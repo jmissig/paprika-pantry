@@ -59,7 +59,7 @@ Do not skip local lookup unless explicitly requested.
 
 Normal answers should use stable CLI verbs first. Before writing SQL, run `paprika-pantry --help` and relevant subcommand help when semantics are unclear.
 
-Use read-only SQL/Datasette only for audit questions: source coverage, sidecar freshness, provenance examples, debugging surprising output, or discovering a repeated pattern that may deserve a future CLI verb. The audit guide is `docs/read-only-audit.md` in the repo.
+Use read-only SQL/Datasette only for audit questions: source coverage, sidecar freshness, provenance examples, debugging surprising output, or discovering a repeated pattern that may deserve a future CLI verb. For canned SQL and Datasette setup, read `references/read-only-audit.md` from this skill folder.
 
 Audit SQL rules:
 - open the sidecar read-only / immutable
