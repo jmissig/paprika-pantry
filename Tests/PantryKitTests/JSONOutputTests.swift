@@ -110,6 +110,7 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"totalTimeMinutes\" : 30"))
         XCTAssertTrue(recipesRendered.contains("\"usageStats\""))
         XCTAssertTrue(recipesRendered.contains("\"mealCount\" : 2"))
+        XCTAssertTrue(recipesRendered.contains("\"firstCookedAt\" : \"2026-04-01 18:00:00\""))
     }
 
     func testRenderDoctorReportIncludesStatusAndIndexFields() throws {

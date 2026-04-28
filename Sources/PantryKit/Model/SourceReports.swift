@@ -256,6 +256,10 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
                 parts.append("first_meal=\(firstMealAt)")
             }
 
+            if let firstCookedAt = aggregate.firstCookedAt {
+                parts.append("first_cooked_at=\(firstCookedAt)")
+            }
+
             if let lastMealAt = aggregate.lastMealAt {
                 parts.append("last_meal=\(lastMealAt)")
             }
@@ -304,6 +308,7 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
             "three_star_count",
             "two_star_count",
             "one_star_count",
+            "first_cooked_at",
         ]
     }
 
@@ -330,6 +335,7 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
                 String(aggregate.ratingDistribution.threeStarCount),
                 String(aggregate.ratingDistribution.twoStarCount),
                 String(aggregate.ratingDistribution.oneStarCount),
+                aggregate.firstCookedAt ?? "",
             ]
         }
     }

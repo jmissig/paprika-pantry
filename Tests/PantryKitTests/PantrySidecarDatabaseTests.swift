@@ -38,6 +38,7 @@ final class PantrySidecarDatabaseTests: XCTestCase {
             XCTAssertTrue(try columns(in: "recipe_ingredient_lines", db: db).contains("source_fingerprint"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("meal_count"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("first_meal_at"))
+            XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("first_cooked_at"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("last_meal_at"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("meal_gap_days_json"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("days_spanned_by_meals"))
@@ -84,6 +85,7 @@ final class PantrySidecarDatabaseTests: XCTestCase {
         try migratedQueue.read { db in
             let columns = try columns(in: "recipe_usage_stats", db: db)
             XCTAssertTrue(columns.contains("meal_count"))
+            XCTAssertTrue(columns.contains("first_cooked_at"))
             XCTAssertTrue(columns.contains("last_meal_at"))
             XCTAssertTrue(try db.tableExists("recipe_usage_summary"))
 
@@ -96,6 +98,7 @@ final class PantrySidecarDatabaseTests: XCTestCase {
                         last_cooked_at,
                         meal_count,
                         first_meal_at,
+                        first_cooked_at,
                         last_meal_at,
                         meal_gap_days_json,
                         days_spanned_by_meals,
@@ -111,6 +114,7 @@ final class PantrySidecarDatabaseTests: XCTestCase {
             XCTAssertEqual(row["last_cooked_at"], "2026-04-07 18:00:00")
             XCTAssertEqual(row["meal_count"], 3)
             XCTAssertNil(row["first_meal_at"] as String?)
+            XCTAssertNil(row["first_cooked_at"] as String?)
             XCTAssertEqual(row["last_meal_at"], "2026-04-07 18:00:00")
             XCTAssertNil(row["meal_gap_days_json"] as String?)
             XCTAssertNil(row["days_spanned_by_meals"] as Int?)
@@ -121,6 +125,54 @@ final class PantrySidecarDatabaseTests: XCTestCase {
                 try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_usage_summary WHERE summary_key = 'current'"),
                 0
             )
+        }
+    }
+
+    func testRecipeUsageFirstCookedMigrationBackfillsFromFirstMealAt() throws {
+        let database = try makeDatabase()
+        try FileManager.default.createDirectory(
+            at: database.path.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let queue = try DatabaseQueue(path: database.path.path)
+
+        try PantrySidecarDatabase.migrator().migrate(queue, upTo: "ingredient-pairs-v1")
+
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO recipe_usage_stats (
+                    uid,
+                    derived_at,
+                    times_cooked,
+                    last_cooked_at,
+                    meal_count,
+                    first_meal_at,
+                    last_meal_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    "AAA",
+                    "2026-04-10T00:00:00.000Z",
+                    2,
+                    "2026-04-07 18:00:00",
+                    2,
+                    "2026-04-01 18:00:00",
+                    "2026-04-07 18:00:00",
+                ]
+            )
+        }
+
+        let migratedQueue = try database.openQueue()
+        try migratedQueue.read { db in
+            XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("first_cooked_at"))
+
+            let firstCookedAt = try String.fetchOne(
+                db,
+                sql: "SELECT first_cooked_at FROM recipe_usage_stats WHERE uid = ?",
+                arguments: ["AAA"]
+            )
+            XCTAssertEqual(firstCookedAt, "2026-04-01 18:00:00")
         }
     }
 

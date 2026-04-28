@@ -214,6 +214,9 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             if let firstMealAt = usageStats.firstMealAt {
                 lines.append("first_meal_at: \(firstMealAt)")
             }
+            if let firstCookedAt = usageStats.firstCookedAt {
+                lines.append("first_cooked_at: \(firstCookedAt)")
+            }
             if let lastMealAt = usageStats.lastMealAt {
                 lines.append("last_meal_at: \(lastMealAt)")
             }
@@ -1187,6 +1190,10 @@ func renderedRecipeUsageEvidence(_ usageStats: RecipeUsageStats?) -> [String] {
 
     var parts = ["meal_count=\(usageStats.mealCount)"]
 
+    if let firstCookedAt = usageStats.firstCookedAt {
+        parts.append("first_cooked_at=\(firstCookedAt)")
+    }
+
     if let lastMealAt = usageStats.lastMealAt {
         parts.append("last_meal_at=\(lastMealAt)")
     }
@@ -1225,6 +1232,7 @@ private let recipeResultCSVHeaders = [
     "days_spanned_by_meals",
     "median_meal_gap_days",
     "meal_share",
+    "first_cooked_at",
 ]
 
 private func recipeCSVRow(_ recipe: RecipeSummary) -> [String] {
@@ -1243,6 +1251,7 @@ private func recipeCSVRow(_ recipe: RecipeSummary) -> [String] {
         recipe.usageStats?.daysSpannedByMeals.map(String.init) ?? "",
         recipe.usageStats?.medianMealGapDays.map(renderedDouble) ?? "",
         recipe.usageStats?.mealShare.map(renderedDouble) ?? "",
+        recipe.usageStats?.firstCookedAt ?? "",
     ]
 }
 

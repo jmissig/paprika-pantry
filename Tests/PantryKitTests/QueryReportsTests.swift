@@ -65,6 +65,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("derived_total_time_minutes=30"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
         XCTAssertTrue(report.humanDescription.contains("meal_count=3"))
+        XCTAssertTrue(report.humanDescription.contains("first_cooked_at=2026-04-01 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("last_meal_at=2026-04-07 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("days_since_last_meal="))
         XCTAssertTrue(report.humanDescription.contains("days_spanned_by_meals=6"))
@@ -125,6 +126,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("meal_count: 4"))
         XCTAssertTrue(report.humanDescription.contains("first_meal_at: 2026-04-01 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("first_cooked_at: 2026-04-01 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("last_meal_at: 2026-04-08 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("days_since_last_meal:"))
         XCTAssertTrue(report.humanDescription.contains("meal_gap_days: [2, 3, 2]"))
@@ -292,6 +294,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
         XCTAssertTrue(report.humanDescription.contains("meal_count=2"))
+        XCTAssertTrue(report.humanDescription.contains("first_cooked_at=2026-04-01 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("last_meal_at=2026-04-07 18:00:00"))
         XCTAssertTrue(report.humanDescription.contains("days_since_last_meal="))
     }
@@ -607,7 +610,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("sort: average-rating"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("recipe_usage_freshness: 1m old"))
-        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | used_recipes=2 | unused_recipes=2 | meals=5 | meal_share=0.25 | first_meal=2026-03-01 18:00:00 | last_meal=2026-04-01 18:00:00 | avg_rating=4.33 | ratings=5:2,3:1"))
+        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | used_recipes=2 | unused_recipes=2 | meals=5 | meal_share=0.25 | first_meal=2026-03-01 18:00:00 | first_cooked_at=2026-03-01 18:00:00 | last_meal=2026-04-01 18:00:00 | avg_rating=4.33 | ratings=5:2,3:1"))
         XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | recipes=2 | rated=0 | unrated=2 | favorites=1 | used_recipes=0 | unused_recipes=2 | meals=0 | meal_share=0.00 | avg_rating=unrated | is_unlabeled=yes"))
     }
 

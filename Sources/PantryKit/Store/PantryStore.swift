@@ -266,6 +266,7 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
     public let mealCount: Int
     public let mealShare: Double
     public let firstMealAt: String?
+    public let firstCookedAt: String?
     public let lastMealAt: String?
     public let averageStarRating: Double?
     public let ratedRecipeShare: Double
@@ -284,6 +285,7 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
         mealCount: Int = 0,
         mealShare: Double = 0,
         firstMealAt: String? = nil,
+        firstCookedAt: String? = nil,
         lastMealAt: String? = nil,
         averageStarRating: Double?,
         ratedRecipeShare: Double,
@@ -301,6 +303,7 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
         self.mealCount = mealCount
         self.mealShare = mealShare
         self.firstMealAt = firstMealAt
+        self.firstCookedAt = firstCookedAt ?? firstMealAt
         self.lastMealAt = lastMealAt
         self.averageStarRating = averageStarRating
         self.ratedRecipeShare = ratedRecipeShare
@@ -457,6 +460,7 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
     public let derivedAt: Date
     public let mealCount: Int
     public let firstMealAt: String?
+    public let firstCookedAt: String?
     public let lastMealAt: String?
     public let mealGapDays: [Int]?
     public let daysSpannedByMeals: Int?
@@ -468,6 +472,7 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
         derivedAt: Date,
         mealCount: Int,
         firstMealAt: String?,
+        firstCookedAt: String? = nil,
         lastMealAt: String?,
         mealGapDays: [Int]?,
         daysSpannedByMeals: Int?,
@@ -478,6 +483,7 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
         self.derivedAt = derivedAt
         self.mealCount = mealCount
         self.firstMealAt = firstMealAt
+        self.firstCookedAt = firstCookedAt ?? firstMealAt
         self.lastMealAt = lastMealAt
         self.mealGapDays = mealGapDays
         self.daysSpannedByMeals = daysSpannedByMeals
@@ -677,6 +683,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     recipe_usage_stats.derived_at AS usage_derived_at,
                     recipe_usage_stats.meal_count,
                     recipe_usage_stats.first_meal_at,
+                    recipe_usage_stats.first_cooked_at,
                     recipe_usage_stats.last_meal_at,
                     recipe_usage_stats.meal_gap_days_json,
                     recipe_usage_stats.days_spanned_by_meals,
@@ -761,6 +768,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         SUM(CASE WHEN COALESCE(recipe_usage_stats.meal_count, 0) = 0 THEN 1 ELSE 0 END) AS unused_recipe_count,
                         COALESCE(SUM(recipe_usage_stats.meal_count), 0) AS meal_count,
                         MIN(recipe_usage_stats.first_meal_at) AS first_meal_at,
+                        MIN(recipe_usage_stats.first_cooked_at) AS first_cooked_at,
                         MAX(recipe_usage_stats.last_meal_at) AS last_meal_at,
                         AVG(CAST(recipe_search_documents.star_rating AS REAL)) AS average_star_rating,
                         SUM(CASE WHEN recipe_search_documents.star_rating = 1 THEN 1 ELSE 0 END) AS one_star_count,
@@ -791,6 +799,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         ELSE 0
                     END AS meal_share,
                     first_meal_at,
+                    first_cooked_at,
                     last_meal_at,
                     average_star_rating,
                     CAST(rated_recipe_count AS REAL) / recipe_count AS rated_recipe_share,
@@ -822,6 +831,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     mealCount: row["meal_count"],
                     mealShare: row["meal_share"],
                     firstMealAt: row["first_meal_at"],
+                    firstCookedAt: row["first_cooked_at"],
                     lastMealAt: row["last_meal_at"],
                     averageStarRating: row["average_star_rating"],
                     ratedRecipeShare: row["rated_recipe_share"],
@@ -879,6 +889,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                         derived_at,
                         meal_count,
                         first_meal_at,
+                        first_cooked_at,
                         last_meal_at,
                         meal_gap_days_json,
                         days_spanned_by_meals,
@@ -941,6 +952,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     derived_at,
                     meal_count,
                     first_meal_at,
+                    first_cooked_at,
                     last_meal_at,
                     meal_gap_days_json,
                     days_spanned_by_meals,
@@ -1448,12 +1460,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             last_cooked_at,
                             meal_count,
                             first_meal_at,
+                            first_cooked_at,
                             last_meal_at,
                             meal_gap_days_json,
                             days_spanned_by_meals,
                             median_meal_gap_days,
                             meal_share
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         arguments: [
                             usageStat.uid,
@@ -1462,6 +1475,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             usageStat.lastMealAt,
                             usageStat.mealCount,
                             usageStat.firstMealAt,
+                            usageStat.firstCookedAt,
                             usageStat.lastMealAt,
                             Self.encodeIntArrayJSON(usageStat.mealGapDays),
                             usageStat.daysSpannedByMeals,
@@ -2146,6 +2160,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
             derivedAt: DatabaseTimestamp.decodeRequired(derivedAtValue),
             mealCount: mealCount,
             firstMealAt: row["first_meal_at"],
+            firstCookedAt: row["first_cooked_at"] ?? row["first_meal_at"],
             lastMealAt: row["last_meal_at"] ?? row["last_cooked_at"],
             mealGapDays: decodeIntArrayJSON(row["meal_gap_days_json"]),
             daysSpannedByMeals: row["days_spanned_by_meals"],
@@ -2427,6 +2442,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 derivedAt: derivedAt,
                 mealCount: sortedMeals.count,
                 firstMealAt: firstMeal?.scheduledAt,
+                firstCookedAt: firstMeal?.scheduledAt,
                 lastMealAt: lastMeal?.scheduledAt,
                 mealGapDays: mealGapDays,
                 daysSpannedByMeals: daysSpannedByMeals,

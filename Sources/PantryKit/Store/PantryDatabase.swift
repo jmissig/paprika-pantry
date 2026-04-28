@@ -259,6 +259,19 @@ public struct PantrySidecarDatabase {
             try db.create(index: "ingredient_pair_recipe_evidence_on_pair", on: "ingredient_pair_recipe_evidence", columns: ["basis", "token_a", "token_b"])
         }
 
+        migrator.registerMigration("recipe-usage-first-cooked-at-v1") { db in
+            try db.alter(table: "recipe_usage_stats") { table in
+                table.add(column: "first_cooked_at", .text)
+            }
+
+            try db.execute(
+                sql: """
+                UPDATE recipe_usage_stats
+                SET first_cooked_at = first_meal_at
+                """
+            )
+        }
+
         return migrator
     }
 
