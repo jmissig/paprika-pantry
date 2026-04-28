@@ -4,10 +4,10 @@ import XCTest
 @testable import PantryKit
 
 final class OutputFormatTests: XCTestCase {
-    func testResolvedOutputFormatDefaultsToHuman() throws {
+    func testResolvedOutputFormatDefaultsToAuto() throws {
         let options = try parseRuntimeOptions([])
 
-        XCTAssertEqual(try options.resolvedOutputFormat(), .human)
+        XCTAssertEqual(try options.resolvedOutputFormat(), .auto)
     }
 
     func testResolvedOutputFormatUsesExplicitCSV() throws {

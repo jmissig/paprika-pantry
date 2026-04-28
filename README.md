@@ -79,7 +79,7 @@ paprika-pantry doctor
 
 Commands default to compact human-readable output.
 
-- `--format human` forces compact operator-oriented text
+- `--format text` forces compact operator-oriented text
 - `--format json` forces machine-readable JSON
 - `--json` is a shortcut for `--format json`
 - `--format csv` is supported only on row-oriented reports for now
@@ -95,7 +95,7 @@ paprika-pantry groceries list --format csv
 paprika-pantry source cookbooks --format csv
 ```
 
-Not every command flattens honestly to CSV. Detail and diagnostic commands continue to support human and JSON output only, and will fail clearly if asked for CSV.
+Not every command flattens honestly to CSV. Detail and diagnostic commands continue to support text and JSON output only, and will fail clearly if asked for CSV.
 
 ## Common Commands
 

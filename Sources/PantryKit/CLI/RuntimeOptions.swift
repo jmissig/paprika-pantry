@@ -4,7 +4,7 @@ import Foundation
 public struct RuntimeOptions: ParsableArguments, Sendable {
     @Option(
         name: .long,
-        help: "Output format: human, json, or csv. Prefer --format json for agent and script consumption."
+        help: "Output format: auto, text, json, or csv. Prefer --format json for agent and script consumption."
     )
     public var format: OutputFormat?
 
@@ -45,7 +45,7 @@ extension RuntimeOptions {
             return .json
         }
 
-        return format ?? .human
+        return format ?? .auto
     }
 
     var pathOptions: PantryPathOptions {

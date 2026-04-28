@@ -2,7 +2,8 @@ import ArgumentParser
 import Foundation
 
 public enum OutputFormat: String, CaseIterable, Codable, ExpressibleByArgument, Sendable {
-    case human
+    case auto
+    case text
     case json
     case csv
 }

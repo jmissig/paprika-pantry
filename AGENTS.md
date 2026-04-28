@@ -226,7 +226,7 @@ Structured output:
 - use `--format json` for machine-readable output
 - `--json` may exist as shorthand, but docs and examples should prefer `--format json`
 - use CSV only for row-oriented reports that flatten honestly
-- detail/diagnostic commands may support only human and JSON if CSV would be misleading
+- detail/diagnostic commands may support only text and JSON if CSV would be misleading
 
 Output should expose evidence rather than narrating conclusions. OpenClaw or downstream tools interpret it.
 
@@ -343,7 +343,7 @@ Prefer tests for:
 - sidecar schema and migrations
 - index rebuild/update semantics
 - recipe search/filter/ranking semantics
-- output format contracts: human/JSON/CSV where applicable
+- output format contracts: auto/text/JSON/CSV where applicable
 - source health / doctor diagnostics
 - path/config selection
 - data-loss or accidental-write regressions

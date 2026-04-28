@@ -6,7 +6,7 @@ public enum ConsoleOutputError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case let .unsupportedFormat(command, format):
-            return "`\(command)` does not support --format \(format.rawValue) yet. Use --format human or --format json."
+            return "`\(command)` does not support --format \(format.rawValue) yet. Use --format auto, --format text, or --format json."
         }
     }
 }
@@ -18,7 +18,7 @@ public enum ConsoleOutput {
         human: (Value) -> String
     ) throws {
         switch format {
-        case .human:
+        case .auto, .text:
             print(human(value))
         case .json:
             let rendered = try JSONOutput.render(value)
