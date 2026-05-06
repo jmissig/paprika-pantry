@@ -41,6 +41,7 @@ final class JSONOutputTests: XCTestCase {
                     starRating: 5,
                     isFavorite: true,
                     updatedAt: "2026-04-02 10:00:00",
+                    hasNotes: true,
                     derivedFeatures: RecipeDerivedFeatures(
                         uid: "AAA",
                         sourceFingerprint: "hash-aaa",
@@ -102,6 +103,10 @@ final class JSONOutputTests: XCTestCase {
         XCTAssertTrue(recipesRendered.contains("\"fewest-ingredients\""))
         XCTAssertTrue(recipesRendered.contains("\"categories\""))
         XCTAssertTrue(recipesRendered.contains("\"Dinner\""))
+        XCTAssertTrue(recipesRendered.contains("\"target\""))
+        XCTAssertTrue(recipesRendered.contains("\"kind\" : \"paprika.recipe\""))
+        XCTAssertTrue(recipesRendered.contains("\"uid\" : \"AAA\""))
+        XCTAssertTrue(recipesRendered.contains("\"hasNotes\" : true"))
         XCTAssertTrue(recipesRendered.contains("\"sourceName\""))
         XCTAssertTrue(recipesRendered.contains("\"Serious Eats\""))
         XCTAssertTrue(recipesRendered.contains("\"starRating\""))

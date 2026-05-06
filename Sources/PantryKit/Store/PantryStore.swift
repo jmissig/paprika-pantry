@@ -158,6 +158,7 @@ public enum IngredientPairEvidenceSort: String, CaseIterable, Codable, Sendable,
 public struct IngredientPairRecipeEvidence: Codable, Equatable, Sendable {
     public let recipeUID: String
     public let recipeName: String
+    public let recipeTarget: PaprikaRecipeTarget
     public let sourceName: String?
     public let tokenALineNumbers: [Int]
     public let tokenBLineNumbers: [Int]
@@ -181,6 +182,7 @@ public struct IngredientPairRecipeEvidence: Codable, Equatable, Sendable {
     ) {
         self.recipeUID = recipeUID
         self.recipeName = recipeName
+        self.recipeTarget = PaprikaRecipeTarget(uid: recipeUID, name: recipeName, sourceName: sourceName)
         self.sourceName = sourceName
         self.tokenALineNumbers = tokenALineNumbers
         self.tokenBLineNumbers = tokenBLineNumbers
@@ -268,6 +270,7 @@ public struct CookbookRatingDistribution: Codable, Equatable, Sendable {
 
 public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
     public let sourceName: String?
+    public let target: PaprikaSourceTarget
     public let isUnlabeled: Bool
     public let recipeCount: Int
     public let ratedRecipeCount: Int
@@ -305,6 +308,7 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
         ratingDistribution: CookbookRatingDistribution
     ) {
         self.sourceName = sourceName
+        self.target = PaprikaSourceTarget(sourceName: sourceName, isUnlabeled: isUnlabeled)
         self.isUnlabeled = isUnlabeled
         self.recipeCount = recipeCount
         self.ratedRecipeCount = ratedRecipeCount
@@ -327,6 +331,7 @@ public struct CookbookAggregateSummary: Codable, Equatable, Sendable {
 public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
+    public let target: PaprikaRecipeTarget
     public let categories: [String]
     public let sourceName: String?
     public let isFavorite: Bool
@@ -341,11 +346,13 @@ public struct IndexedRecipeSearchResult: Codable, Equatable, Sendable {
         sourceName: String?,
         isFavorite: Bool,
         starRating: Int?,
+        hasNotes: Bool? = nil,
         derivedFeatures: RecipeDerivedFeatures? = nil,
         usageStats: RecipeUsageStats? = nil
     ) {
         self.uid = uid
         self.name = name
+        self.target = PaprikaRecipeTarget(uid: uid, name: name, sourceName: sourceName, hasNotes: hasNotes)
         self.categories = categories
         self.sourceName = sourceName
         self.isFavorite = isFavorite
@@ -694,6 +701,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     recipe_search_documents.name,
                     recipe_search_documents.categories,
                     recipe_search_documents.source_name,
+                    recipe_search_documents.notes IS NOT NULL
+                        AND LENGTH(TRIM(recipe_search_documents.notes)) > 0 AS has_notes,
                     recipe_search_documents.is_favorite,
                     recipe_search_documents.star_rating,
                     recipe_features.uid AS feature_uid,
@@ -739,6 +748,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     sourceName: row["source_name"],
                     isFavorite: row["is_favorite"],
                     starRating: row["star_rating"],
+                    hasNotes: row["has_notes"],
                     derivedFeatures: Self.decodeRecipeDerivedFeatures(row: row),
                     usageStats: Self.decodeRecipeUsageStats(row: row)
                 )

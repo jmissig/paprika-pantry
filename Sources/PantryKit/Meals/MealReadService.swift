@@ -3,6 +3,7 @@ import Foundation
 public struct MealSummary: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
+    public let target: PaprikaMealTarget
     public let scheduledAt: String?
     public let mealType: String?
     public let recipeUID: String?
@@ -18,6 +19,12 @@ public struct MealSummary: Codable, Equatable, Sendable {
     ) {
         self.uid = uid
         self.name = name
+        self.target = PaprikaMealTarget(
+            uid: uid,
+            name: name,
+            scheduledAt: scheduledAt,
+            recipeTarget: recipeUID.map { PaprikaRecipeTarget(uid: $0, name: recipeName ?? name, sourceName: nil) }
+        )
         self.scheduledAt = scheduledAt
         self.mealType = mealType
         self.recipeUID = recipeUID

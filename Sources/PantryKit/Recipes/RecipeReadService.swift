@@ -3,6 +3,7 @@ import Foundation
 public struct RecipeSummary: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
+    public let target: PaprikaRecipeTarget
     public let categories: [String]
     public let sourceName: String?
     public let starRating: Int?
@@ -19,11 +20,13 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
         starRating: Int?,
         isFavorite: Bool,
         updatedAt: String?,
+        hasNotes: Bool? = nil,
         derivedFeatures: RecipeDerivedFeatures? = nil,
         usageStats: RecipeUsageStats? = nil
     ) {
         self.uid = uid
         self.name = name
+        self.target = PaprikaRecipeTarget(uid: uid, name: name, sourceName: sourceName, hasNotes: hasNotes)
         self.categories = categories
         self.sourceName = sourceName
         self.starRating = starRating
@@ -37,6 +40,7 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
 public struct RecipeDetail: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
+    public let target: PaprikaRecipeTarget
     public let categories: [String]
     public let sourceName: String?
     public let ingredients: String?
@@ -74,6 +78,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
     ) {
         self.uid = uid
         self.name = name
+        self.target = PaprikaRecipeTarget(uid: uid, name: name, sourceName: sourceName, hasNotes: hasNonEmptyNotes(notes))
         self.categories = categories
         self.sourceName = sourceName
         self.ingredients = ingredients
@@ -143,6 +148,7 @@ public struct RecipeReadService: Sendable {
                     starRating: recipe.starRating,
                     isFavorite: recipe.isFavorite,
                     updatedAt: recipe.updatedAt,
+                    hasNotes: hasNonEmptyNotes(recipe.notes),
                     derivedFeatures: derivedFeaturesByUID[recipe.uid],
                     usageStats: usageStatsByUID[recipe.uid]
                 )

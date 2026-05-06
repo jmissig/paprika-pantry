@@ -129,7 +129,8 @@ final class RecipeCommandResolutionTests: XCTestCase {
                     sourceName: "Serious Eats",
                     starRating: 4,
                     isFavorite: true,
-                    updatedAt: nil
+                    updatedAt: nil,
+                    hasNotes: false
                 ),
             ]
         )

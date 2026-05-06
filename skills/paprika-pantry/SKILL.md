@@ -39,6 +39,12 @@ Data types:
 
 Not exhaustive. Use `--help` and adapt to the current interface.
 
+## Attachment targets
+
+JSON rows may include `target` or `recipeTarget` objects. Use them as stable Paprika attachment handles for OpenClaw/Obsidian notes or follow-up reads. Do not treat them as commands, and do not expect summary/derived outputs to contain full recipe details.
+
+`recipes show <uid> --format json` is the full recipe detail boundary. It can include Paprika recipe notes. Pairings, meal rows, source rollups, list rows, and search rows should be read as partial evidence with a UID handle.
+
 ## Recipe policy
 
 When asked for a recipe:

@@ -86,6 +86,8 @@ Commands default to compact human-readable output.
 
 Prefer `--format json` in docs, scripts, and agent usage.
 
+JSON recipe, meal, pairing-evidence, and source-rollup rows may include a `target` or `recipeTarget` object. Treat these as stable attachment handles for OpenClaw/Obsidian notes or follow-up reads. They identify Paprika objects; they are not embedded commands and they are not full recipe records.
+
 Examples:
 
 ```bash
@@ -185,6 +187,8 @@ Use direct reads when you want the canonical recipe record:
 paprika-pantry recipes list
 paprika-pantry recipes show "Weeknight Pasta"
 ```
+
+`recipes show <uid>` is the full recipe detail boundary and includes Paprika recipe notes when present. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
 
 Use paprika-pantry's local index when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
 
