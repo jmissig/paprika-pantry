@@ -23,7 +23,8 @@ Paprika source DB read-only
   -> sidecar search / features / usage / pairings / source rollups
   -> stable CLI source and derived outputs
   -> Robut-composed Cooking Guide / Almanac / meal-planning answer
-  -> human correction or policy where needed
+  -> OpenClaw/Obsidian-held correction suggestions where needed
+  -> human-authored Paprika notes when a recipe-specific note should become durable
 ```
 
 Datasette/read-only SQL is the microscope for inspection and debugging. CLI verbs are domain-shaped instruments. Robut composes the Guide.
@@ -52,6 +53,7 @@ Do not make the CLI decide:
 - cross-domain joins with weather, calendar, Swarm, pantry mood, or person context;
 - polished Cooking Guide prose;
 - durable taste/profile changes.
+- annotation inboxes, pending-note queues, or chat-to-recipe correction storage.
 
 Those are Robut/Guide-layer judgments over explicit cooking evidence.
 
@@ -59,7 +61,9 @@ Those are Robut/Guide-layer judgments over explicit cooking evidence.
 
 Near-term correction handling should be simple: a human attaches a plain-English note to the thing Robut is likely to encounter again. The note supplies context; the LLM decides how to use it next time.
 
-The hard part is not schema. The hard part is **what object the note attaches to** and **where Robut will reliably find it later**.
+Recipe-specific notes already have a human home in Paprika recipe notes, and `paprika-pantry` reads those notes as source data. Do not add a separate `paprika-pantry` annotation layer just to mirror or stage those notes.
+
+The hard part is not schema. The hard part is **what object the note attaches to** and **where Robut will reliably find it later**. For chat-originated suggestions, that routing belongs in the OpenClaw or Obsidian layer, not in `paprika-pantry`.
 
 Useful attachment targets for `paprika-pantry`:
 
@@ -86,7 +90,7 @@ Good note targets should be close to the evidence Robut will retrieve later:
 - attach guest/kid/deadline context to the meal window;
 - attach durable Julian/Alice/family distinctions to profile or family memory, not to a random recipe row.
 
-Store the note somewhere human-readable first: Obsidian, profile memory, or a small sidecar only when retrieval needs it. Never write notes back into the real Paprika database automatically. Do not require humans to choose correction kinds, approval states, or future effects.
+Store recipe-specific notes in Paprika when a human wants them to become durable recipe notes. Store chat-originated suggestions, unresolved routing, and non-recipe context in OpenClaw/Obsidian/profile memory. Never write notes back into the real Paprika database automatically. Do not require humans to choose correction kinds, approval states, or future effects.
 
 If this later becomes machine-readable, keep the durable shape minimal:
 
@@ -97,7 +101,7 @@ source: <human/chat/note>
 updated_at: <timestamp>
 ```
 
-That is enough for Robut to find the note and reason from it.
+That shape belongs outside `paprika-pantry` unless Julian explicitly changes the boundary. `paprika-pantry` can expose recipe IDs, names, source trails, and existing Paprika notes so OpenClaw/Obsidian has good attachment targets.
 
 ## Actionable next slices
 
@@ -105,9 +109,10 @@ That is enough for Robut to find the note and reason from it.
    - Add README and skill examples for existing meal-history query fields: `meal_count`, `last_meal_at`, `days_since_last_meal`, `median_meal_gap_days`.
    - Avoid labels like `favorite`; expose facts Robut can interpret.
 
-2. **Attached-note retrieval**
-   - Decide where Robut will reliably find human notes later: Obsidian/profile memory first, sidecar only if needed.
-   - Do not build correction kinds, approval states, or future-effect machinery until plain-English notes prove insufficient.
+2. **OpenClaw/Obsidian note routing**
+   - Keep chat-originated correction suggestions outside `paprika-pantry`.
+   - Ensure `paprika-pantry` exposes enough stable recipe/source identifiers for OpenClaw or Obsidian notes to point back to Paprika recipes.
+   - Do not build correction kinds, approval states, pending-note queues, or future-effect machinery in this repo.
 
 3. **Drill-down consistency**
    - Ensure recipe usage, pairings, source rollups, and future match traces expose stable drill-down commands/source trails.

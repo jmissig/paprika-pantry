@@ -58,6 +58,7 @@ Non-goals / anti-goals:
 - not a generic Paprika SDK for every possible integration
 - not a remote-auth or mirror-first product direction
 - not an opaque recommendation engine
+- not an annotation layer, pending-note queue, or chat correction database
 - not a generic cooking AI; the CLI exposes evidence and OpenClaw/downstream tools do judgment
 
 ## Current state
@@ -286,6 +287,8 @@ The sidecar should store only data that adds value beyond direct Paprika reads, 
 - pattern-detection outputs
 - cached derived facts
 - index/update bookkeeping
+
+Do not use the sidecar for Robut chat annotations, pending note suggestions, or correction/profile state. Recipe-specific human notes already live in Paprika and should be read as source data; chat-originated suggestions and unresolved routing belong in OpenClaw, Obsidian, or profile/family memory.
 
 The system should make these questions easy to answer:
 - can I read the source DB right now?

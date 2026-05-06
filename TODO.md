@@ -7,7 +7,7 @@ Completed work should leave this file.
 
 - [ ] Use [docs/pattern-boundary-and-corrections.md](docs/pattern-boundary-and-corrections.md) to keep the next slices focused on cooking evidence primitives and simple attached notes, not dinner recommendations or correction machinery.
 - [ ] Add examples for existing mechanical recency/lapse query affordances (`meal_count`, `last_meal_at`, query-time `days_since_last_meal`, `median_meal_gap_days`) without labeling recipes as favorites.
-- [ ] Decide where Robut should reliably find plain-English human-attached notes later: Obsidian/profile memory first, sidecar only if needed.
+- [ ] Ensure recipe outputs expose stable identifiers/source trails that OpenClaw or Obsidian notes can use to point back to Paprika recipes.
 - [ ] Make drill-down/source-trail fields consistent across recipe usage, pairings, source rollups, and future match traces.
 
 ## Next
@@ -25,6 +25,7 @@ Completed work should leave this file.
 - No writes to the real Paprika DB.
 - No remote-auth or mirror-first product direction.
 - No blind duplication of canonical Paprika rows into the sidecar.
+- No `paprika-pantry` annotation layer, pending-note queue, or correction database; chat-originated suggestions belong in OpenClaw/Obsidian.
 - No background daemon or scheduler.
 - No multi-account support.
 - No generic Paprika SDK extraction.
