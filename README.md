@@ -118,12 +118,15 @@ paprika-pantry recipes list --category Dinner --category Weeknight
 paprika-pantry recipes list --ingredient basil --ingredient "green onion"
 paprika-pantry recipes list --exclude-ingredient anchovy
 paprika-pantry recipes list --max-total-time-minutes 30 --sort fewest-ingredients
+paprika-pantry recipes list --min-meal-count 2 --sort recent
+paprika-pantry recipes list --min-days-since-last-meal 90 --sort lapsed
 paprika-pantry recipes list --format csv
 
 paprika-pantry recipes show "Mushroom Risotto"
 paprika-pantry recipes show 8D4A0D7E-EXAMPLE-UID --format json
 paprika-pantry recipes search risotto
 paprika-pantry recipes search "crispy tofu" --min-rating 4 --format json
+paprika-pantry recipes search tostada --max-days-since-last-meal 60 --format json
 paprika-pantry recipes features "Mushroom Risotto"
 paprika-pantry recipes ingredients "Mushroom Risotto"
 paprika-pantry recipes pairings --token tomato --sort meals
@@ -204,6 +207,8 @@ paprika-pantry recipes pairings --token tomato --sort meals
 ```
 
 Pairings are evidence, not recommendations. They come from `index rebuild`, and the command will warn if the pairing evidence is older than the routine index.
+
+Meal-history fields are also evidence. Recipe list/search can filter by linked meal count, days since last meal, and median meal gap, but those facts do not mean a recipe is loved, disliked, forgotten, or a good dinner suggestion by themselves.
 
 ## Meals, Groceries, and Pantry
 

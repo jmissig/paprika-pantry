@@ -9,9 +9,8 @@ Related Obsidian notes:
 - `Almanacs and Guides`
 
 Related repo notes:
-- `docs/pattern-intelligence-proposal.md`
 - `docs/read-only-exploration.md`
-- `docs/recipe-meal-history-facts-phase-1-spec.md`
+- `docs/usage-facts-contract.md`
 
 ## Boundary
 
@@ -76,6 +75,16 @@ Example notes:
 - Recipe note: “Still liked; it just fell out of rotation.”
 - Ingredient note: “Alice dislikes raw cilantro, but cooked coriander is fine.”
 - Source note: “This cookbook is reliable for technique but usually too salty.”
+- Meal-window note: “This run was mostly guest dinners, not our normal weeknight pattern.”
+- Person/family note: “Julian likes this as lunch leftovers; Alice does not usually want it for dinner.”
+
+Good note targets should be close to the evidence Robut will retrieve later:
+
+- attach convenience/preference caveats to the recipe;
+- attach dislike, tolerance, or substitution context to the ingredient;
+- attach reliability or importer-quality caveats to the source/cookbook/site;
+- attach guest/kid/deadline context to the meal window;
+- attach durable Julian/Alice/family distinctions to profile or family memory, not to a random recipe row.
 
 Store the note somewhere human-readable first: Obsidian, profile memory, or a small sidecar only when retrieval needs it. Never write notes back into the real Paprika database automatically. Do not require humans to choose correction kinds, approval states, or future effects.
 
@@ -92,13 +101,13 @@ That is enough for Robut to find the note and reason from it.
 
 ## Actionable next slices
 
-1. **Mechanical recency/lapse affordances**
-   - Add sort/filter/report support around existing meal-history facts: `meal_count`, `last_meal_at`, `days_since_last_meal`, `median_meal_gap_days`.
+1. **Mechanical recency/lapse examples**
+   - Add README and skill examples for existing meal-history query fields: `meal_count`, `last_meal_at`, `days_since_last_meal`, `median_meal_gap_days`.
    - Avoid labels like `favorite`; expose facts Robut can interpret.
 
-2. **Attached-note examples**
-   - Add examples of plain-English notes attached to recipes, ingredients, sources, meal windows, and person/family contexts.
-   - Decide where Robut will reliably find those notes later: Obsidian/profile memory first, sidecar only if needed.
+2. **Attached-note retrieval**
+   - Decide where Robut will reliably find human notes later: Obsidian/profile memory first, sidecar only if needed.
+   - Do not build correction kinds, approval states, or future-effect machinery until plain-English notes prove insufficient.
 
 3. **Drill-down consistency**
    - Ensure recipe usage, pairings, source rollups, and future match traces expose stable drill-down commands/source trails.
