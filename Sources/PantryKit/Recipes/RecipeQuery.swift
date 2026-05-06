@@ -134,16 +134,97 @@ public struct RecipeDerivedConstraints: Codable, Equatable, Sendable {
     }
 }
 
+public struct RecipeUsageConstraints: Codable, Equatable, Sendable {
+    public let minMealCount: Int?
+    public let maxMealCount: Int?
+    public let minDaysSinceLastMeal: Int?
+    public let maxDaysSinceLastMeal: Int?
+    public let minMedianMealGapDays: Double?
+    public let maxMedianMealGapDays: Double?
+
+    public init(
+        minMealCount: Int? = nil,
+        maxMealCount: Int? = nil,
+        minDaysSinceLastMeal: Int? = nil,
+        maxDaysSinceLastMeal: Int? = nil,
+        minMedianMealGapDays: Double? = nil,
+        maxMedianMealGapDays: Double? = nil
+    ) {
+        self.minMealCount = minMealCount
+        self.maxMealCount = maxMealCount
+        self.minDaysSinceLastMeal = minDaysSinceLastMeal
+        self.maxDaysSinceLastMeal = maxDaysSinceLastMeal
+        self.minMedianMealGapDays = minMedianMealGapDays
+        self.maxMedianMealGapDays = maxMedianMealGapDays
+    }
+
+    public var isDefault: Bool {
+        minMealCount == nil &&
+            maxMealCount == nil &&
+            minDaysSinceLastMeal == nil &&
+            maxDaysSinceLastMeal == nil &&
+            minMedianMealGapDays == nil &&
+            maxMedianMealGapDays == nil
+    }
+
+    public func matches(usageStats: RecipeUsageStats?, referenceDate: Date = Date()) -> Bool {
+        if let minMealCount {
+            guard let mealCount = usageStats?.mealCount, mealCount >= minMealCount else {
+                return false
+            }
+        }
+
+        if let maxMealCount {
+            let mealCount = usageStats?.mealCount ?? 0
+            guard mealCount <= maxMealCount else {
+                return false
+            }
+        }
+
+        if let minDaysSinceLastMeal {
+            guard let daysSinceLastMeal = usageStats?.daysSinceLastMeal(referenceDate: referenceDate),
+                  daysSinceLastMeal >= minDaysSinceLastMeal else {
+                return false
+            }
+        }
+
+        if let maxDaysSinceLastMeal {
+            guard let daysSinceLastMeal = usageStats?.daysSinceLastMeal(referenceDate: referenceDate),
+                  daysSinceLastMeal <= maxDaysSinceLastMeal else {
+                return false
+            }
+        }
+
+        if let minMedianMealGapDays {
+            guard let medianMealGapDays = usageStats?.medianMealGapDays,
+                  medianMealGapDays >= minMedianMealGapDays else {
+                return false
+            }
+        }
+
+        if let maxMedianMealGapDays {
+            guard let medianMealGapDays = usageStats?.medianMealGapDays,
+                  medianMealGapDays <= maxMedianMealGapDays else {
+                return false
+            }
+        }
+
+        return true
+    }
+}
+
 public enum RecipeListSort: String, Codable, CaseIterable, ExpressibleByArgument, Sendable {
     case name
     case rating
     case timesCooked = "times-cooked"
+    case recent
+    case lapsed
     case totalTime = "total-time"
     case fewestIngredients = "fewest-ingredients"
 
     public var requiresDerivedFeatures: Bool {
         switch self {
-        case .name, .rating, .timesCooked:
+        case .name, .rating, .timesCooked, .recent, .lapsed:
             return false
         case .totalTime, .fewestIngredients:
             return true
@@ -152,7 +233,7 @@ public enum RecipeListSort: String, Codable, CaseIterable, ExpressibleByArgument
 
     public var requiresUsageStats: Bool {
         switch self {
-        case .timesCooked:
+        case .timesCooked, .recent, .lapsed:
             return true
         case .name, .rating, .totalTime, .fewestIngredients:
             return false
@@ -165,12 +246,14 @@ public enum RecipeSearchSort: String, Codable, CaseIterable, ExpressibleByArgume
     case name
     case rating
     case timesCooked = "times-cooked"
+    case recent
+    case lapsed
     case totalTime = "total-time"
     case fewestIngredients = "fewest-ingredients"
 
     public var requiresDerivedFeatures: Bool {
         switch self {
-        case .relevance, .name, .rating, .timesCooked:
+        case .relevance, .name, .rating, .timesCooked, .recent, .lapsed:
             return false
         case .totalTime, .fewestIngredients:
             return true
@@ -179,7 +262,7 @@ public enum RecipeSearchSort: String, Codable, CaseIterable, ExpressibleByArgume
 
     public var requiresUsageStats: Bool {
         switch self {
-        case .timesCooked:
+        case .timesCooked, .recent, .lapsed:
             return true
         case .relevance, .name, .rating, .totalTime, .fewestIngredients:
             return false

@@ -16,6 +16,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
     public let canonicalFilters: RecipeQueryFilters
     public let ingredientFilter: RecipeIngredientFilter
     public let derivedConstraints: RecipeDerivedConstraints
+    public let usageConstraints: RecipeUsageConstraints
     public let sort: RecipeListSort
     public let recipes: [RecipeSummary]
 
@@ -24,6 +25,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
         canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
         ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
+        usageConstraints: RecipeUsageConstraints = RecipeUsageConstraints(),
         sort: RecipeListSort = .name,
         readPath: String = "direct-source",
         derivedReadPath: String? = nil,
@@ -51,6 +53,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
         self.canonicalFilters = canonicalFilters
         self.ingredientFilter = ingredientFilter
         self.derivedConstraints = derivedConstraints
+        self.usageConstraints = usageConstraints
         self.sort = sort
         self.recipes = recipes
     }
@@ -84,6 +87,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
         lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
         lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
+        lines.append(contentsOf: renderedRecipeUsageConstraints(usageConstraints))
         lines.append("sort: \(sort.rawValue)")
 
         if recipes.isEmpty {
@@ -541,6 +545,7 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
     public let canonicalFilters: RecipeQueryFilters
     public let ingredientFilter: RecipeIngredientFilter
     public let derivedConstraints: RecipeDerivedConstraints
+    public let usageConstraints: RecipeUsageConstraints
     public let sort: RecipeSearchSort
     public let results: [IndexedRecipeSearchResult]
     public let paths: PantryPathReport
@@ -550,6 +555,7 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
         canonicalFilters: RecipeQueryFilters = RecipeQueryFilters(),
         ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
+        usageConstraints: RecipeUsageConstraints = RecipeUsageConstraints(),
         sort: RecipeSearchSort = .relevance,
         results: [IndexedRecipeSearchResult],
         paths: PantryPaths,
@@ -584,6 +590,7 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
         self.canonicalFilters = canonicalFilters
         self.ingredientFilter = ingredientFilter
         self.derivedConstraints = derivedConstraints
+        self.usageConstraints = usageConstraints
         self.sort = sort
         self.results = results
         self.paths = paths.report
@@ -627,6 +634,7 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
         lines.append(contentsOf: renderedCanonicalRecipeFilters(canonicalFilters))
         lines.append(contentsOf: renderedRecipeIngredientFilter(ingredientFilter))
         lines.append(contentsOf: renderedRecipeDerivedConstraints(derivedConstraints))
+        lines.append(contentsOf: renderedRecipeUsageConstraints(usageConstraints))
         lines.append("sort: \(sort.rawValue)")
 
         if results.isEmpty {
@@ -1141,6 +1149,36 @@ func renderedRecipeDerivedConstraints(_ constraints: RecipeDerivedConstraints) -
 
     if let maxIngredientLineCount = constraints.maxIngredientLineCount {
         lines.append("derived.max_ingredient_line_count: \(maxIngredientLineCount)")
+    }
+
+    return lines
+}
+
+func renderedRecipeUsageConstraints(_ constraints: RecipeUsageConstraints) -> [String] {
+    var lines = [String]()
+
+    if let minMealCount = constraints.minMealCount {
+        lines.append("usage.min_meal_count: \(minMealCount)")
+    }
+
+    if let maxMealCount = constraints.maxMealCount {
+        lines.append("usage.max_meal_count: \(maxMealCount)")
+    }
+
+    if let minDaysSinceLastMeal = constraints.minDaysSinceLastMeal {
+        lines.append("usage.min_days_since_last_meal: \(minDaysSinceLastMeal)")
+    }
+
+    if let maxDaysSinceLastMeal = constraints.maxDaysSinceLastMeal {
+        lines.append("usage.max_days_since_last_meal: \(maxDaysSinceLastMeal)")
+    }
+
+    if let minMedianMealGapDays = constraints.minMedianMealGapDays {
+        lines.append("usage.min_median_meal_gap_days: \(renderedDouble(minMedianMealGapDays))")
+    }
+
+    if let maxMedianMealGapDays = constraints.maxMedianMealGapDays {
+        lines.append("usage.max_median_meal_gap_days: \(renderedDouble(maxMedianMealGapDays))")
     }
 
     return lines

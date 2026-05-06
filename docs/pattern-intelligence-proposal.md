@@ -2,12 +2,12 @@
 
 ## Thesis
 
-`paprika-pantry` should be the household cooking evidence layer for Robut: read Paprika’s canonical local database safely, maintain a sidecar for search and derived cooking-pattern facts, and expose stable source/derived outputs that help Robut compose meal-planning, use-up, pairing, taste-reflection, and recommendation answers without becoming an opaque cooking AI.
+`paprika-pantry` should be the household cooking evidence layer for Robut: read Paprika’s canonical local database safely, maintain a sidecar for search and derived cooking-pattern facts, and expose stable source/derived outputs that Robut can use while composing meal-planning, use-up, pairing, and taste-reflection answers above the CLI. The tool should not become an opaque cooking AI or dinner recommender.
 
 The next architecture should explicitly support two sibling surfaces:
 
 1. **Explore/inspect surface** — SQLite/Datasette-style browsing over Paprika-derived sidecar/index data and safe read-only projections so humans and agents can inspect recipes, meals, ingredients, cookbooks, usage stats, pairings, freshness, and source coverage.
-2. **Stable verb / evidence-substrate surface** — stable `paprika-pantry` commands that return bounded JSON/source outputs for LLM grounding: safe defaults, explicit semantics, provenance, drill-down descriptors, correction hooks, and no improvised arbitrary SQL in normal conversation. Robut composes any decision-specific evidence packet above this layer.
+2. **Stable verb / evidence-substrate surface** — stable `paprika-pantry` commands that return bounded JSON/source outputs for LLM grounding: safe defaults, explicit semantics, provenance, drill-down descriptors, explicit correction-policy inputs when approved, and no improvised arbitrary SQL in normal conversation. Robut composes any decision-specific evidence packet above this layer.
 
 This adapts broader Dogsheep/Datasette and personal-informatics practice to the local cooking domain: keep the data owner in control, preserve evidence, make derived facts inspectable, and let Robut handle conversational judgment.
 
@@ -60,23 +60,23 @@ Paprika.sqlite read-only
 
 ## Gaps relative to the 17-verb pattern map
 
-`paprika-pantry` already covers collection, normalization, summarization, and evidence-backed associations. The important gaps are in scoping, recommendation packets, correction, and lifecycle:
+`paprika-pantry` already covers collection, normalization, summarization, and evidence-backed associations. The important gaps are in explicit scoping fields, correction examples, freshness/provenance consistency, and lifecycle facts:
 
-- **Prepare / scope:** dinner suggestion, use-up, “what goes with this?”, “what have we liked?”, and “what should Alice/Julian/family eat?” need different assumptions and evidence windows.
+- **Prepare / scope:** dinner, use-up, “what goes with this?”, “what have we cooked?”, and person/family contexts need explicit assumptions and evidence windows chosen above the CLI.
 - **Collect / preserve / normalize:** strong through read-only Paprika adapter and sidecar. Continue avoiding blind canonical duplication.
 - **Integrate / join cautiously:** pantry/grocery/meal/recipe/cookbook joins are in-domain and useful; joins with Swarm, clime, calendar, or household behavior should be explicit and rare.
 - **Summarize / roll up:** strong via cookbook rollups, usage stats, meal-history facts, and ingredient pairings. The next need is representation-ready output with support counts and denominators.
 - **Compare / baseline:** partially present. Useful future baselines include recent vs historical cooking, weekday vs weekend, family vs guest meals, seasonality, and “made often but not recently.”
-- **Detect change / lapse / resumption:** meal-history gaps will support lapsed favorites and rediscovery; avoid phrasing gaps as failure.
-- **Segment / context:** critical. Distinguish weeknight practical, dinner-party, kid/family compromise, Julian preference, Alice preference, household favorite, pantry cleanout, and convenience artifacts.
-- **Classify / label provisionally:** labels like `weeknight_anchor`, `lapsed_household_favorite`, `vegetable_forward`, `convenience_repeat`, or `good_side_candidate` should carry evidence, scope, and correction hooks.
+- **Detect change / lapse / resumption:** meal-history gaps should expose recency and absence facts; avoid phrasing gaps as failure or preference.
+- **Segment / context:** critical, but mostly above the CLI. The tool should expose facts that help Robut distinguish weeknight practicality, dinner-party context, kid/family compromise, person-specific preference, pantry cleanout, and convenience artifacts.
+- **Avoid tool-owned preference labels:** labels like `weeknight_anchor`, `lapsed_household_favorite`, `vegetable_forward`, `convenience_repeat`, or `good_side_candidate` belong in Robut/Guide/profile layers unless backed by explicit human-approved correction/profile state. The tool should expose the underlying facts, windows, counts, and drill-downs.
 - **Co-occurrence / pairings:** a local strength. Pairings should remain descriptive evidence, not automatic suggestions.
-- **Surface candidates / exclusions:** missing as first-class query behavior. Robut needs candidate sets with reasons and exclusions, not one hidden winner.
+- **Explain deterministic query behavior:** if needed, expose why mechanical filters matched or failed. Do not create a tool-owned candidate/recommendation surface.
 - **Explain / cite / drill down:** outputs should consistently identify contributing recipes, meals, tokens, cookbook/source fields, and sidecar freshness.
 - **Simulate / adjust assumptions:** useful for “quick,” “vegetarian,” “use avocados,” “Alice is eating,” “avoid pasta,” or “something not repeated recently.” This belongs first in explicit filters/query fields and later in Guide lenses or an explorable surface assembled above the CLI.
 - **Critique / correct:** the largest gap. Corrections need to distinguish convenience vs preference, Julian/Alice/family context, source quality, bad tags, disliked recipes, stale ratings, and “made for guests, not us.”
-- **Decay / retire:** pattern labels need generated-at dates and active windows. A 2019 favorite may be an archive clue, not a current dinner suggestion.
-- **Export / preserve:** sidecar SQLite and docs are good; a Datasette metadata layer and packet schema would make the evidence easier to inspect and move.
+- **Decay / retire:** derived observations need generated-at dates and active windows. A 2019 high-use recipe may be an archive clue, not a current preference.
+- **Export / preserve:** sidecar SQLite and docs are good; Datasette metadata and stable primitive schemas would make the evidence easier to inspect and move.
 
 ## Two-surface design
 
@@ -94,11 +94,11 @@ Recommended scope:
   - ingredient token usage and pairings;
   - source/cookbook reliability rollups;
   - stale index/pairing freshness;
-  - candidate evidence drill-downs.
+  - source/derived evidence drill-downs.
 
-The exploration surface is ideal for exploratory questions like “which cookbooks do we actually cook from?” or “what ingredient pairings are supported by real meals?” It can also debug whether a future recommendation packet is missing a source or over-weighting stale data.
+The exploration surface is ideal for exploratory questions like “which cookbooks do we actually cook from?” or “what ingredient pairings are supported by real meals?” It can also debug whether a Robut-composed Guide is missing a source or over-weighting stale data.
 
-It should not become the default path for Robut’s dinner advice. Normal chat should use stable verbs and packet fields with known semantics.
+It should not become the default path for Robut’s dinner advice. Normal chat should use stable verbs and source/derived fields with known semantics.
 
 ### 2. Stable verb / evidence-substrate surface
 
@@ -117,68 +117,55 @@ paprika-pantry source cookbooks --format json
 paprika-pantry index stats --format json
 ```
 
-A future packet should compose these into a decision-specific evidence bundle rather than a final verdict. Example dinner/use-up packet:
+Above the CLI, Robut can compose these outputs into a decision-specific evidence bundle rather than a final verdict. Keep the repo-side contract focused on primitives Robut can assemble, for example:
 
 ```json
 {
-  "kind": "paprika_pantry.cooking_context.v0",
-  "intent": "dinner_suggestions",
-  "assumptions": {
-    "context": "family_weeknight",
-    "time_budget_minutes": 45,
-    "use_up": ["avocado"],
-    "avoid_recent_repeats": true
+  "kind": "paprika_pantry.recipe_usage_facts.v0",
+  "filters": {
+    "ingredient_contains": ["avocado"],
+    "max_total_time_minutes": 45
   },
   "freshness": {
     "paprika_last_sync_observed_at": "2026-04-26T09:40:00-07:00",
-    "sidecar_updated_at": "2026-04-26T09:45:00-07:00",
-    "pairings_updated_at": "2026-04-20T18:00:00-07:00"
+    "sidecar_updated_at": "2026-04-26T09:45:00-07:00"
   },
-  "candidates": [
+  "rows": [
     {
       "recipe_uid": "...",
       "name": "Black Bean Tostadas",
-      "roles": ["use_up_avocado", "weeknight_candidate"],
-      "evidence": [
-        {"kind": "ingredient_match", "value": "uses avocado"},
-        {"kind": "meal_history", "value": "cooked 5 times, last 62 days ago"},
-        {"kind": "source_quality", "value": "source/cookbook has strong household rating"}
-      ],
+      "matched_ingredients": ["avocado"],
+      "meal_count": 5,
+      "last_meal_at": "2026-02-23T18:30:00-08:00",
+      "days_since_last_meal": 62,
+      "rating": 4,
+      "favorite": false,
       "uncertainty": ["pantry quantity not verified unless pantry source is current"],
       "drilldowns": [
         "paprika-pantry recipes show ... --format json",
         "paprika-pantry recipes ingredients ... --format json"
-      ],
-      "corrections_supported": [
-        "convenience_not_preference",
-        "julian_only",
-        "alice_only",
-        "family_favorite",
-        "not_for_weeknight",
-        "bad_source_quality"
       ]
     }
   ],
-  "exclusions": [
-    {"name": "Long Braise", "reason": "exceeds 45 minute budget"},
-    {"name": "Recent Pasta", "reason": "recent repeat"}
+  "filter_diagnostics": [
+    {"recipe_uid": "...", "filter": "max_total_time_minutes", "result": "excluded", "observed_minutes": 180}
   ]
 }
 ```
 
-These outputs support Robut saying “I’d do X if you want quick and use-up; Y if you want a lapsed favorite” without pretending the CLI knows what the family wants tonight.
+These source/derived outputs support Robut’s above-CLI reasoning without pretending the CLI knows what the family wants tonight.
 
 ## Recommended next slices
 
 Small, practical slices that build on current work:
 
-1. **Finish/use meal-history facts** — the `first_cooked_at`/meal-history TODO is foundational for lapsed favorites, recency, and rediscovery.
+1. **Finish/use meal-history facts** — the `first_cooked_at`/meal-history layer is foundational for recency, gap, and rediscovery evidence.
 2. **Document Datasette/read-only exploration workflow** — start with the sidecar/index DB; include sample questions and canned queries.
-3. **Define packet contracts in docs before code** — `dinner_suggestions`, `use_up`, `pairings_context`, and `taste_profile_update` packets with required freshness/provenance/drill-down fields.
-4. **Add correction model sketch** — define correction scopes before implementation: recipe, ingredient, source, category/tag, person, family, context, time window.
-5. **Tighten pattern-report output** — align with the existing TODO: confidence limits and contributing evidence should be obvious.
-6. **Candidate/exclusion language** — add outputs that can explain “why this” and “why not,” even before implementing ranking-heavy suggestions.
-7. **Source-quality descriptors** — keep cookbook/source rollups descriptive, but make it easy for Robut to cite them as evidence when recommending.
+3. **Define evidence primitive contracts in docs before code** — recipe usage, source/cookbook rollups, pairings, ingredients, pantry/grocery state, freshness, and drill-down fields.
+4. **Add correction model examples soon** — define correction scopes before sidecar implementation: recipe, ingredient, source, category/tag, person, family, context, time window.
+5. **Tighten derived-output reporting** — confidence limits, denominators, freshness, and contributing evidence should be obvious.
+6. **Deterministic filter diagnostics only if needed** — explain mechanical “matched/filtered out” behavior without creating a dinner-suggestion command.
+7. **Source-quality facts** — keep cookbook/source rollups descriptive, so Robut can cite them as evidence above the CLI.
 
 ## Correction model
 
@@ -203,17 +190,17 @@ Corrections should never write to the real Paprika database unless a human expli
 - Avoid moralizing food. Do not infer health, discipline, virtue, or failure from meal patterns unless the human asks for that frame.
 - Do not over-join with non-food household data by default. Weather may matter for grilling/outings; calendar may matter for time budget; cameras almost never matter.
 - Keep pairings and rankings inspectable. Embeddings may help search later, but recommendations need symbolic evidence.
-- Preserve source freshness. A stale Paprika sync or sidecar index should be visible in every packet that could influence a recommendation.
+- Preserve source freshness. A stale Paprika sync or sidecar index should be visible in every output Robut might use for a Guide or recommendation above the CLI.
 
 ## Success test
 
-Good `paprika-pantry` pattern outputs should let Robut answer cooking questions with:
+Good `paprika-pantry` tool outputs should let Robut build cooking Guides above the CLI using:
 
-- a small candidate set, not one hidden winner;
+- stable source/derived facts, not one hidden winner;
 - evidence from recipes, meals, ingredients, pantry/grocery state, source rollups, and pairings as appropriate;
 - freshness and sidecar/source status;
-- exclusions and uncertainty;
+- explicit uncertainty and mechanical filter limits;
 - drill-down commands back to contributing recipes/meals/facts;
-- correction hooks for convenience vs preference and person/family context.
+- human-approved correction/profile state only when it is explicitly scoped.
 
 If humans can browse/inspect the sidecar through a Datasette-style surface while Robut normally consumes stable evidence outputs, `paprika-pantry` will sit cleanly in the broader local pattern-intelligence stack.

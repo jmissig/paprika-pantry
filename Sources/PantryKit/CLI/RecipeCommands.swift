@@ -57,6 +57,24 @@ public struct RecipesListCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at most this many lines.")
     public var maxIngredientLines: Int?
 
+    @Option(name: .long, help: "Only include recipes with at least this many linked meal-history entries.")
+    public var minMealCount: Int?
+
+    @Option(name: .long, help: "Only include recipes with at most this many linked meal-history entries; recipes with no usage row count as 0.")
+    public var maxMealCount: Int?
+
+    @Option(name: .long, help: "Only include recipes last seen at least this many calendar days ago.")
+    public var minDaysSinceLastMeal: Int?
+
+    @Option(name: .long, help: "Only include recipes last seen at most this many calendar days ago.")
+    public var maxDaysSinceLastMeal: Int?
+
+    @Option(name: .long, help: "Only include recipes whose median observed meal gap is at least this many days.")
+    public var minMedianMealGapDays: Double?
+
+    @Option(name: .long, help: "Only include recipes whose median observed meal gap is at most this many days.")
+    public var maxMedianMealGapDays: Double?
+
     @Option(name: .long, help: "Sort order for returned recipes: \(RecipeListSort.allCases.map(\.rawValue).joined(separator: ", ")).")
     public var sort: RecipeListSort = .name
 
@@ -70,6 +88,14 @@ public struct RecipesListCommand: PantryLeafCommand {
             maxTotalTimeMinutes: maxTotalTimeMinutes,
             minIngredientLines: minIngredientLines,
             maxIngredientLines: maxIngredientLines
+        )
+        try validateRecipeUsageQueryOptions(
+            minMealCount: minMealCount,
+            maxMealCount: maxMealCount,
+            minDaysSinceLastMeal: minDaysSinceLastMeal,
+            maxDaysSinceLastMeal: maxDaysSinceLastMeal,
+            minMedianMealGapDays: minMedianMealGapDays,
+            maxMedianMealGapDays: maxMedianMealGapDays
         )
     }
 
@@ -94,7 +120,16 @@ public struct RecipesListCommand: PantryLeafCommand {
             minIngredientLineCount: minIngredientLines,
             maxIngredientLineCount: maxIngredientLines
         )
+        let usageConstraints = RecipeUsageConstraints(
+            minMealCount: minMealCount,
+            maxMealCount: maxMealCount,
+            minDaysSinceLastMeal: minDaysSinceLastMeal,
+            maxDaysSinceLastMeal: maxDaysSinceLastMeal,
+            minMedianMealGapDays: minMedianMealGapDays,
+            maxMedianMealGapDays: maxMedianMealGapDays
+        )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
+        let requiresUsageStats = sort.requiresUsageStats || !usageConstraints.isDefault
         let store = try context.makeSidecarStore()
         let indexStats = try store.indexStats()
         let now = Date()
@@ -115,8 +150,8 @@ public struct RecipesListCommand: PantryLeafCommand {
             derivedReadPath = nil
         }
 
-        if sort.requiresUsageStats && !indexStats.recipeUsageStatsReady {
-            throw ValidationError("Recipe usage index is required for usage sort. Run `paprika-pantry index rebuild` first.")
+        if requiresUsageStats && !indexStats.recipeUsageStatsReady {
+            throw ValidationError("Recipe usage index is required for usage constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
         if indexStats.recipeUsageStatsReady {
@@ -139,9 +174,11 @@ public struct RecipesListCommand: PantryLeafCommand {
             try await recipeReadService.listRecipes(
                 filters: canonicalFilters,
                 derivedConstraints: derivedConstraints,
+                usageConstraints: usageConstraints,
                 sort: sort,
                 derivedFeaturesByUID: derivedFeaturesByUID,
-                usageStatsByUID: usageStatsByUID
+                usageStatsByUID: usageStatsByUID,
+                referenceDate: now
             )
         }
         let filteredRecipes = matchingRecipeUIDs.map { requiredUIDs in
@@ -153,10 +190,11 @@ public struct RecipesListCommand: PantryLeafCommand {
                 canonicalFilters: canonicalFilters,
                 ingredientFilter: ingredientFilter,
                 derivedConstraints: derivedConstraints,
+                usageConstraints: usageConstraints,
                 sort: sort,
                 derivedReadPath: derivedReadPath,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
-                usageReadPath: indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
+                usageReadPath: requiresUsageStats || indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
                 ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
@@ -246,6 +284,24 @@ public struct RecipesSearchCommand: PantryLeafCommand {
     @Option(name: .long, help: "Only include recipes whose derived non-empty ingredient line count is at most this many lines.")
     public var maxIngredientLines: Int?
 
+    @Option(name: .long, help: "Only include recipes with at least this many linked meal-history entries.")
+    public var minMealCount: Int?
+
+    @Option(name: .long, help: "Only include recipes with at most this many linked meal-history entries; recipes with no usage row count as 0.")
+    public var maxMealCount: Int?
+
+    @Option(name: .long, help: "Only include recipes last seen at least this many calendar days ago.")
+    public var minDaysSinceLastMeal: Int?
+
+    @Option(name: .long, help: "Only include recipes last seen at most this many calendar days ago.")
+    public var maxDaysSinceLastMeal: Int?
+
+    @Option(name: .long, help: "Only include recipes whose median observed meal gap is at least this many days.")
+    public var minMedianMealGapDays: Double?
+
+    @Option(name: .long, help: "Only include recipes whose median observed meal gap is at most this many days.")
+    public var maxMedianMealGapDays: Double?
+
     @Option(name: .long, help: "Sort order for returned recipes: \(RecipeSearchSort.allCases.map(\.rawValue).joined(separator: ", ")).")
     public var sort: RecipeSearchSort = .relevance
 
@@ -262,6 +318,14 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             maxTotalTimeMinutes: maxTotalTimeMinutes,
             minIngredientLines: minIngredientLines,
             maxIngredientLines: maxIngredientLines
+        )
+        try validateRecipeUsageQueryOptions(
+            minMealCount: minMealCount,
+            maxMealCount: maxMealCount,
+            minDaysSinceLastMeal: minDaysSinceLastMeal,
+            maxDaysSinceLastMeal: maxDaysSinceLastMeal,
+            minMedianMealGapDays: minMedianMealGapDays,
+            maxMedianMealGapDays: maxMedianMealGapDays
         )
     }
 
@@ -298,15 +362,24 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             minIngredientLineCount: minIngredientLines,
             maxIngredientLineCount: maxIngredientLines
         )
+        let usageConstraints = RecipeUsageConstraints(
+            minMealCount: minMealCount,
+            maxMealCount: maxMealCount,
+            minDaysSinceLastMeal: minDaysSinceLastMeal,
+            maxDaysSinceLastMeal: maxDaysSinceLastMeal,
+            minMedianMealGapDays: minMedianMealGapDays,
+            maxMedianMealGapDays: maxMedianMealGapDays
+        )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
+        let requiresUsageStats = sort.requiresUsageStats || !usageConstraints.isDefault
         let indexStats = try store.indexStats()
 
         if requiresDerivedFeatures && !indexStats.recipeFeaturesReady {
             throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
-        if sort.requiresUsageStats && !indexStats.recipeUsageStatsReady {
-            throw ValidationError("Recipe usage index is required for usage sort. Run `paprika-pantry index rebuild` first.")
+        if requiresUsageStats && !indexStats.recipeUsageStatsReady {
+            throw ValidationError("Recipe usage index is required for usage constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
         if !ingredientFilter.isDefault && !indexStats.recipeIngredientIndexReady {
@@ -318,8 +391,10 @@ public struct RecipesSearchCommand: PantryLeafCommand {
             filters: canonicalFilters,
             ingredientFilter: ingredientFilter,
             derivedConstraints: derivedConstraints,
+            usageConstraints: usageConstraints,
             sort: sort,
-            limit: limit
+            limit: limit,
+            referenceDate: Date()
         )
         let now = Date()
         try context.write(
@@ -328,12 +403,13 @@ public struct RecipesSearchCommand: PantryLeafCommand {
                 canonicalFilters: canonicalFilters,
                 ingredientFilter: ingredientFilter,
                 derivedConstraints: derivedConstraints,
+                usageConstraints: usageConstraints,
                 sort: sort,
                 results: results,
                 paths: context.paths,
                 derivedReadPath: requiresDerivedFeatures ? "sidecar-derived" : nil,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
-                usageReadPath: indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
+                usageReadPath: requiresUsageStats || indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
                 searchLastSuccessAt: indexStats.lastSuccessfulRecipeSearchRun.map { $0.finishedAt ?? $0.startedAt },
                 searchFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeSearchRun, now: now),
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
@@ -616,5 +692,50 @@ private func validateRecipeDerivedQueryOptions(
 
     if let minIngredientLines, let maxIngredientLines, minIngredientLines > maxIngredientLines {
         throw ValidationError("--min-ingredient-lines must be less than or equal to --max-ingredient-lines.")
+    }
+}
+
+private func validateRecipeUsageQueryOptions(
+    minMealCount: Int?,
+    maxMealCount: Int?,
+    minDaysSinceLastMeal: Int?,
+    maxDaysSinceLastMeal: Int?,
+    minMedianMealGapDays: Double?,
+    maxMedianMealGapDays: Double?
+) throws {
+    if let minMealCount, minMealCount < 0 {
+        throw ValidationError("--min-meal-count must be zero or greater.")
+    }
+
+    if let maxMealCount, maxMealCount < 0 {
+        throw ValidationError("--max-meal-count must be zero or greater.")
+    }
+
+    if let minMealCount, let maxMealCount, minMealCount > maxMealCount {
+        throw ValidationError("--min-meal-count must be less than or equal to --max-meal-count.")
+    }
+
+    if let minDaysSinceLastMeal, minDaysSinceLastMeal < 0 {
+        throw ValidationError("--min-days-since-last-meal must be zero or greater.")
+    }
+
+    if let maxDaysSinceLastMeal, maxDaysSinceLastMeal < 0 {
+        throw ValidationError("--max-days-since-last-meal must be zero or greater.")
+    }
+
+    if let minDaysSinceLastMeal, let maxDaysSinceLastMeal, minDaysSinceLastMeal > maxDaysSinceLastMeal {
+        throw ValidationError("--min-days-since-last-meal must be less than or equal to --max-days-since-last-meal.")
+    }
+
+    if let minMedianMealGapDays, minMedianMealGapDays < 0 {
+        throw ValidationError("--min-median-meal-gap-days must be zero or greater.")
+    }
+
+    if let maxMedianMealGapDays, maxMedianMealGapDays < 0 {
+        throw ValidationError("--max-median-meal-gap-days must be zero or greater.")
+    }
+
+    if let minMedianMealGapDays, let maxMedianMealGapDays, minMedianMealGapDays > maxMedianMealGapDays {
+        throw ValidationError("--min-median-meal-gap-days must be less than or equal to --max-median-meal-gap-days.")
     }
 }

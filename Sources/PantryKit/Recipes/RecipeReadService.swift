@@ -116,9 +116,11 @@ public struct RecipeReadService: Sendable {
     public func listRecipes(
         filters: RecipeQueryFilters = RecipeQueryFilters(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
+        usageConstraints: RecipeUsageConstraints = RecipeUsageConstraints(),
         sort: RecipeListSort = .name,
         derivedFeaturesByUID: [String: RecipeDerivedFeatures] = [:],
-        usageStatsByUID: [String: RecipeUsageStats] = [:]
+        usageStatsByUID: [String: RecipeUsageStats] = [:],
+        referenceDate: Date = Date()
     ) async throws -> [RecipeSummary] {
         let categoryNamesByUID = try await loadCategoryNamesByUID()
         let stubs = try await source.listRecipeStubs()
@@ -156,6 +158,7 @@ public struct RecipeReadService: Sendable {
                 )
             }
             .filter { derivedConstraints.matches(features: $0.derivedFeatures) }
+            .filter { usageConstraints.matches(usageStats: $0.usageStats, referenceDate: referenceDate) }
             .sorted { Self.sortRecipes(lhs: $0, rhs: $1, by: sort) }
     }
 
@@ -238,6 +241,10 @@ public struct RecipeReadService: Sendable {
             return compareByRating(lhs: lhs, rhs: rhs)
         case .timesCooked:
             return compareByTimesCooked(lhs: lhs, rhs: rhs)
+        case .recent:
+            return compareByRecentMeal(lhs: lhs, rhs: rhs)
+        case .lapsed:
+            return compareByLapsedMeal(lhs: lhs, rhs: rhs)
         case .totalTime:
             return compareByTotalTime(lhs: lhs, rhs: rhs)
         case .fewestIngredients:
@@ -266,6 +273,38 @@ public struct RecipeReadService: Sendable {
     }
 
     private static func compareByTimesCooked(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let usageDecision = compareByUsage(lhs: lhs, rhs: rhs) {
+            return usageDecision
+        }
+
+        if let ratingDecision = compareByRatingThenFavorite(lhs: lhs, rhs: rhs) {
+            return ratingDecision
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByRecentMeal(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let recencyDecision = compareByLastMealDescending(lhs: lhs, rhs: rhs) {
+            return recencyDecision
+        }
+
+        if let usageDecision = compareByUsage(lhs: lhs, rhs: rhs) {
+            return usageDecision
+        }
+
+        if let ratingDecision = compareByRatingThenFavorite(lhs: lhs, rhs: rhs) {
+            return ratingDecision
+        }
+
+        return compareByName(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByLapsedMeal(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool {
+        if let lapseDecision = compareByLastMealAscending(lhs: lhs, rhs: rhs) {
+            return lapseDecision
+        }
+
         if let usageDecision = compareByUsage(lhs: lhs, rhs: rhs) {
             return usageDecision
         }
@@ -351,11 +390,30 @@ public struct RecipeReadService: Sendable {
             return mealCountDecision
         }
 
+        return compareByLastMealDescending(lhs: lhs, rhs: rhs)
+    }
+
+    private static func compareByLastMealDescending(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool? {
         let lhsLastMealAt = lhs.usageStats?.lastMealAt
         let rhsLastMealAt = rhs.usageStats?.lastMealAt
         switch (lhsLastMealAt, rhsLastMealAt) {
         case let (lhsValue?, rhsValue?) where lhsValue != rhsValue:
             return lhsValue > rhsValue
+        case (nil, .some):
+            return false
+        case (.some, nil):
+            return true
+        default:
+            return nil
+        }
+    }
+
+    private static func compareByLastMealAscending(lhs: RecipeSummary, rhs: RecipeSummary) -> Bool? {
+        let lhsLastMealAt = lhs.usageStats?.lastMealAt
+        let rhsLastMealAt = rhs.usageStats?.lastMealAt
+        switch (lhsLastMealAt, rhsLastMealAt) {
+        case let (lhsValue?, rhsValue?) where lhsValue != rhsValue:
+            return lhsValue < rhsValue
         case (nil, .some):
             return false
         case (.some, nil):

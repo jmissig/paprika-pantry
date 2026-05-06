@@ -618,8 +618,10 @@ public struct PantrySidecarStore: @unchecked Sendable {
         filters: RecipeQueryFilters = RecipeQueryFilters(),
         ingredientFilter: RecipeIngredientFilter = RecipeIngredientFilter(),
         derivedConstraints: RecipeDerivedConstraints = RecipeDerivedConstraints(),
+        usageConstraints: RecipeUsageConstraints = RecipeUsageConstraints(),
         sort: RecipeSearchSort = .relevance,
-        limit: Int = 20
+        limit: Int = 20,
+        referenceDate: Date = Date()
     ) throws -> [IndexedRecipeSearchResult] {
         let normalizedQuery = Self.normalizedSearchQuery(query)
         guard !normalizedQuery.isEmpty else {
@@ -629,7 +631,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
         return try dbQueue.read { db in
             var arguments: StatementArguments = [normalizedQuery]
             var conditions = ["recipe_search_fts MATCH ?"]
-            let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty
+            let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty || !usageConstraints.isDefault
 
             if !ingredientFilter.isDefault {
                 Self.appendIngredientFilterSQL(
@@ -751,6 +753,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     )
                 }
                 .filter { derivedConstraints.matches(features: $0.derivedFeatures) }
+                .filter { usageConstraints.matches(usageStats: $0.usageStats, referenceDate: referenceDate) }
                 .prefix(max(1, limit))
                 .map { $0 }
         }
@@ -2236,6 +2239,26 @@ public struct PantrySidecarStore: @unchecked Sendable {
             COALESCE(recipe_usage_stats.meal_count, 0) DESC,
             CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
             recipe_usage_stats.last_meal_at DESC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .recent:
+            return """
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at DESC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
+            COALESCE(recipe_search_documents.star_rating, 0) DESC,
+            recipe_search_documents.is_favorite DESC,
+            recipe_search_documents.name COLLATE NOCASE ASC,
+            recipe_search_documents.uid ASC
+            """
+        case .lapsed:
+            return """
+            CASE WHEN recipe_usage_stats.last_meal_at IS NULL THEN 1 ELSE 0 END ASC,
+            recipe_usage_stats.last_meal_at ASC,
+            COALESCE(recipe_usage_stats.meal_count, 0) DESC,
             COALESCE(recipe_search_documents.star_rating, 0) DESC,
             recipe_search_documents.is_favorite DESC,
             recipe_search_documents.name COLLATE NOCASE ASC,
