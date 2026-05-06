@@ -39,7 +39,7 @@ Good tool-layer work:
 - descriptive meal-history facts: first/last cooked, meal count, gaps, median gap, share, days since last meal at query time;
 - descriptive pairings with recipe-level provenance;
 - source/cookbook rollups with support counts;
-- drill-down handles to recipes, ingredients, features, meals, and pair evidence;
+- stable attachment targets: enough recipe/source/meal identity for an upper layer to fetch more detail by UID when it needs it;
 - deterministic filter diagnostics only when they explain mechanical query behavior, not when they shape a meal recommendation.
 
 ## What stays above `paprika-pantry`
@@ -103,6 +103,33 @@ updated_at: <timestamp>
 
 That shape belongs outside `paprika-pantry` unless Julian explicitly changes the boundary. `paprika-pantry` can expose recipe IDs, names, source trails, and existing Paprika notes so OpenClaw/Obsidian has good attachment targets.
 
+## Attachment Target Contract
+
+Summary and derived outputs should stay partial. They should say “there is this recipe/source/meal, here is why it appeared, and here is the stable identity you can use to fetch more.” They should not inline full recipe contents just because an agent might want follow-up context.
+
+Use `recipes show <uid>` as the full recipe detail boundary. That command can expose recipe notes because Paprika recipe notes are canonical source data.
+
+For JSON output, prefer structured targets over command strings. A recipe target should identify the Paprika recipe, not prescribe how a caller must fetch it:
+
+```json
+{
+  "kind": "paprika.recipe",
+  "uid": "...",
+  "name": "...",
+  "source_name": "...",
+  "has_notes": true
+}
+```
+
+`has_notes` is optional. Include it only when notes are already cheap in the current read path:
+
+- include for `recipes show`, `recipes features`, `recipes ingredients`;
+- include for `recipes list`, because list already loads recipe records;
+- include for `recipes search`, because the sidecar search document already stores notes;
+- omit for `recipes pairings`, `meals list`, and `source cookbooks` unless a future implementation needs the extra join/fetch for another reason.
+
+Pairing evidence and meal rows should expose recipe UID/name targets as follow-up handles, not full recipe information. Source rollups should expose source targets and aggregate evidence, not expanded recipe lists.
+
 ## Actionable next slices
 
 1. **Mechanical recency/lapse examples**
@@ -114,8 +141,9 @@ That shape belongs outside `paprika-pantry` unless Julian explicitly changes the
    - Ensure `paprika-pantry` exposes enough stable recipe/source identifiers for OpenClaw or Obsidian notes to point back to Paprika recipes.
    - Do not build correction kinds, approval states, pending-note queues, or future-effect machinery in this repo.
 
-3. **Drill-down consistency**
-   - Ensure recipe usage, pairings, source rollups, and future match traces expose stable drill-down commands/source trails.
+3. **Attachment target consistency**
+   - Ensure recipe usage, pairings, source rollups, and future match traces expose stable targets, not embedded follow-up commands.
+   - Keep summary/derived outputs partial; callers use UIDs to fetch full recipe details when needed.
 
 4. **Only then consider deterministic filter diagnostics**
    - If Robut repeatedly needs to explain mechanical filter failures, add narrow diagnostics to existing search/list outputs.
