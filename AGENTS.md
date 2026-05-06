@@ -32,9 +32,9 @@ This project is:
 It helps answer questions like:
 - what are our favorite risottos?
 - which cookbook or source has consistently worked well?
-- which main can I make in 30 minutes with the fewest ingredients?
+- which mains match a 30-minute/fewest-ingredients query?
 - what side uses up avocados and goes with risotto?
-- what substitutions or pairings have evidence in our cooking history?
+- what substitution or pairing evidence exists in our cooking history?
 
 Source of truth:
 - Canonical data: the real local Paprika 3 SQLite database, opened read-only
@@ -236,6 +236,21 @@ For config and docs:
 - install docs should prefer `PREFIX` style examples over raw `BINDIR=...`
   - canonical alternate install example: `make install PREFIX="$HOME/.local"`
 
+### Research and redesign posture
+
+Before reshaping command families, query semantics, source/index boundaries, or derived cooking-pattern outputs, start from the cooking question and the evidence needed to answer it.
+
+Sibling tools such as `clime`, `protect-cadence`, and `swarm-cadence` are useful consistency checks and taste signals, but they should not define the search space. First ask what a small Paprika evidence tool should expose if designed from the user workflow, Paprika source constraints, and current ecosystem; then bring local conventions back in.
+
+Default sequence:
+- frame the question, audience, source constraints, freshness/provenance needs, and non-goals
+- scan current CLI/search/indexing patterns or prior art when the change is design-heavy
+- map options before committing to one command, schema, index, or report shape
+- adapt the choice back to `paprika-pantry`’s in-use posture and read-only Paprika boundary
+- record durable decisions in `AGENTS.md` or focused docs when future agents need the guardrail
+
+Improvements to local tools can be output, but only vibes should be input. Keep survey, decision, and implementation plan distinct when the work is research-shaped.
+
 ## Data and persistence
 
 ### Read-only Paprika source
@@ -317,11 +332,11 @@ Support should continue to emphasize:
 
 Prefer canonical filters like rating, favorite status, category membership, ingredient membership, and time bounds over embedding opaque reasoning into the CLI.
 
-Default ranking should prefer meaningful evidence over alphabetical ordering where possible. When multiple strong candidates exist, usage is usually a better tie-breaker than name.
+Default sorting should prefer inspectable evidence over alphabetical ordering where possible. When multiple rows match equally, usage facts can be a useful tie-breaker, but the CLI should not imply final recommendation meaning.
 
 There is a strong product desire to deep-link directly into individual Paprika recipes, but investigation so far did not find a reliable way to do that. Treat direct recipe deep links as desirable but currently unsupported unless new evidence appears.
 
-When choosing between a smart CLI and a useful CLI, prefer useful. The model decides what the human meant; the CLI returns trustworthy evidence-bounded candidates and filters.
+When choosing between a smart CLI and a useful CLI, prefer useful. The model decides what the human meant; the CLI returns trustworthy evidence-bounded rows, filters, and derived facts.
 
 ## Layering rules
 
