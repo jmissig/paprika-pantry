@@ -116,6 +116,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("ingredient.include_term_tokens_all: tomatoes=tomato; basil leaves=basil, leaves"))
         XCTAssertTrue(report.humanDescription.contains("derived.max_total_time_minutes: 30"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
+        XCTAssertTrue(report.humanDescription.contains("target=paprika.recipe:AAA"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner"))
         XCTAssertTrue(report.humanDescription.contains("source=Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("rating=4"))
@@ -177,6 +178,7 @@ final class QueryReportsTests: XCTestCase {
         )
 
         XCTAssertTrue(report.humanDescription.contains("read_path: direct-source"))
+        XCTAssertTrue(report.humanDescription.contains("target: paprika.recipe:AAA"))
         XCTAssertTrue(report.humanDescription.contains("categories: Dinner, Weeknight"))
         XCTAssertTrue(report.humanDescription.contains("source_name: Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("star_rating: 5"))
@@ -348,6 +350,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("derived.max_ingredient_line_count: 6"))
         XCTAssertTrue(report.humanDescription.contains("sort: fewest-ingredients"))
         XCTAssertTrue(report.humanDescription.contains("AAA  Weeknight Soup"))
+        XCTAssertTrue(report.humanDescription.contains("target=paprika.recipe:AAA"))
         XCTAssertTrue(report.humanDescription.contains("categories=Dinner, Soup"))
         XCTAssertTrue(report.humanDescription.contains("favorite=yes"))
         XCTAssertTrue(report.humanDescription.contains("derived_ingredient_line_count=5"))
@@ -554,12 +557,14 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("with_token: basil"))
         XCTAssertTrue(report.humanDescription.contains("sort: meals"))
         XCTAssertTrue(report.humanDescription.contains("basil + tomato | recipes=2 | cooked_recipes=2 | meals=3 | favorites=1 | rated=2 | avg_rating=4.50 | first_meal=2026-04-01 18:00:00 | last_meal=2026-04-07 18:00:00"))
-        XCTAssertTrue(report.humanDescription.contains("evidence: AAA  Tomato Basil Pasta | basil_lines=3 | tomato_lines=1,2 | source=Test Kitchen | rating=5 | favorite=yes | meals=2 | last_meal=2026-04-07 18:00:00"))
+        XCTAssertTrue(report.humanDescription.contains("evidence: AAA  Tomato Basil Pasta | recipe_target=paprika.recipe:AAA | basil_lines=3 | tomato_lines=1,2 | source=Test Kitchen | rating=5 | favorite=yes | meals=2 | last_meal=2026-04-07 18:00:00"))
 
         let rendered = try JSONOutput.render(report)
         XCTAssertTrue(rendered.contains("\"basis\" : \"recipe-token-cooccurrence-v1\""))
         XCTAssertTrue(rendered.contains("\"readPath\" : \"sidecar-ingredient-pair-index\""))
         XCTAssertTrue(rendered.contains("\"recipeEvidence\""))
+        XCTAssertTrue(rendered.contains("\"recipeTarget\""))
+        XCTAssertTrue(rendered.contains("\"kind\" : \"paprika.recipe\""))
         XCTAssertTrue(rendered.contains("\"tokenBLineNumbers\""))
         XCTAssertTrue(rendered.contains("\"ingredientPairEvidenceMayBeStale\" : false"))
     }
@@ -668,8 +673,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("sort: average-rating"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: 1m old"))
         XCTAssertTrue(report.humanDescription.contains("recipe_usage_freshness: 1m old"))
-        XCTAssertTrue(report.humanDescription.contains("Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | used_recipes=2 | unused_recipes=2 | meals=5 | meal_share=0.25 | first_meal=2026-03-01 18:00:00 | first_cooked_at=2026-03-01 18:00:00 | last_meal=2026-04-01 18:00:00 | avg_rating=4.33 | ratings=5:2,3:1"))
-        XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | recipes=2 | rated=0 | unrated=2 | favorites=1 | used_recipes=0 | unused_recipes=2 | meals=0 | meal_share=0.00 | avg_rating=unrated | is_unlabeled=yes"))
+        XCTAssertTrue(report.humanDescription.contains("Serious Eats | target=paprika.source:Serious Eats | recipes=4 | rated=3 | unrated=1 | favorites=2 | used_recipes=2 | unused_recipes=2 | meals=5 | meal_share=0.25 | first_meal=2026-03-01 18:00:00 | first_cooked_at=2026-03-01 18:00:00 | last_meal=2026-04-01 18:00:00 | avg_rating=4.33 | ratings=5:2,3:1"))
+        XCTAssertTrue(report.humanDescription.contains("(unlabeled source/cookbook) | target=paprika.source:unlabeled | recipes=2 | rated=0 | unrated=2 | favorites=1 | used_recipes=0 | unused_recipes=2 | meals=0 | meal_share=0.00 | avg_rating=unrated | is_unlabeled=yes"))
     }
 
     private func makePaths() -> PantryPaths {

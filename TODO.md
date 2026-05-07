@@ -7,8 +7,6 @@ Completed work should leave this file.
 
 - [ ] Use [docs/pattern-boundary-and-corrections.md](docs/pattern-boundary-and-corrections.md) to keep the next slices focused on cooking evidence primitives and simple attached notes, not dinner recommendations or correction machinery.
 - [ ] Add examples for existing mechanical recency/lapse query affordances (`meal_count`, `last_meal_at`, query-time `days_since_last_meal`, `median_meal_gap_days`) without labeling recipes as favorites.
-- [ ] Ensure recipe outputs expose stable attachment targets that OpenClaw or Obsidian notes can use to point back to Paprika recipes.
-- [ ] Make target fields consistent across recipe usage, pairings, source rollups, and future match traces without embedding follow-up commands or full recipe details.
 
 ## Next
 - [ ] If real timings show `derive.ingredient_pairs` or pairing writes are slow, investigate incremental updates for ingredient pairings so `index rebuild` is not the only way to refresh pairing evidence.

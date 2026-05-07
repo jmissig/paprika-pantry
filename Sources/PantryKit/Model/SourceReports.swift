@@ -243,6 +243,7 @@ public struct SourceCookbooksReport: ConsoleRenderable, CSVRenderable, Equatable
 
         for aggregate in aggregates {
             var parts = [renderedCookbookName(aggregate)]
+            parts.append("target=\(renderedTargetHandle(aggregate.target))")
             parts.append("recipes=\(aggregate.recipeCount)")
             parts.append("rated=\(aggregate.ratedRecipeCount)")
             parts.append("unrated=\(aggregate.unratedRecipeCount)")

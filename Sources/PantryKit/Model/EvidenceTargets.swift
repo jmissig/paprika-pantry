@@ -51,3 +51,19 @@ func hasNonEmptyNotes(_ notes: String?) -> Bool {
 
     return !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 }
+
+func renderedTargetHandle(_ target: PaprikaRecipeTarget) -> String {
+    "\(target.kind):\(target.uid)"
+}
+
+func renderedTargetHandle(_ target: PaprikaMealTarget) -> String {
+    "\(target.kind):\(target.uid)"
+}
+
+func renderedTargetHandle(_ target: PaprikaSourceTarget) -> String {
+    if target.isUnlabeled {
+        return "\(target.kind):unlabeled"
+    }
+
+    return "\(target.kind):\(target.sourceName ?? "unknown")"
+}

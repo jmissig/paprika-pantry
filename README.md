@@ -86,7 +86,7 @@ Commands default to compact human-readable output.
 
 Prefer `--format json` in docs, scripts, and agent usage.
 
-JSON recipe, meal, pairing-evidence, and source-rollup rows may include a `target` or `recipeTarget` object. Treat these as stable attachment handles for OpenClaw/Obsidian notes or follow-up reads. They identify Paprika objects; they are not embedded commands and they are not full recipe records.
+Recipe, meal, pairing-evidence, and source-rollup rows include stable attachment handles for OpenClaw/Obsidian notes or follow-up reads. JSON uses structured `target` or `recipeTarget` objects. Text uses compact handles like `target=paprika.recipe:<uid>` or `recipe_target=paprika.recipe:<uid>`. These identify Paprika objects; they are not embedded commands and they are not full recipe records.
 
 Examples:
 

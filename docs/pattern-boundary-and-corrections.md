@@ -116,8 +116,8 @@ For JSON output, prefer structured targets over command strings. A recipe target
   "kind": "paprika.recipe",
   "uid": "...",
   "name": "...",
-  "source_name": "...",
-  "has_notes": true
+  "sourceName": "...",
+  "hasNotes": true
 }
 ```
 
@@ -128,7 +128,7 @@ For JSON output, prefer structured targets over command strings. A recipe target
 - include for `recipes search`, because the sidecar search document already stores notes;
 - omit for `recipes pairings`, `meals list`, and `source cookbooks` unless a future implementation needs the extra join/fetch for another reason.
 
-Pairing evidence and meal rows should expose recipe UID/name targets as follow-up handles, not full recipe information. Source rollups should expose source targets and aggregate evidence, not expanded recipe lists.
+Pairing evidence and meal rows should expose recipe UID/name targets as follow-up handles, not full recipe information. Source rollups should expose source targets and aggregate evidence, not expanded recipe lists. Text output should use compact target handles such as `target=paprika.recipe:<uid>`, `recipe_target=paprika.recipe:<uid>`, or `target=paprika.source:<source-name>` so default operator output remains attachable without embedding a follow-up command.
 
 ## Actionable next slices
 

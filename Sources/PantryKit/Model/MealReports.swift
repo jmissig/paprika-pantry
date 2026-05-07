@@ -21,6 +21,7 @@ public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Send
 
         for meal in meals {
             var fields = [meal.name, "[\(meal.uid)]"]
+            fields.append("target=\(renderedTargetHandle(meal.target))")
 
             if let scheduledAt = meal.scheduledAt {
                 fields.append("date=\(scheduledAt)")
@@ -33,6 +34,9 @@ public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Send
             if let recipeUID = meal.recipeUID {
                 let label = meal.recipeName ?? meal.name
                 fields.append("recipe=\(label) [\(recipeUID)]")
+                if let recipeTarget = meal.target.recipeTarget {
+                    fields.append("recipe_target=\(renderedTargetHandle(recipeTarget))")
+                }
             }
 
             lines.append(fields.joined(separator: " "))

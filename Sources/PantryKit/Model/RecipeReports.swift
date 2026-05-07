@@ -97,6 +97,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
 
         for recipe in recipes {
             var parts = ["\(recipe.uid)  \(recipe.name)"]
+            parts.append("target=\(renderedTargetHandle(recipe.target))")
 
             if !recipe.categories.isEmpty {
                 parts.append("categories=\(recipe.categories.joined(separator: ", "))")
@@ -168,6 +169,7 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             "\(command): \(recipe.name)",
             "read_path: \(readPath)",
             "uid: \(recipe.uid)",
+            "target: \(renderedTargetHandle(recipe.target))",
         ]
 
         if !recipe.categories.isEmpty {
@@ -645,6 +647,7 @@ public struct RecipesSearchReport: ConsoleRenderable, CSVRenderable, Equatable, 
 
         for recipe in results {
             var parts = ["\(recipe.uid)  \(recipe.name)"]
+            parts.append("target=\(renderedTargetHandle(recipe.target))")
 
             if !recipe.categories.isEmpty {
                 parts.append("categories=\(recipe.categories.joined(separator: ", "))")
@@ -805,6 +808,7 @@ public struct RecipesPairingsReport: ConsoleRenderable, Equatable, Sendable {
             for evidence in result.recipeEvidence {
                 var evidenceParts = [
                     "  evidence: \(evidence.recipeUID)  \(evidence.recipeName)",
+                    "recipe_target=\(renderedTargetHandle(evidence.recipeTarget))",
                     "\(result.tokenA)_lines=\(renderedLineNumbers(evidence.tokenALineNumbers))",
                     "\(result.tokenB)_lines=\(renderedLineNumbers(evidence.tokenBLineNumbers))",
                 ]
@@ -871,6 +875,7 @@ public struct RecipeFeaturesReport: ConsoleRenderable, Equatable, Sendable {
             "source_read_path: \(sourceReadPath)",
             "derived_read_path: \(derivedReadPath)",
             "uid: \(recipe.uid)",
+            "target: \(renderedTargetHandle(recipe.target))",
         ]
         lines.append(contentsOf: renderedIndexFreshnessLines(
             prefix: "derived_index",
@@ -973,6 +978,7 @@ public struct RecipeIngredientsReport: ConsoleRenderable, Equatable, Sendable {
             "source_read_path: \(sourceReadPath)",
             "ingredient_read_path: \(ingredientReadPath)",
             "uid: \(recipe.uid)",
+            "target: \(renderedTargetHandle(recipe.target))",
         ]
         lines.append(contentsOf: renderedIndexFreshnessLines(
             prefix: "ingredient_index",
