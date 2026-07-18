@@ -2,12 +2,6 @@
 
 This note turns the broader OpenClaw pattern-intelligence work into concrete guidance for `paprika-pantry`.
 
-Related Obsidian notes:
-- `LLM Pattern Loop`
-- `Pattern Extraction Tooling`
-- `Personal Pattern Intelligence`
-- `Almanacs and Guides`
-
 Related repo notes:
 - `docs/read-only-exploration.md`
 - `docs/usage-facts-contract.md`
@@ -48,7 +42,7 @@ Do not make the CLI decide:
 
 - “cook this tonight”;
 - “family favorite” as a truth claim;
-- “Julian likes this” or “Alice dislikes this” unless grounded in human-approved correction/profile state;
+- person-specific preference claims unless grounded in human-approved correction/profile state;
 - weeknight/guest/kid suitability as final meaning;
 - cross-domain joins with weather, calendar, Swarm, pantry mood, or person context;
 - polished Cooking Guide prose;
@@ -71,16 +65,16 @@ Useful attachment targets for `paprika-pantry`:
 - an ingredient, for dislike/tolerance/substitution notes;
 - a source/cookbook/site, for quality or household-fit caveats;
 - a meal-history fact/window, for “this was guests/kids/deadline, not preference”;
-- a person/family context, for Julian/Alice/family distinction.
+- a person/household context, for distinguishing individual and shared preferences.
 
 Example notes:
 
 - Recipe note: “We made this often because it was easy, not because anyone loved it.”
 - Recipe note: “Still liked; it just fell out of rotation.”
-- Ingredient note: “Alice dislikes raw cilantro, but cooked coriander is fine.”
+- Ingredient note: “One household member dislikes raw cilantro, but cooked coriander is fine.”
 - Source note: “This cookbook is reliable for technique but usually too salty.”
 - Meal-window note: “This run was mostly guest dinners, not our normal weeknight pattern.”
-- Person/family note: “Julian likes this as lunch leftovers; Alice does not usually want it for dinner.”
+- Person/household note: “One person likes this as lunch leftovers; another does not usually want it for dinner.”
 
 Good note targets should be close to the evidence Robut will retrieve later:
 
@@ -88,7 +82,7 @@ Good note targets should be close to the evidence Robut will retrieve later:
 - attach dislike, tolerance, or substitution context to the ingredient;
 - attach reliability or importer-quality caveats to the source/cookbook/site;
 - attach guest/kid/deadline context to the meal window;
-- attach durable Julian/Alice/family distinctions to profile or family memory, not to a random recipe row.
+- attach durable person/household distinctions to profile or household memory, not to a random recipe row.
 
 Store recipe-specific notes in Paprika when a human wants them to become durable recipe notes. Store chat-originated suggestions, unresolved routing, and non-recipe context in OpenClaw/Obsidian/profile memory. Never write notes back into the real Paprika database automatically. Do not require humans to choose correction kinds, approval states, or future effects.
 
@@ -101,7 +95,7 @@ source: <human/chat/note>
 updated_at: <timestamp>
 ```
 
-That shape belongs outside `paprika-pantry` unless Julian explicitly changes the boundary. `paprika-pantry` can expose recipe IDs, names, source trails, and existing Paprika notes so OpenClaw/Obsidian has good attachment targets.
+That shape belongs outside `paprika-pantry` unless the maintainer explicitly changes the boundary. `paprika-pantry` can expose recipe IDs, names, source trails, and existing Paprika notes so an agent or note system has good attachment targets.
 
 ## Attachment Target Contract
 

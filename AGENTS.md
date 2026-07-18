@@ -2,7 +2,7 @@
 
 This file gives coding agents the durable context they need to work safely and consistently in this repository.
 
-Preserve `paprika-pantry`’s purpose. Do not broaden scope or invent a platform unless Julian explicitly asks.
+Preserve `paprika-pantry`’s purpose. Do not broaden scope or invent a platform unless the maintainer explicitly asks.
 
 ## Project posture
 
@@ -48,7 +48,7 @@ Never write to:
 - the real Paprika database (`Paprika.sqlite` or equivalent local source DB)
 - Paprika cloud/server state
 - installed binaries, installed OpenClaw skills, or ambient user config during routine tests
-- non-fixture user data unless Julian explicitly asks to exercise real local state
+- non-fixture user data unless the operator explicitly asks to exercise real local state
 
 Non-goals / anti-goals:
 - not a full Paprika replacement app
@@ -127,7 +127,7 @@ Do not run during routine verification:
 - commands that mutate the real Paprika database
 - destructive cleanup of sidecar databases outside repo-local/temp/fixture paths
 
-Use repo-local, fixture, sandboxed, or temporary paths for tests. Do not rely on the human’s live Paprika database during routine verification unless Julian explicitly asks for a live-data smoke test.
+Use repo-local, fixture, sandboxed, or temporary paths for tests. Do not rely on the operator’s live Paprika database during routine verification unless they explicitly ask for a live-data smoke test.
 
 ## Core principles
 
@@ -202,13 +202,14 @@ For major architecture choices — persistence, indexing, CLI parsing, output fo
 
 ## CLI / local tool guidance
 
-This tool should feel like Julian’s other local-first CLIs:
+This tool should follow the same conventions as the maintainer’s other local-first CLIs:
 - small command surface
 - explicit local store/source boundary
 - compact human output by default
 - structured output for agents and scripts
 - narrow extraction-oriented commands
 - clear diagnostic / doctor / status commands
+- interactive setup/auth/config flows only where they help humans, with complete one-shot forms for agents and scripts
 
 Preferred command families:
 - `source`
@@ -220,6 +221,13 @@ Preferred command families:
 - `doctor`
 
 Keep the command surface small and coherent. Do not explode it prematurely.
+
+Align shared verbs where they mean the same thing across tools, and use Paprika-specific verbs only when they match the source model or real cooking workflow.
+
+Interactive vs one-shot:
+- human setup/auth/config flows may be guided, but evidence reads such as `recipes`, `meals`, `groceries`, `pantry`, and source diagnostics/status reads should stay one-shot
+- JSON, non-TTY, and `--non-interactive` / `--no-input` modes must never prompt
+- risky writes and repairs need explicit scope plus preview or confirmation; bounded source launches and index rebuilds must be explicitly invoked and explain their effects
 
 Default output should be concise and useful to a human operator.
 
@@ -368,6 +376,7 @@ Prefer tests for:
 
 Testing rules:
 - Use repo-local, temp, fixture, or explicitly supplied paths.
+- Put usable machine-local artifacts under a visible ignored directory such as `local/`; do not use dot-prefixed directories for ordinary project data.
 - Do not mutate ambient/default operator state during routine verification.
 - Do not require the live Paprika database in normal tests.
 - Do not install or publish as part of normal validation unless explicitly asked.
@@ -398,6 +407,8 @@ Use this docs split:
 - `AGENTS.md` — durable architecture, constraints, source-of-truth boundaries, project posture, validation, and agent guidance
 - `docs/` — focused architecture notes/specs when details would bloat `AGENTS.md`
 - `skills/paprika-pantry/SKILL.md` — OpenClaw skill instructions for using the installed tool
+
+`make install-skill` installs into the shared managed OpenClaw skill root at `~/.openclaw/skills/` by default. Workspace-local `skills/` directories are user-controlled override layers with higher precedence; do not treat an active workspace shadow as the canonical install destination.
 
 Completed work should leave `TODO.md` and live in git history, tests, code, and release notes if relevant.
 

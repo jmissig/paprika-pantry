@@ -4,3 +4,22 @@ build
 Package.resolved
 .DS_Store
 
+# Machine-local notes and measurements
+local/
+
+# Paprika source data and rebuildable local databases
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Local environment and credential/session exports
+.env
+.env.*
+!.env.example
+*.credentials.json
+*.session.json

@@ -316,6 +316,6 @@ Good exploration question:
 
 Bad exploration question:
 
-> What should Julian cook tonight?
+> What should I cook tonight?
 
 For the bad question, use stable CLI outputs first, then let Robut compose a situated answer with visible assumptions.

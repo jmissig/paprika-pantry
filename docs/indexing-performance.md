@@ -28,19 +28,4 @@ Usage stats are still a full refresh during `index update`. Meal edits can chang
 
 Ingredient pair evidence is not touched by `index update`. Run `index rebuild` when pairings should be refreshed.
 
-
-## Local Timing Snapshot — 2026-04-27
-
-Before the routine partial-update path, local real-data `index update --format json` over 3,599 active recipes took about 7 seconds. The largest routine phase was `sidecar.write_transaction` at about 4.3 seconds because the command rewrote all recipe-owned sidecar rows even when no recipes had changed.
-
-After the partial-update path, a no-recipe-change local `index update --format json` reported:
-
-- `changedRecipeCount`: 0
-- `skippedRecipeCount`: 3,599
-- `deletedRecipeCount`: 0
-- `source.fetch_recipes`: 0 ms / 0 items
-- `derive.recipe_documents_features_ingredients`: 0 ms / 0 items
-- `sidecar.write_transaction`: about 0.5 seconds / 0 recipe-owned row changes
-- total command window: about 1 second
-
-This confirms the daily-path optimization is aimed at the measured waste: refetching and rewriting thousands of unchanged recipe-owned rows. Usage stats still refresh fully for correctness.
+Keep corpus- and machine-specific benchmark snapshots in ignored `local/benchmarks/` files. Committed documentation should describe the measurement method and the behavior it is intended to validate without publishing private corpus details.
