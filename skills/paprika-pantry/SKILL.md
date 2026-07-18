@@ -29,15 +29,18 @@ Data types:
 
 ## Core commands (illustrative)
 
+- `paprika-pantry source status --format json`
 - `paprika-pantry doctor --format json`
 - `paprika-pantry recipes search "..." --format json`
 - `paprika-pantry recipes show "..." --format json`
 - `paprika-pantry meals list --format json`
 - `paprika-pantry pantry list --format json`
-- `paprika-pantry source cookbooks --format json`
+- `paprika-pantry recipes cookbooks --format json`
 - `paprika-pantry recipes pairings --token tomato --sort meals --format json`
 
 Not exhaustive. Use `--help` and adapt to the current interface.
+
+Command boundaries: `source` reports on the real local Paprika database/app, `recipes` includes canonical recipe reads and recipe-derived sidecar evidence, `index` manages the owned sidecar, and top-level `doctor` diagnoses across source and sidecar health.
 
 ## Attachment targets
 

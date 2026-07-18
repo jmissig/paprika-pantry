@@ -33,7 +33,7 @@ Usage facts can appear in:
 - `recipes list`
 - `recipes search`
 - `recipes show`
-- `source cookbooks`
+- `recipes cookbooks`
 - `index stats`
 - `index update`
 - `index rebuild`

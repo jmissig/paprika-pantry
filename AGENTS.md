@@ -74,11 +74,11 @@ Current stack:
 
 Current command surface includes:
 - `paprika-pantry doctor`
+- `paprika-pantry source status`
 - `paprika-pantry source last-sync-time`
 - `paprika-pantry source stats`
-- `paprika-pantry source cookbooks`
 - `paprika-pantry source launch-app [--wait-for-sync]`
-- `paprika-pantry recipes list|show|search|features|ingredients`
+- `paprika-pantry recipes list|show|search|features|ingredients|pairings|cookbooks`
 - `paprika-pantry meals list`
 - `paprika-pantry groceries list`
 - `paprika-pantry pantry list`
@@ -224,8 +224,14 @@ Keep the command surface small and coherent. Do not explode it prematurely.
 
 Align shared verbs where they mean the same thing across tools, and use Paprika-specific verbs only when they match the source model or real cooking workflow.
 
+Namespace boundaries:
+- `source` is limited to readiness, freshness, coverage, and bounded app operations at the real Paprika database/app boundary
+- `recipes` owns canonical recipe reads plus recipe-derived sidecar evidence such as search, features, ingredients, pairings, and cookbook/source aggregates
+- `index` owns sidecar lifecycle and focused sidecar status
+- top-level `doctor` diagnoses health across the source and sidecar layers
+
 Interactive vs one-shot:
-- human setup/auth/config flows may be guided, but evidence reads such as `recipes`, `meals`, `groceries`, `pantry`, and source diagnostics/status reads should stay one-shot
+- human setup/auth/config flows may be guided, but evidence reads such as `recipes`, `meals`, `groceries`, `pantry`, and `source status` should stay one-shot
 - JSON, non-TTY, and `--non-interactive` / `--no-input` modes must never prompt
 - risky writes and repairs need explicit scope plus preview or confirmation; bounded source launches and index rebuilds must be explicitly invoked and explain their effects
 
@@ -339,7 +345,7 @@ Support should continue to emphasize:
 - meals lookup
 - groceries lookup
 - pantry item lookup
-- source doctor and index status reporting
+- source status, index status, and cross-layer doctor reporting
 
 Prefer canonical filters like rating, favorite status, category membership, ingredient membership, and time bounds over embedding opaque reasoning into the CLI.
 

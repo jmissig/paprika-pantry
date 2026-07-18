@@ -56,10 +56,10 @@ Paprika 3 for macOS must be installed on the same Mac and must have created its 
 The normal first check is:
 
 ```bash
-paprika-pantry doctor
+paprika-pantry source status
 ```
 
-That checks that the Paprika 3 Mac app is installed, its local SQLite database was found, and the database looks like the format `paprika-pantry` expects.
+That checks that the Paprika 3 Mac app is installed, its local SQLite database was found, and the database looks like the format `paprika-pantry` expects. `paprika-pantry doctor` cuts across both that real source and paprika-pantry's owned sidecar index.
 
 ## Update Index
 
@@ -84,7 +84,7 @@ After that, the usual commands are things like:
 ```bash
 paprika-pantry recipes list
 paprika-pantry recipes search risotto
-paprika-pantry source cookbooks
+paprika-pantry recipes cookbooks
 paprika-pantry index stats
 paprika-pantry doctor
 ```
@@ -108,7 +108,7 @@ Examples:
 paprika-pantry recipes list --format json
 paprika-pantry recipes search risotto --format json
 paprika-pantry groceries list --format csv
-paprika-pantry source cookbooks --format csv
+paprika-pantry recipes cookbooks --format csv
 ```
 
 Not every command flattens honestly to CSV. Detail and diagnostic commands continue to support text and JSON output only, and will fail clearly if asked for CSV.
@@ -119,10 +119,11 @@ Most people will use these:
 
 ```bash
 paprika-pantry doctor
+paprika-pantry source status
 paprika-pantry source last-sync-time
 paprika-pantry source stats
-paprika-pantry source cookbooks
-paprika-pantry source cookbooks --sort recipes --min-recipes 2 --format csv
+paprika-pantry recipes cookbooks
+paprika-pantry recipes cookbooks --sort recipes --min-recipes 2 --format csv
 paprika-pantry source launch-app
 paprika-pantry source launch-app --wait-for-sync
 paprika-pantry source launch-app --wait-for-sync --timeout-seconds 300
@@ -174,9 +175,12 @@ Use the CLI first when a stable command answers the question. Use read-only SQL/
 The source-related commands exist to make that legible:
 
 ```bash
+paprika-pantry source status
 paprika-pantry doctor
 paprika-pantry source last-sync-time
 ```
+
+`source status` reports on the real Paprika database/app boundary. Top-level `doctor` combines that source diagnosis with sidecar index health.
 
 The sync-related reporting is observational, not a real sync API.
 
@@ -245,10 +249,10 @@ They are meant to be simple extraction commands, not a replacement UI for Paprik
 If paprika-pantry's local index has been built, you can inspect cookbook or source rollups from canonical recipe source fields:
 
 ```bash
-paprika-pantry source cookbooks
-paprika-pantry source cookbooks --sort average-rating
-paprika-pantry source cookbooks --sort recipes --min-recipes 3
-paprika-pantry source cookbooks --format csv
+paprika-pantry recipes cookbooks
+paprika-pantry recipes cookbooks --sort average-rating
+paprika-pantry recipes cookbooks --sort recipes --min-recipes 3
+paprika-pantry recipes cookbooks --format csv
 ```
 
 This is useful for questions like:

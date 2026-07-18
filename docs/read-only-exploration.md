@@ -67,7 +67,7 @@ Prefer these commands before dropping into SQL:
 paprika-pantry doctor --format json
 paprika-pantry index stats --format json
 paprika-pantry source stats --format json
-paprika-pantry source cookbooks --format json
+paprika-pantry recipes cookbooks --format json
 paprika-pantry recipes list --format json
 paprika-pantry recipes search "risotto" --format json
 paprika-pantry recipes show "Mushroom Risotto" --format json
@@ -207,7 +207,7 @@ Frequency is evidence of repeat use, not absolute preference. Convenience, guest
 Prefer the CLI first:
 
 ```bash
-paprika-pantry source cookbooks --sort meals --format json
+paprika-pantry recipes cookbooks --sort meals --format json
 ```
 
 If debugging the rollup, inspect directly:

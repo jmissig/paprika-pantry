@@ -120,7 +120,7 @@ For JSON output, prefer structured targets over command strings. A recipe target
 - include for `recipes show`, `recipes features`, `recipes ingredients`;
 - include for `recipes list`, because list already loads recipe records;
 - include for `recipes search`, because the sidecar search document already stores notes;
-- omit for `recipes pairings`, `meals list`, and `source cookbooks` unless a future implementation needs the extra join/fetch for another reason.
+- omit for `recipes pairings`, `meals list`, and `recipes cookbooks` unless a future implementation needs the extra join/fetch for another reason.
 
 Pairing evidence and meal rows should expose recipe UID/name targets as follow-up handles, not full recipe information. Source rollups should expose source targets and aggregate evidence, not expanded recipe lists. Text output should use compact target handles such as `target=paprika.recipe:<uid>`, `recipe_target=paprika.recipe:<uid>`, or `target=paprika.source:<source-name>` so default operator output remains attachable without embedding a follow-up command.
 
