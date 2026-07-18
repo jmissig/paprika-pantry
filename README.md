@@ -1,6 +1,8 @@
 # paprika-pantry
 
-`paprika-pantry` is a small macOS CLI that reads the SQLite database maintained by the locally installed Paprika 3 Mac app and queries it as compact local evidence. It opens Paprika's database read-only: it does not authenticate to Paprika Cloud, call a Paprika web API, or write back to the app's data.
+`paprika-pantry` is a command-line tool for querying the local database used by Paprika 3 for Mac. It includes skills that help OpenClaw, ChatGPT, and Claude use the tool to answer questions about recipes, meals, groceries, pantry items, and cooking patterns.
+
+It opens Paprika's database read-only: it does not authenticate to Paprika Cloud, call a Paprika web API, or write back to the app's data.
 
 It is built around a few normal tasks:
 
