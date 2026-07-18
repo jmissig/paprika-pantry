@@ -408,7 +408,7 @@ Use this docs split:
 - `docs/` — focused architecture notes/specs when details would bloat `AGENTS.md`
 - `skills/paprika-pantry/SKILL.md` — OpenClaw skill instructions for using the installed tool
 
-`make install-skill` installs into the shared managed OpenClaw skill root at `~/.openclaw/skills/` by default. Workspace-local `skills/` directories are user-controlled override layers with higher precedence; do not treat an active workspace shadow as the canonical install destination.
+`make install-skill` installs into the shared managed OpenClaw skill root at `~/.openclaw/skills/` by default. Set `SKILL_TARGET=codex` or `SKILL_TARGET=claude` to install into the corresponding Codex or Claude Code skills root. Workspace-local `skills/` directories are user-controlled override layers with higher precedence; do not treat an active workspace shadow as the canonical install destination.
 
 Completed work should leave `TODO.md` and live in git history, tests, code, and release notes if relevant.
 

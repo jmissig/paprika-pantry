@@ -1,6 +1,6 @@
 # paprika-pantry
 
-`paprika-pantry` is a small local CLI for reading Paprika 3 data directly from the real local Paprika SQLite database and querying it as compact local evidence.
+`paprika-pantry` is a small macOS CLI that reads the SQLite database maintained by the locally installed Paprika 3 Mac app and queries it as compact local evidence. It opens Paprika's database read-only: it does not authenticate to Paprika Cloud, call a Paprika web API, or write back to the app's data.
 
 It is built around a few normal tasks:
 
@@ -31,13 +31,25 @@ If you want a different install location:
 sudo make install PREFIX="/usr/local"
 ```
 
-To install the repo's OpenClaw skill separately:
+To install the repo's agent skill for OpenClaw (the default), Codex, or Claude Code:
 
 ```bash
 make install-skill
+make install-skill SKILL_TARGET=codex
+make install-skill SKILL_TARGET=claude
 ```
 
+The default destinations are:
+
+- OpenClaw: `$OPENCLAW_HOME/skills/paprika-pantry`, with `OPENCLAW_HOME` defaulting to `~/.openclaw`
+- Codex: `$CODEX_HOME/skills/paprika-pantry`, with `CODEX_HOME` defaulting to `~/.codex`
+- Claude Code: `$CLAUDE_CONFIG_DIR/skills/paprika-pantry`, with `CLAUDE_CONFIG_DIR` defaulting to `~/.claude`
+
+Set the corresponding home/config variable to install elsewhere. `SKILLS_DIR` can also override the final skills directory directly.
+
 ## First Run
+
+Paprika 3 for macOS must be installed on the same Mac and must have created its local database, normally by completing at least one app sync. `paprika-pantry` reads that on-disk database directly; no Paprika account credentials are needed by this tool.
 
 The normal first check is:
 
@@ -45,7 +57,7 @@ The normal first check is:
 paprika-pantry doctor
 ```
 
-That checks that Paprika 3 is installed, its local database was found, and the database looks like the format `paprika-pantry` expects.
+That checks that the Paprika 3 Mac app is installed, its local SQLite database was found, and the database looks like the format `paprika-pantry` expects.
 
 ## Update Index
 
