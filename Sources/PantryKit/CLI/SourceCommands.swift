@@ -6,10 +6,9 @@ public struct SourceCommand: ParsableCommand {
         commandName: "source",
         abstract: "Inspect direct Paprika SQLite source readiness.",
         subcommands: [
-            SourceDoctorCommand.self,
+            SourceStatusCommand.self,
             SourceLastSyncTimeCommand.self,
             SourceStatsCommand.self,
-            SourceCookbooksCommand.self,
             SourceLaunchAppCommand.self,
         ]
     )
@@ -174,10 +173,10 @@ private func paprikaSyncHasAdvanced(
     }
 }
 
-public struct SourceDoctorCommand: PantryLeafCommand {
+public struct SourceStatusCommand: PantryLeafCommand {
     public static let configuration = CommandConfiguration(
-        commandName: "doctor",
-        abstract: "Diagnose the configured pantry source."
+        commandName: "status",
+        abstract: "Show readiness and health of the configured Paprika source."
     )
 
     public init() {}
@@ -185,7 +184,7 @@ public struct SourceDoctorCommand: PantryLeafCommand {
     public mutating func run() throws {
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
-        try context.write(SourceDoctorReport(snapshot: snapshot, paths: context.paths, now: Date()))
+        try context.write(SourceStatusReport(snapshot: snapshot, paths: context.paths, now: Date()))
     }
 }
 
@@ -212,71 +211,5 @@ public struct SourceStatsCommand: PantryLeafCommand {
             try await sourceStatsService.makeSnapshot(sampleLimit: sampleLimit)
         }
         try context.write(SourceStatsReport(snapshot: snapshot, paths: context.paths))
-    }
-}
-
-public struct SourceCookbooksCommand: PantryLeafCommand {
-    public static let configuration = CommandConfiguration(
-        commandName: "cookbooks",
-        abstract: "Show sidecar-backed cookbook/source aggregates from canonical recipe source fields."
-    )
-
-    @Option(name: .long, help: "Sort order for cookbook/source groups: \(CookbookAggregateSort.allCases.map(\.rawValue).joined(separator: ", ")).")
-    public var sort: CookbookAggregateSort = .averageRating
-
-    @Option(name: .long, help: "Maximum number of cookbook/source groups to return.")
-    public var limit: Int = 20
-
-    @Option(name: .customLong("min-recipes"), help: "Only include cookbook/source groups with at least this many recipes.")
-    public var minRecipes: Int = 1
-
-    @Option(name: .customLong("min-rated-recipes"), help: "Only include cookbook/source groups with at least this many rated recipes.")
-    public var minRatedRecipes: Int = 0
-
-    public init() {}
-
-    public mutating func run() throws {
-        guard limit > 0 else {
-            throw ValidationError("--limit must be greater than zero.")
-        }
-
-        guard minRecipes >= 1 else {
-            throw ValidationError("--min-recipes must be at least 1.")
-        }
-
-        guard minRatedRecipes >= 0 else {
-            throw ValidationError("--min-rated-recipes must be zero or greater.")
-        }
-
-        let context = try makeContext()
-        let store = try context.makeSidecarStore()
-        let indexStats = try store.indexStats()
-
-        guard indexStats.recipeSearchReady else {
-            throw ValidationError("Cookbook/source aggregates require the recipe search index. Run `paprika-pantry index rebuild` first.")
-        }
-
-        guard indexStats.recipeUsageStatsReady else {
-            throw ValidationError("Cookbook/source usage summaries require the recipe usage index. Run `paprika-pantry index rebuild` first.")
-        }
-
-        let aggregates = try store.listCookbookAggregates(
-            sort: sort,
-            limit: limit,
-            minRecipeCount: minRecipes,
-            minRatedRecipeCount: minRatedRecipes
-        )
-        try context.write(
-            SourceCookbooksReport(
-                aggregates: aggregates,
-                sort: sort,
-                limit: limit,
-                minRecipeCount: minRecipes,
-                minRatedRecipeCount: minRatedRecipes,
-                indexStats: indexStats,
-                paths: context.paths,
-                now: Date()
-            )
-        )
     }
 }

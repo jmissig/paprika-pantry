@@ -589,7 +589,7 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(rendered.contains("\"ingredientPairEvidenceMayBeStale\" : true"))
     }
 
-    func testSourceCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {
+    func testRecipesCookbooksReportIncludesAggregateEvidenceAndUnlabeledBucket() {
         let searchRun = PantryIndexRun(
             id: 9,
             startedAt: Date(timeIntervalSince1970: 1_712_736_000),
@@ -599,7 +599,7 @@ final class QueryReportsTests: XCTestCase {
             recipeCount: 6,
             errorMessage: nil
         )
-        let report = SourceCookbooksReport(
+        let report = RecipesCookbooksReport(
             aggregates: [
                 CookbookAggregateSummary(
                     sourceName: "Serious Eats",
@@ -668,7 +668,7 @@ final class QueryReportsTests: XCTestCase {
             now: Date(timeIntervalSince1970: 1_712_736_180)
         )
 
-        XCTAssertTrue(report.humanDescription.contains("source cookbooks: 2 cookbook/source groups"))
+        XCTAssertTrue(report.humanDescription.contains("recipes cookbooks: 2 cookbook/source groups"))
         XCTAssertTrue(report.humanDescription.contains("read_path: sidecar-search-index"))
         XCTAssertTrue(report.humanDescription.contains("sort: average-rating"))
         XCTAssertTrue(report.humanDescription.contains("recipe_search_freshness: 1m old"))

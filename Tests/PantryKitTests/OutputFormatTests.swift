@@ -90,8 +90,8 @@ final class OutputFormatTests: XCTestCase {
         )
     }
 
-    func testSourceCookbooksReportRendersCSVRows() {
-        let report = SourceCookbooksReport(
+    func testRecipesCookbooksReportRendersCSVRows() {
+        let report = RecipesCookbooksReport(
             aggregates: [
                 CookbookAggregateSummary(
                     sourceName: "Serious Eats",

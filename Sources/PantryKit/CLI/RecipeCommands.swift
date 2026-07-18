@@ -4,7 +4,7 @@ import Foundation
 public struct RecipesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "recipes",
-        abstract: "Query canonical recipes and sidecar-backed recipe search/features/ingredient tokens.",
+        abstract: "Query canonical recipes and recipe-derived sidecar search, features, ingredients, pairings, and cookbook aggregates.",
         subcommands: [
             RecipesListCommand.self,
             RecipesShowCommand.self,
@@ -12,6 +12,7 @@ public struct RecipesCommand: ParsableCommand {
             RecipesFeaturesCommand.self,
             RecipesIngredientsCommand.self,
             RecipesPairingsCommand.self,
+            RecipesCookbooksCommand.self,
         ]
     )
 
@@ -737,5 +738,71 @@ private func validateRecipeUsageQueryOptions(
 
     if let minMedianMealGapDays, let maxMedianMealGapDays, minMedianMealGapDays > maxMedianMealGapDays {
         throw ValidationError("--min-median-meal-gap-days must be less than or equal to --max-median-meal-gap-days.")
+    }
+}
+
+public struct RecipesCookbooksCommand: PantryLeafCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "cookbooks",
+        abstract: "Show sidecar-backed cookbook/source aggregates from canonical recipe source fields."
+    )
+
+    @Option(name: .long, help: "Sort order for cookbook/source groups: \(CookbookAggregateSort.allCases.map(\.rawValue).joined(separator: ", ")).")
+    public var sort: CookbookAggregateSort = .averageRating
+
+    @Option(name: .long, help: "Maximum number of cookbook/source groups to return.")
+    public var limit: Int = 20
+
+    @Option(name: .customLong("min-recipes"), help: "Only include cookbook/source groups with at least this many recipes.")
+    public var minRecipes: Int = 1
+
+    @Option(name: .customLong("min-rated-recipes"), help: "Only include cookbook/source groups with at least this many rated recipes.")
+    public var minRatedRecipes: Int = 0
+
+    public init() {}
+
+    public mutating func run() throws {
+        guard limit > 0 else {
+            throw ValidationError("--limit must be greater than zero.")
+        }
+
+        guard minRecipes >= 1 else {
+            throw ValidationError("--min-recipes must be at least 1.")
+        }
+
+        guard minRatedRecipes >= 0 else {
+            throw ValidationError("--min-rated-recipes must be zero or greater.")
+        }
+
+        let context = try makeContext()
+        let store = try context.makeSidecarStore()
+        let indexStats = try store.indexStats()
+
+        guard indexStats.recipeSearchReady else {
+            throw ValidationError("Cookbook/source aggregates require the recipe search index. Run `paprika-pantry index rebuild` first.")
+        }
+
+        guard indexStats.recipeUsageStatsReady else {
+            throw ValidationError("Cookbook/source usage summaries require the recipe usage index. Run `paprika-pantry index rebuild` first.")
+        }
+
+        let aggregates = try store.listCookbookAggregates(
+            sort: sort,
+            limit: limit,
+            minRecipeCount: minRecipes,
+            minRatedRecipeCount: minRatedRecipes
+        )
+        try context.write(
+            RecipesCookbooksReport(
+                aggregates: aggregates,
+                sort: sort,
+                limit: limit,
+                minRecipeCount: minRecipes,
+                minRatedRecipeCount: minRatedRecipes,
+                indexStats: indexStats,
+                paths: context.paths,
+                now: Date()
+            )
+        )
     }
 }

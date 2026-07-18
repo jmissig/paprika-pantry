@@ -3,8 +3,8 @@ import XCTest
 @testable import PantryKit
 
 final class SourceDoctorReportTests: XCTestCase {
-    func testSourceDoctorReportIncludesReadOnlySQLiteDetails() {
-        let report = SourceDoctorReport(
+    func testSourceStatusReportIncludesReadOnlySQLiteDetails() {
+        let report = SourceStatusReport(
             snapshot: PantrySourceDoctorSnapshot(
                 status: .ready,
                 message: "The configured pantry source is ready for direct read-only Paprika access.",
@@ -38,7 +38,9 @@ final class SourceDoctorReportTests: XCTestCase {
             now: Date(timeIntervalSince1970: 1_712_736_120)
         )
 
+        XCTAssertEqual(report.command, "source status")
         XCTAssertEqual(report.status, "ready")
+        XCTAssertTrue(report.humanDescription.contains("source status:"))
         XCTAssertTrue(report.humanDescription.contains("source_type: paprika-sqlite"))
         XCTAssertTrue(report.humanDescription.contains("schema: paprika-3-core-data"))
         XCTAssertTrue(report.humanDescription.contains("access_mode: read-only"))
