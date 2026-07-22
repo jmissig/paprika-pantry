@@ -141,7 +141,12 @@ final class QueryReportsTests: XCTestCase {
                 sourceName: "Serious Eats",
                 ingredients: "Broth",
                 directions: "Simmer.",
+                description: "A bright bean soup.",
                 notes: "Use lemon.",
+                difficulty: "Easy",
+                nutrition: "Per serving: 320 calories",
+                sourceURL: "https://example.test/weeknight-soup",
+                imageURL: "https://example.test/weeknight-soup.jpg",
                 starRating: 5,
                 isFavorite: true,
                 prepTime: "10 min",
@@ -183,6 +188,12 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("source_name: Serious Eats"))
         XCTAssertTrue(report.humanDescription.contains("star_rating: 5"))
         XCTAssertTrue(report.humanDescription.contains("favorite: yes"))
+        XCTAssertTrue(report.humanDescription.contains("description:\nA bright bean soup."))
+        XCTAssertTrue(report.humanDescription.contains("difficulty: Easy"))
+        XCTAssertTrue(report.humanDescription.contains("nutrition:\nPer serving: 320 calories"))
+        XCTAssertTrue(report.humanDescription.contains("source_url: https://example.test/weeknight-soup"))
+        XCTAssertTrue(report.humanDescription.contains("image_url: https://example.test/weeknight-soup.jpg"))
+        XCTAssertTrue(report.humanDescription.contains("notes:\nUse lemon."))
         XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("meal_count: 4"))
         XCTAssertTrue(report.humanDescription.contains("first_meal_at: 2026-04-01 18:00:00"))
@@ -414,7 +425,12 @@ final class QueryReportsTests: XCTestCase {
                 sourceName: "Serious Eats",
                 ingredients: "Broth\nBeans",
                 directions: nil,
+                description: nil,
                 notes: nil,
+                difficulty: nil,
+                nutrition: nil,
+                sourceURL: nil,
+                imageURL: nil,
                 starRating: nil,
                 isFavorite: false,
                 prepTime: "10 min",
@@ -459,7 +475,12 @@ final class QueryReportsTests: XCTestCase {
                 sourceName: "Serious Eats",
                 ingredients: "1 can tomatoes\nfresh basil leaves",
                 directions: nil,
+                description: nil,
                 notes: nil,
+                difficulty: nil,
+                nutrition: nil,
+                sourceURL: nil,
+                imageURL: nil,
                 starRating: nil,
                 isFavorite: false,
                 prepTime: nil,

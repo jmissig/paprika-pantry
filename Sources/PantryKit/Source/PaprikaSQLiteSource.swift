@@ -271,7 +271,12 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 \(self.schema.optionalTextExpression(column: "ZSOURCE")) AS source_name,
                 \(self.schema.optionalTextExpression(column: "ZINGREDIENTS")) AS ingredients,
                 \(self.schema.optionalTextExpression(column: "ZDIRECTIONS")) AS directions,
-                \(self.schema.notesExpression) AS notes,
+                \(self.schema.optionalTextExpression(column: "ZDESCRIPTIONTEXT")) AS description,
+                \(self.schema.optionalTextExpression(column: "ZNOTES")) AS notes,
+                \(self.schema.optionalTextExpression(column: "ZDIFFICULTY")) AS difficulty,
+                \(self.schema.optionalTextExpression(column: "ZNUTRITIONALINFO")) AS nutrition,
+                \(self.schema.optionalTextExpression(column: "ZSOURCEURL")) AS source_url,
+                \(self.schema.optionalTextExpression(column: "ZIMAGEURL")) AS image_url,
                 \(self.schema.ratingExpression) AS star_rating,
                 \(self.schema.favoriteExpression) AS is_favorite,
                 \(self.schema.optionalTextExpression(column: "ZPREPTIME")) AS prep_time,
@@ -307,7 +312,12 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 sourceName: row["source_name"],
                 ingredients: row["ingredients"],
                 directions: row["directions"],
+                description: row["description"],
                 notes: row["notes"],
+                difficulty: row["difficulty"],
+                nutrition: row["nutrition"],
+                sourceURL: row["source_url"],
+                imageURL: row["image_url"],
                 starRating: Self.decodeRating(row["star_rating"]),
                 isFavorite: Self.decodeBoolean(row["is_favorite"]),
                 prepTime: row["prep_time"],
@@ -354,7 +364,12 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         let sourceName: String? = row["source_name"]
         let ingredients: String? = row["ingredients"]
         let directions: String? = row["directions"]
+        let description: String? = row["description"]
         let notes: String? = row["notes"]
+        let difficulty: String? = row["difficulty"]
+        let nutrition: String? = row["nutrition"]
+        let sourceURL: String? = row["source_url"]
+        let imageURL: String? = row["image_url"]
         let prepTime: String? = row["prep_time"]
         let cookTime: String? = row["cook_time"]
         let totalTime: String? = row["total_time"]
@@ -374,7 +389,12 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         Self.setOptionalValue(in: &object, key: "source", value: sourceName)
         Self.setOptionalValue(in: &object, key: "ingredients", value: ingredients)
         Self.setOptionalValue(in: &object, key: "directions", value: directions)
+        Self.setOptionalValue(in: &object, key: "description", value: description)
         Self.setOptionalValue(in: &object, key: "notes", value: notes)
+        Self.setOptionalValue(in: &object, key: "difficulty", value: difficulty)
+        Self.setOptionalValue(in: &object, key: "nutritional_info", value: nutrition)
+        Self.setOptionalValue(in: &object, key: "source_url", value: sourceURL)
+        Self.setOptionalValue(in: &object, key: "image_url", value: imageURL)
         Self.setOptionalValue(in: &object, key: "rating", value: Self.decodeRating(row["star_rating"]))
         Self.setOptionalValue(in: &object, key: "prep_time", value: prepTime)
         Self.setOptionalValue(in: &object, key: "cook_time", value: cookTime)
@@ -508,19 +528,6 @@ private struct PaprikaSQLiteSchema: Sendable {
         categoryColumns.contains("ZSTATUS")
             ? "CASE WHEN lower(COALESCE(ZSTATUS, '')) = 'deleted' THEN 1 ELSE 0 END"
             : "0"
-    }
-
-    var notesExpression: String {
-        switch (recipeColumns.contains("ZNOTES"), recipeColumns.contains("ZDESCRIPTIONTEXT")) {
-        case (true, true):
-            return "COALESCE(NULLIF(ZNOTES, ''), ZDESCRIPTIONTEXT)"
-        case (true, false):
-            return "ZNOTES"
-        case (false, true):
-            return "ZDESCRIPTIONTEXT"
-        case (false, false):
-            return "NULL"
-        }
     }
 
     var ratingExpression: String {

@@ -28,6 +28,9 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
             stubs,
             [
                 SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", sourceFingerprint: "hash-bbb", isDeleted: true),
+                SourceRecipeStub(uid: "CCC", name: "Description Only", sourceFingerprint: nil),
+                SourceRecipeStub(uid: "EEE", name: "Neither Field", sourceFingerprint: nil),
+                SourceRecipeStub(uid: "DDD", name: "Notes Only", sourceFingerprint: nil),
                 SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
             ]
         )
@@ -174,7 +177,12 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.sourceName, "Serious Eats")
         XCTAssertEqual(recipe.ingredients, "Broth\nBeans")
         XCTAssertEqual(recipe.directions, "Simmer.")
+        XCTAssertEqual(recipe.description, "A bright bean soup.")
         XCTAssertEqual(recipe.notes, "Finish with lemon.")
+        XCTAssertEqual(recipe.difficulty, "Easy")
+        XCTAssertEqual(recipe.nutrition, "Per serving: 320 calories")
+        XCTAssertEqual(recipe.sourceURL, "https://example.test/weeknight-soup")
+        XCTAssertEqual(recipe.imageURL, "https://example.test/weeknight-soup.jpg")
         XCTAssertEqual(recipe.starRating, 4)
         XCTAssertTrue(recipe.isFavorite)
         XCTAssertEqual(recipe.prepTime, "10 min")
@@ -186,6 +194,36 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.sourceFingerprint, "hash-aaa")
         XCTAssertTrue(recipe.rawJSON.contains("\"category_uids\":[\"CAT1\"]"))
         XCTAssertTrue(recipe.rawJSON.contains("\"created\":\"2025-04-10 10:00:00\""))
+        XCTAssertTrue(recipe.rawJSON.contains("\"description\":\"A bright bean soup.\""))
+        XCTAssertTrue(recipe.rawJSON.contains("\"notes\":\"Finish with lemon.\""))
+    }
+
+    func testPaprikaSQLiteSourceKeepsDescriptionAndNotesIndependent() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
+
+        let both = try await source.fetchRecipe(uid: "AAA")
+        let descriptionOnly = try await source.fetchRecipe(uid: "CCC")
+        let notesOnly = try await source.fetchRecipe(uid: "DDD")
+        let neither = try await source.fetchRecipe(uid: "EEE")
+
+        XCTAssertEqual(both.description, "A bright bean soup.")
+        XCTAssertEqual(both.notes, "Finish with lemon.")
+        XCTAssertEqual(descriptionOnly.description, "Description sentinel.")
+        XCTAssertNil(descriptionOnly.notes)
+        XCTAssertNil(notesOnly.description)
+        XCTAssertEqual(notesOnly.notes, "Notes sentinel.")
+        XCTAssertNil(neither.description)
+        XCTAssertNil(neither.notes)
+
+        let service = RecipeReadService(source: source)
+        let bothDetail = try await service.resolveRecipe(selector: "AAA")
+        let descriptionOnlyDetail = try await service.resolveRecipe(selector: "CCC")
+        let notesOnlyDetail = try await service.resolveRecipe(selector: "DDD")
+        let neitherDetail = try await service.resolveRecipe(selector: "EEE")
+        XCTAssertEqual(bothDetail.target.hasNotes, true)
+        XCTAssertEqual(descriptionOnlyDetail.target.hasNotes, false)
+        XCTAssertEqual(notesOnlyDetail.target.hasNotes, true)
+        XCTAssertEqual(neitherDetail.target.hasNotes, false)
     }
 
     func testPaprikaSQLiteSourceRejectsIncompleteRealSchema() throws {
@@ -222,6 +260,36 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(
             listed,
             [
+                RecipeSummary(
+                    uid: "CCC",
+                    name: "Description Only",
+                    categories: [],
+                    sourceName: nil,
+                    starRating: nil,
+                    isFavorite: false,
+                    updatedAt: nil,
+                    hasNotes: false
+                ),
+                RecipeSummary(
+                    uid: "EEE",
+                    name: "Neither Field",
+                    categories: [],
+                    sourceName: nil,
+                    starRating: nil,
+                    isFavorite: false,
+                    updatedAt: nil,
+                    hasNotes: false
+                ),
+                RecipeSummary(
+                    uid: "DDD",
+                    name: "Notes Only",
+                    categories: [],
+                    sourceName: nil,
+                    starRating: nil,
+                    isFavorite: false,
+                    updatedAt: nil,
+                    hasNotes: true
+                ),
                 RecipeSummary(
                     uid: "AAA",
                     name: "Weeknight Soup",
@@ -358,8 +426,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
             now: { Date(timeIntervalSince1970: 1_712_736_000) }
         )
 
-        XCTAssertEqual(summary.recipeSearchDocumentCount, 1)
-        XCTAssertEqual(summary.recipeFeatureCount, 1)
+        XCTAssertEqual(summary.recipeSearchDocumentCount, 4)
+        XCTAssertEqual(summary.recipeFeatureCount, 4)
         XCTAssertEqual(summary.recipeFeaturesWithTotalTimeCount, 1)
         XCTAssertEqual(summary.recipeFeaturesWithIngredientLineCountCount, 1)
         XCTAssertEqual(summary.sourceState?.sourceType, PantrySourceType.paprikaSQLite)
@@ -420,13 +488,17 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ZCREATED TIMESTAMP,
                     ZCOOKTIME VARCHAR,
                     ZDESCRIPTIONTEXT VARCHAR,
+                    ZDIFFICULTY VARCHAR,
                     ZDIRECTIONS VARCHAR,
+                    ZIMAGEURL VARCHAR,
                     ZINGREDIENTS VARCHAR,
                     ZNAME VARCHAR,
                     ZNOTES VARCHAR,
+                    ZNUTRITIONALINFO VARCHAR,
                     ZPREPTIME VARCHAR,
                     ZSERVINGS VARCHAR,
                     ZSOURCE VARCHAR,
+                    ZSOURCEURL VARCHAR,
                     ZSYNCHASH VARCHAR,
                     ZTOTALTIME VARCHAR,
                     ZUID VARCHAR
@@ -525,15 +597,24 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
             try db.execute(sql: """
                 INSERT INTO ZRECIPE (
                     Z_PK, ZINTRASH, ZONFAVORITES, ZRATING, ZCREATED, ZCOOKTIME,
-                    ZDESCRIPTIONTEXT, ZDIRECTIONS, ZINGREDIENTS, ZNAME, ZNOTES,
-                    ZPREPTIME, ZSERVINGS, ZSOURCE, ZSYNCHASH, ZTOTALTIME, ZUID
+                    ZDESCRIPTIONTEXT, ZDIFFICULTY, ZDIRECTIONS, ZIMAGEURL, ZINGREDIENTS,
+                    ZNAME, ZNOTES, ZNUTRITIONALINFO, ZPREPTIME, ZSERVINGS, ZSOURCE,
+                    ZSOURCEURL, ZSYNCHASH, ZTOTALTIME, ZUID
                 ) VALUES
-                    (1, 0, 1, 4, 765972000, '30 min', NULL, 'Simmer.', 'Broth\nBeans',
-                     'Weeknight Soup', 'Finish with lemon.', '10 min', '4', 'Serious Eats',
+                    (1, 0, 1, 4, 765972000, '30 min', 'A bright bean soup.', 'Easy',
+                     'Simmer.', 'https://example.test/weeknight-soup.jpg', 'Broth\nBeans',
+                     'Weeknight Soup', 'Finish with lemon.', 'Per serving: 320 calories',
+                     '10 min', '4', 'Serious Eats', 'https://example.test/weeknight-soup',
                      'hash-aaa', '40 min', 'AAA'),
-                    (2, 1, 0, 2, 765885600, NULL, 'Hidden', NULL, NULL,
-                     'Deleted Recipe', NULL, NULL, NULL, NULL,
-                     'hash-bbb', NULL, 'BBB')
+                    (2, 1, 0, 2, 765885600, NULL, 'Hidden', NULL, NULL, NULL, NULL,
+                     'Deleted Recipe', NULL, NULL, NULL, NULL, NULL, NULL,
+                     'hash-bbb', NULL, 'BBB'),
+                    (3, 0, 0, NULL, NULL, NULL, 'Description sentinel.', NULL, NULL, NULL, NULL,
+                     'Description Only', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'CCC'),
+                    (4, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     'Notes Only', 'Notes sentinel.', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'DDD'),
+                    (5, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     'Neither Field', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'EEE')
                 """)
             try db.execute(sql: """
                 INSERT INTO Z_12CATEGORIES (Z_12RECIPES, Z_13CATEGORIES)

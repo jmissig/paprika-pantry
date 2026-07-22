@@ -33,7 +33,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     public let sourceName: String?
     public let ingredients: String?
     public let directions: String?
+    public let description: String?
     public let notes: String?
+    public let difficulty: String?
+    public let nutrition: String?
+    public let sourceURL: String?
+    public let imageURL: String?
     public let starRating: Int?
     public let isFavorite: Bool
     public let prepTime: String?
@@ -52,7 +57,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         sourceName: String?,
         ingredients: String?,
         directions: String?,
+        description: String?,
         notes: String?,
+        difficulty: String?,
+        nutrition: String?,
+        sourceURL: String?,
+        imageURL: String?,
         starRating: Int?,
         isFavorite: Bool,
         prepTime: String?,
@@ -70,7 +80,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         self.sourceName = sourceName
         self.ingredients = ingredients
         self.directions = directions
+        self.description = description
         self.notes = notes
+        self.difficulty = difficulty
+        self.nutrition = nutrition
+        self.sourceURL = sourceURL
+        self.imageURL = imageURL
         self.starRating = starRating
         self.isFavorite = isFavorite
         self.prepTime = prepTime

@@ -208,6 +208,24 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("source_fingerprint: \(sourceFingerprint)")
         }
 
+        if let description = recipe.description, !description.isEmpty {
+            lines.append("description:")
+            lines.append(description)
+        }
+        if let difficulty = recipe.difficulty, !difficulty.isEmpty {
+            lines.append("difficulty: \(difficulty)")
+        }
+        if let nutrition = recipe.nutrition, !nutrition.isEmpty {
+            lines.append("nutrition:")
+            lines.append(nutrition)
+        }
+        if let sourceURL = recipe.sourceURL, !sourceURL.isEmpty {
+            lines.append("source_url: \(sourceURL)")
+        }
+        if let imageURL = recipe.imageURL, !imageURL.isEmpty {
+            lines.append("image_url: \(imageURL)")
+        }
+
         if let usageStats {
             lines.append("usage_read_path: sidecar-derived")
             lines.append(contentsOf: renderedIndexFreshnessLines(
