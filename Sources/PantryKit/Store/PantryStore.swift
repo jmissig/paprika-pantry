@@ -1400,12 +1400,13 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             categories,
                             source_name,
                             ingredients,
+                            description,
                             notes,
                             source_fingerprint,
                             indexed_at,
                             is_favorite,
                             star_rating
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         arguments: [
                             document.uid,
@@ -1413,6 +1414,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             Self.encodeCategories(document.categories),
                             document.sourceName,
                             document.ingredients,
+                            document.description,
                             document.notes,
                             document.sourceFingerprint,
                             indexedAtString,
@@ -1429,8 +1431,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             categories,
                             source_name,
                             ingredients,
+                            description,
                             notes
-                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         arguments: [
                             document.uid,
@@ -1438,6 +1441,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                             document.categories.joined(separator: " "),
                             document.sourceName,
                             document.ingredients,
+                            document.description,
                             document.notes,
                         ]
                     )
@@ -2078,6 +2082,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 ),
                 sourceName: recipe.sourceName,
                 ingredients: recipe.ingredients,
+                description: recipe.description,
                 notes: recipe.notes,
                 sourceFingerprint: recipe.sourceFingerprint,
                 isFavorite: recipe.isFavorite,
@@ -2980,6 +2985,7 @@ private struct RecipeSearchDocument: Equatable, Sendable {
     let categories: [String]
     let sourceName: String?
     let ingredients: String?
+    let description: String?
     let notes: String?
     let sourceFingerprint: String?
     let isFavorite: Bool

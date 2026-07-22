@@ -34,6 +34,8 @@ final class PantrySidecarDatabaseTests: XCTestCase {
             XCTAssertFalse(try db.tableExists("sync_runs"))
 
             XCTAssertTrue(try columns(in: "recipe_search_documents", db: db).contains("source_fingerprint"))
+            XCTAssertTrue(try columns(in: "recipe_search_documents", db: db).contains("description"))
+            XCTAssertTrue(try columns(in: "recipe_search_fts", db: db).contains("description"))
             XCTAssertTrue(try columns(in: "recipe_features", db: db).contains("source_fingerprint"))
             XCTAssertTrue(try columns(in: "recipe_ingredient_lines", db: db).contains("source_fingerprint"))
             XCTAssertTrue(try columns(in: "recipe_usage_stats", db: db).contains("meal_count"))

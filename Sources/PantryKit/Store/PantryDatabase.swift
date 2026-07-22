@@ -33,6 +33,7 @@ public struct PantrySidecarDatabase {
                 table.column("categories", .text).notNull().defaults(to: "")
                 table.column("source_name", .text)
                 table.column("ingredients", .text)
+                table.column("description", .text)
                 table.column("notes", .text)
                 table.column("source_fingerprint", .text)
                 table.column("indexed_at", .text).notNull()
@@ -47,6 +48,7 @@ public struct PantrySidecarDatabase {
                 table.column("categories")
                 table.column("source_name")
                 table.column("ingredients")
+                table.column("description")
                 table.column("notes")
                 table.tokenizer = .unicode61()
             }

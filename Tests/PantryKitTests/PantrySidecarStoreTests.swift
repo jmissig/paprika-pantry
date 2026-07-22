@@ -386,6 +386,46 @@ final class PantrySidecarStoreTests: XCTestCase {
         XCTAssertEqual(try store.searchRecipes(query: "   ").count, 0)
     }
 
+    func testRecipeSearchIndexesDescriptionAndNotesIndependently() async throws {
+        let store = try makeStore()
+        let source = InMemoryPantrySource(
+            stubs: [
+                SourceRecipeStub(uid: "AAA", name: "Both Fields", sourceFingerprint: "hash-aaa"),
+                SourceRecipeStub(uid: "CCC", name: "Description Only", sourceFingerprint: "hash-ccc"),
+                SourceRecipeStub(uid: "DDD", name: "Notes Only", sourceFingerprint: "hash-ddd"),
+                SourceRecipeStub(uid: "EEE", name: "Neither Field", sourceFingerprint: "hash-eee"),
+            ],
+            categories: [],
+            recipesByUID: [
+                "AAA": makeSearchFieldsRecipe(
+                    uid: "AAA",
+                    description: "A bright bean soup.",
+                    notes: "Finish with lemon."
+                ),
+                "CCC": makeSearchFieldsRecipe(
+                    uid: "CCC",
+                    description: "Description sentinel.",
+                    notes: nil
+                ),
+                "DDD": makeSearchFieldsRecipe(
+                    uid: "DDD",
+                    description: nil,
+                    notes: "Notes sentinel."
+                ),
+                "EEE": makeSearchFieldsRecipe(uid: "EEE", description: nil, notes: nil),
+            ]
+        )
+
+        _ = try await store.rebuildRecipeIndexes(from: source)
+
+        XCTAssertEqual(try store.searchRecipes(query: "Description sentinel").map(\.uid), ["CCC"])
+        XCTAssertEqual(try store.searchRecipes(query: "Notes sentinel").map(\.uid), ["DDD"])
+        XCTAssertEqual(try store.searchRecipes(query: "bright bean").map(\.uid), ["AAA"])
+        XCTAssertEqual(try store.searchRecipes(query: "finish lemon").map(\.uid), ["AAA"])
+        XCTAssertEqual(try store.searchRecipes(query: "Description sentinel").first?.target.hasNotes, false)
+        XCTAssertEqual(try store.searchRecipes(query: "Notes sentinel").first?.target.hasNotes, true)
+    }
+
     func testSearchRecipesAppliesFavoriteAndRatingFiltersWithRatingSort() async throws {
         let store = try makeStore()
         let source = InMemoryPantrySource(
@@ -1445,6 +1485,37 @@ final class PantrySidecarStoreTests: XCTestCase {
     private func makeStore() throws -> PantrySidecarStore {
         let database = try makeDatabase()
         return PantrySidecarStore(dbQueue: try database.openQueue())
+    }
+
+    private func makeSearchFieldsRecipe(
+        uid: String,
+        description: String?,
+        notes: String?
+    ) -> SourceRecipe {
+        SourceRecipe(
+            uid: uid,
+            name: uid,
+            categoryReferences: [],
+            sourceName: nil,
+            ingredients: nil,
+            directions: nil,
+            description: description,
+            notes: notes,
+            difficulty: nil,
+            nutrition: nil,
+            sourceURL: nil,
+            imageURL: nil,
+            starRating: nil,
+            isFavorite: false,
+            prepTime: nil,
+            cookTime: nil,
+            totalTime: nil,
+            servings: nil,
+            createdAt: nil,
+            updatedAt: nil,
+            sourceFingerprint: "hash-\(uid.lowercased())",
+            rawJSON: "{}"
+        )
     }
 
     private func makeRecipeForAggregate(
