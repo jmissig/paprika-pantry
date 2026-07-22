@@ -206,7 +206,7 @@ paprika-pantry recipes list
 paprika-pantry recipes show "Weeknight Pasta"
 ```
 
-`recipes show <uid>` is the full recipe detail boundary and includes Paprika recipe notes when present. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
+`recipes show <uid>` is the full recipe detail boundary. It preserves publisher/source description separately from household-authored notes and also exposes difficulty, nutrition, source/image URLs, and bounded photo metadata when Paprika contains them. Photo output contains filenames, status, and existing Paprika-owned local paths—not copied image bytes. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
 
 Use paprika-pantry's local index when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
 

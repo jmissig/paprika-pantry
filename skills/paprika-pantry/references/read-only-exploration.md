@@ -81,7 +81,7 @@ Use SQL when you need to inspect across tables, validate counts, or understand w
 
 Useful sidecar tables:
 
-- `recipe_search_documents` — recipe search rows and canonical-ish fields copied for the owned index.
+- `recipe_search_documents` — recipe search rows with separate `description` and `notes` columns copied for the owned index.
 - `recipe_features` — derived prep/cook/total time and ingredient-line counts.
 - `recipe_usage_stats` — meal-history-derived usage facts: counts, first/last cooked, gaps, share.
 - `recipe_ingredient_lines` — conservative normalized ingredient-line records.
@@ -93,6 +93,8 @@ Useful sidecar tables:
 - `source_state` — observed source/Paprika sync state captured during indexing.
 
 The sidecar is rebuildable. Paprika remains the canonical source for recipes, meals, groceries, and pantry items.
+
+Description and notes remain semantically separate in both `recipe_search_documents` and `recipe_search_fts`. Search may match either field. Search-result `hasNotes` is derived only from nonblank `recipe_search_documents.notes`; a description-only recipe reports `hasNotes == false`.
 
 ## Canned inspection queries
 

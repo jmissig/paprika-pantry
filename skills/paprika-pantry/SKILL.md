@@ -5,7 +5,7 @@ description: "Use when answering questions about Paprika recipes, planned or pas
 
 # paprika-pantry
 
-Use the locally synced Paprika library as read-only household cooking context: recipes, notes, meals, ratings, groceries, pantry inventory, and cooking history.
+Use Paprika as read-only context: recipes, descriptions, notes, meals, ratings, inventory, and history.
 
 ## Start from the person's question
 
@@ -19,7 +19,7 @@ Use the locally synced Paprika library as read-only household cooking context: r
 ## Answer workflow
 
 1. Retrieve relevant rows with `--format json`; use `--help` instead of guessing filters.
-2. Resolve recipe targets by UID. Use `recipes show <uid>` when ingredients, directions, notes, quantities, or the finished dish matter.
+2. Resolve recipe targets by UID. Use `recipes show <uid>` when full recipe text, quantities, photos, or the finished dish matter.
 3. Inspect the strongest candidates, then give a few useful results with distinguishing evidence and uncertainty.
 
 Do not make the person run a follow-up command to understand the answer.
@@ -29,9 +29,10 @@ If search finds nothing, broaden once while preserving the important constraint.
 ## Evidence and interpretation
 
 - Canonical facts include recipes, ratings, notes, meals, groceries, and pantry records. Derived evidence includes repetition, recency, source rollups, and ingredient co-occurrence.
+- Treat `description` as publisher context and `notes` as household recipe notes. They are separate; a description-only recipe has no notes.
 - Separate observation from inference. Frequency is not quality; surface conflicts such as a high rating without repeats.
 - Pairings are co-occurrence evidence, not flavor or substitution rules. If they are stale, say so; use `index rebuild` only when the question needs fresh pairings.
-- `recipes show` is the fullest currently exposed recipe boundary, not proof that Paprika contains no other fields. The current CLI does not separately expose description, difficulty, nutrition, source/image URLs, or photo metadata, and may combine description with notes.
+- `recipes show` exposes distinct description/notes, difficulty, nutrition, URLs, and photo metadata. Missing fields were empty or unavailable in that Paprika schema; photo paths remain Paprika-owned.
 
 Use concise culinary language grounded in the retrieved recipe. Do not invent ingredients, flavors, preferences, or reasons for a pattern.
 

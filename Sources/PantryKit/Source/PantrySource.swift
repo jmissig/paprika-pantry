@@ -147,6 +147,70 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     }
 }
 
+public struct SourceRecipeFieldCoverage: Codable, Equatable, Sendable {
+    public let descriptionCount: Int
+    public let notesCount: Int
+    public let descriptionAndNotesCount: Int
+    public let difficultyCount: Int
+    public let nutritionCount: Int
+    public let sourceURLCount: Int
+    public let imageURLCount: Int
+    public let primaryPhotoCount: Int
+    public let recipesWithAdditionalPhotosCount: Int
+    public let additionalPhotoCount: Int
+
+    public init(
+        descriptionCount: Int,
+        notesCount: Int,
+        descriptionAndNotesCount: Int,
+        difficultyCount: Int,
+        nutritionCount: Int,
+        sourceURLCount: Int,
+        imageURLCount: Int,
+        primaryPhotoCount: Int,
+        recipesWithAdditionalPhotosCount: Int,
+        additionalPhotoCount: Int
+    ) {
+        self.descriptionCount = descriptionCount
+        self.notesCount = notesCount
+        self.descriptionAndNotesCount = descriptionAndNotesCount
+        self.difficultyCount = difficultyCount
+        self.nutritionCount = nutritionCount
+        self.sourceURLCount = sourceURLCount
+        self.imageURLCount = imageURLCount
+        self.primaryPhotoCount = primaryPhotoCount
+        self.recipesWithAdditionalPhotosCount = recipesWithAdditionalPhotosCount
+        self.additionalPhotoCount = additionalPhotoCount
+    }
+
+    public init(recipes: [SourceRecipe]) {
+        self.init(
+            descriptionCount: recipes.count { Self.isNonblank($0.description) },
+            notesCount: recipes.count { Self.isNonblank($0.notes) },
+            descriptionAndNotesCount: recipes.count {
+                Self.isNonblank($0.description) && Self.isNonblank($0.notes)
+            },
+            difficultyCount: recipes.count { Self.isNonblank($0.difficulty) },
+            nutritionCount: recipes.count { Self.isNonblank($0.nutrition) },
+            sourceURLCount: recipes.count { Self.isNonblank($0.sourceURL) },
+            imageURLCount: recipes.count { Self.isNonblank($0.imageURL) },
+            primaryPhotoCount: recipes.count { recipe in
+                recipe.photos.contains { $0.kind == .primary }
+            },
+            recipesWithAdditionalPhotosCount: recipes.count { recipe in
+                recipe.photos.contains { $0.kind == .additional }
+            },
+            additionalPhotoCount: recipes.reduce(into: 0) { count, recipe in
+                count += recipe.photos.count { $0.kind == .additional }
+            }
+        )
+    }
+
+    private static func isNonblank(_ value: String?) -> Bool {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+}
+
 public struct SourceMeal: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
@@ -253,6 +317,19 @@ public protocol PantrySource: Sendable {
     func listRecipeStubs() async throws -> [SourceRecipeStub]
     func listRecipeCategories() async throws -> [SourceRecipeCategory]
     func fetchRecipe(uid: String) async throws -> SourceRecipe
+    func recipeFieldCoverage() async throws -> SourceRecipeFieldCoverage
+}
+
+public extension PantrySource {
+    func recipeFieldCoverage() async throws -> SourceRecipeFieldCoverage {
+        let activeStubs = try await listRecipeStubs().filter { !$0.isDeleted }
+        var recipes = [SourceRecipe]()
+        recipes.reserveCapacity(activeStubs.count)
+        for stub in activeStubs {
+            recipes.append(try await fetchRecipe(uid: stub.uid))
+        }
+        return SourceRecipeFieldCoverage(recipes: recipes)
+    }
 }
 
 public protocol MealsReadablePantrySource: PantrySource {

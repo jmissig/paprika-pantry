@@ -102,6 +102,7 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
     public let categoryCount: Int
     public let activeCategoryCount: Int
     public let deletedCategoryCount: Int
+    public let recipeFieldCoverage: SourceRecipeFieldCoverage
     public let sampleLimit: Int
     public let sampledRecipeCount: Int
     public let sampleFailureCount: Int
@@ -121,6 +122,7 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
         self.categoryCount = snapshot.categoryCount
         self.activeCategoryCount = snapshot.activeCategoryCount
         self.deletedCategoryCount = snapshot.deletedCategoryCount
+        self.recipeFieldCoverage = snapshot.recipeFieldCoverage
         self.sampleLimit = snapshot.sampleLimit
         self.sampledRecipeCount = snapshot.sampledRecipeCount
         self.sampleFailureCount = snapshot.sampleFailureCount
@@ -139,6 +141,16 @@ public struct SourceStatsReport: ConsoleRenderable, Equatable, Sendable {
             "categories_total: \(categoryCount)",
             "categories_active: \(activeCategoryCount)",
             "categories_deleted: \(deletedCategoryCount)",
+            "recipes_with_description: \(recipeFieldCoverage.descriptionCount)",
+            "recipes_with_notes: \(recipeFieldCoverage.notesCount)",
+            "recipes_with_description_and_notes: \(recipeFieldCoverage.descriptionAndNotesCount)",
+            "recipes_with_difficulty: \(recipeFieldCoverage.difficultyCount)",
+            "recipes_with_nutrition: \(recipeFieldCoverage.nutritionCount)",
+            "recipes_with_source_url: \(recipeFieldCoverage.sourceURLCount)",
+            "recipes_with_image_url: \(recipeFieldCoverage.imageURLCount)",
+            "recipes_with_primary_photo: \(recipeFieldCoverage.primaryPhotoCount)",
+            "recipes_with_additional_photos: \(recipeFieldCoverage.recipesWithAdditionalPhotosCount)",
+            "additional_photos_total: \(recipeFieldCoverage.additionalPhotoCount)",
             "sample_limit: \(sampleLimit)",
             "sampled_recipes: \(sampledRecipeCount)",
             "sample_failures: \(sampleFailureCount)",

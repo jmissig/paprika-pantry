@@ -65,6 +65,18 @@ final class SourceDoctorReportTests: XCTestCase {
                 categoryCount: 2,
                 activeCategoryCount: 1,
                 deletedCategoryCount: 1,
+                recipeFieldCoverage: SourceRecipeFieldCoverage(
+                    descriptionCount: 2,
+                    notesCount: 2,
+                    descriptionAndNotesCount: 1,
+                    difficultyCount: 1,
+                    nutritionCount: 1,
+                    sourceURLCount: 1,
+                    imageURLCount: 1,
+                    primaryPhotoCount: 1,
+                    recipesWithAdditionalPhotosCount: 1,
+                    additionalPhotoCount: 2
+                ),
                 sampleLimit: 5,
                 sampledRecipeCount: 2,
                 sampleFailureCount: 1,
@@ -89,6 +101,16 @@ final class SourceDoctorReportTests: XCTestCase {
         XCTAssertEqual(report.status, "partial")
         XCTAssertTrue(report.humanDescription.contains("recipes_total: 3"))
         XCTAssertTrue(report.humanDescription.contains("categories_deleted: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_description: 2"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_notes: 2"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_description_and_notes: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_difficulty: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_nutrition: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_source_url: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_image_url: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_primary_photo: 1"))
+        XCTAssertTrue(report.humanDescription.contains("recipes_with_additional_photos: 1"))
+        XCTAssertTrue(report.humanDescription.contains("additional_photos_total: 2"))
         XCTAssertTrue(report.humanDescription.contains("sample_recipe: Apple Cake [AAA] categories=Dessert"))
         XCTAssertTrue(report.humanDescription.contains("sample_failure: Broken Recipe [BBB] error=Missing recipe fixture for BBB."))
     }

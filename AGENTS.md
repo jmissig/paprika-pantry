@@ -44,6 +44,8 @@ Source of truth:
 - Architecture notes/specs: `docs/`
 - OpenClaw tool skill: `skills/paprika-pantry/SKILL.md`
 
+Architecture lineage: the early export/import mirror prototype was retired on 2026-04-17 when the project moved to direct read-only access to the live local `Paprika.sqlite`. The current `pantry.sqlite` is a disposable, rebuildable sidecar for search and derived evidence; it is not a second canonical recipe database.
+
 Never write to:
 - the real Paprika database (`Paprika.sqlite` or equivalent local source DB)
 - Paprika cloud/server state

@@ -2,6 +2,8 @@
 
 `paprika-pantry` derives recipe usage facts from Paprika meal history and stores them in the local sidecar/index. These facts are descriptive evidence, not preference labels.
 
+Paprika remains canonical for recipe content. The sidecar is rebuildable and stores only search inputs and derived facts. Recipe `description` and household `notes` stay separate in canonical reads and sidecar search; neither substitutes for the other, and `hasNotes` means nonblank notes only.
+
 ## Source Semantics
 
 Use Paprika meal `scheduledAt` as the meal timestamp.

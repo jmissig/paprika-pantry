@@ -31,6 +31,7 @@ public struct SourceStatsSnapshot: Codable, Equatable, Sendable {
     public let categoryCount: Int
     public let activeCategoryCount: Int
     public let deletedCategoryCount: Int
+    public let recipeFieldCoverage: SourceRecipeFieldCoverage
     public let sampleLimit: Int
     public let sampledRecipeCount: Int
     public let sampleFailureCount: Int
@@ -44,6 +45,7 @@ public struct SourceStatsSnapshot: Codable, Equatable, Sendable {
         categoryCount: Int,
         activeCategoryCount: Int,
         deletedCategoryCount: Int,
+        recipeFieldCoverage: SourceRecipeFieldCoverage,
         sampleLimit: Int,
         sampledRecipeCount: Int,
         sampleFailureCount: Int,
@@ -56,6 +58,7 @@ public struct SourceStatsSnapshot: Codable, Equatable, Sendable {
         self.categoryCount = categoryCount
         self.activeCategoryCount = activeCategoryCount
         self.deletedCategoryCount = deletedCategoryCount
+        self.recipeFieldCoverage = recipeFieldCoverage
         self.sampleLimit = sampleLimit
         self.sampledRecipeCount = sampledRecipeCount
         self.sampleFailureCount = sampleFailureCount
@@ -76,6 +79,7 @@ public struct SourceStatsService: Sendable {
     public func makeSnapshot(sampleLimit: Int) async throws -> SourceStatsSnapshot {
         let stubs = try await source.listRecipeStubs()
         let categories = try await source.listRecipeCategories()
+        let recipeFieldCoverage = try await source.recipeFieldCoverage()
         let activeStubs = stubs
             .filter { !$0.isDeleted }
             .sorted(by: Self.sortRecipeStubs)
@@ -119,6 +123,7 @@ public struct SourceStatsService: Sendable {
             categoryCount: categories.count,
             activeCategoryCount: activeCategoryCount,
             deletedCategoryCount: deletedCategoryCount,
+            recipeFieldCoverage: recipeFieldCoverage,
             sampleLimit: sampleLimit,
             sampledRecipeCount: sampledRecipes.count,
             sampleFailureCount: sampleFailures.count,

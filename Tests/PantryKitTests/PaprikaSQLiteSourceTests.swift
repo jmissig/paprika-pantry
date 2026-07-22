@@ -23,6 +23,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let groceryItems = try await source.listGroceryItems()
         let pantryItems = try await source.listPantryItems()
         let recipe = try await source.fetchRecipe(uid: "AAA")
+        let recipeFieldCoverage = try await source.recipeFieldCoverage()
 
         XCTAssertEqual(
             stubs,
@@ -211,6 +212,16 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertTrue(recipe.rawJSON.contains("\"created\":\"2025-04-10 10:00:00\""))
         XCTAssertTrue(recipe.rawJSON.contains("\"description\":\"A bright bean soup.\""))
         XCTAssertTrue(recipe.rawJSON.contains("\"notes\":\"Finish with lemon.\""))
+        XCTAssertEqual(recipeFieldCoverage.descriptionCount, 2)
+        XCTAssertEqual(recipeFieldCoverage.notesCount, 2)
+        XCTAssertEqual(recipeFieldCoverage.descriptionAndNotesCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.difficultyCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.nutritionCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.sourceURLCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.imageURLCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.primaryPhotoCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.recipesWithAdditionalPhotosCount, 1)
+        XCTAssertEqual(recipeFieldCoverage.additionalPhotoCount, 2)
     }
 
     func testPaprikaSQLiteSourceKeepsDescriptionAndNotesIndependent() async throws {

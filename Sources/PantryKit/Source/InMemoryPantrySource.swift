@@ -65,6 +65,13 @@ public final class InMemoryPantrySource: MealsReadablePantrySource, GroceriesRea
         return recipe
     }
 
+    public func recipeFieldCoverage() async throws -> SourceRecipeFieldCoverage {
+        let activeUIDs = Set(stubs.lazy.filter { !$0.isDeleted }.map(\.uid))
+        return SourceRecipeFieldCoverage(
+            recipes: recipesByUID.values.filter { activeUIDs.contains($0.uid) }
+        )
+    }
+
     public func listMeals() async throws -> [SourceMeal] {
         meals
     }

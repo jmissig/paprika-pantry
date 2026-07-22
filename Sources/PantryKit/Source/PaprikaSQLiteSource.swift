@@ -264,6 +264,41 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         }
     }
 
+    public func recipeFieldCoverage() async throws -> SourceRecipeFieldCoverage {
+        try await dbQueue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT
+                        \(self.schema.nonblankCountExpression(column: "ZDESCRIPTIONTEXT")) AS descriptions,
+                        \(self.schema.nonblankCountExpression(column: "ZNOTES")) AS notes,
+                        \(self.schema.bothNonblankCountExpression(columns: "ZDESCRIPTIONTEXT", "ZNOTES")) AS description_and_notes,
+                        \(self.schema.nonblankCountExpression(column: "ZDIFFICULTY")) AS difficulty,
+                        \(self.schema.nonblankCountExpression(column: "ZNUTRITIONALINFO")) AS nutrition,
+                        \(self.schema.nonblankCountExpression(column: "ZSOURCEURL")) AS source_urls,
+                        \(self.schema.nonblankCountExpression(column: "ZIMAGEURL")) AS image_urls,
+                        \(self.schema.nonblankCountExpression(column: "ZPHOTO")) AS primary_photos
+                    FROM ZRECIPE
+                    WHERE \(self.schema.recipeDeletedExpression) = 0
+                    """
+            )!
+
+            let additionalPhotoCoverage = try self.additionalPhotoCoverage(db: db)
+            return SourceRecipeFieldCoverage(
+                descriptionCount: row["descriptions"],
+                notesCount: row["notes"],
+                descriptionAndNotesCount: row["description_and_notes"],
+                difficultyCount: row["difficulty"],
+                nutritionCount: row["nutrition"],
+                sourceURLCount: row["source_urls"],
+                imageURLCount: row["image_urls"],
+                primaryPhotoCount: row["primary_photos"],
+                recipesWithAdditionalPhotosCount: additionalPhotoCoverage.recipeCount,
+                additionalPhotoCount: additionalPhotoCoverage.photoCount
+            )
+        }
+    }
+
     public func fetchRecipe(uid: String) async throws -> SourceRecipe {
         let sql = """
             SELECT
@@ -444,6 +479,35 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         })
 
         return photos
+    }
+
+    private func additionalPhotoCoverage(db: Database) throws -> (recipeCount: Int, photoCount: Int) {
+        guard
+            let recipePhotoColumns = schema.recipePhotoColumns,
+            recipePhotoColumns.contains("ZRECIPE"),
+            recipePhotoColumns.contains("ZFILENAME")
+        else {
+            return (0, 0)
+        }
+
+        let activeRecipeExpression = schema.recipeColumns.contains("ZINTRASH")
+            ? "COALESCE(recipes.ZINTRASH, 0) = 0"
+            : "1 = 1"
+        let row = try Row.fetchOne(
+            db,
+            sql: """
+                SELECT
+                    COUNT(DISTINCT photos.ZRECIPE) AS recipe_count,
+                    COUNT(*) AS photo_count
+                FROM ZRECIPEPHOTO photos
+                INNER JOIN ZRECIPE recipes
+                    ON recipes.Z_PK = photos.ZRECIPE
+                WHERE \(activeRecipeExpression)
+                  AND NULLIF(TRIM(photos.ZFILENAME), '') IS NOT NULL
+                """
+        )!
+
+        return (row["recipe_count"], row["photo_count"])
     }
 
     private func resolvedPhotoPath(recipeUID: String, filename: String) -> String? {
@@ -725,6 +789,22 @@ private struct PaprikaSQLiteSchema: Sendable {
         }
 
         return tableAlias.map { "\($0).\(column)" } ?? column
+    }
+
+    func nonblankCountExpression(column: String) -> String {
+        guard recipeColumns.contains(column) else {
+            return "0"
+        }
+
+        return "COALESCE(SUM(CASE WHEN NULLIF(TRIM(\(column)), '') IS NOT NULL THEN 1 ELSE 0 END), 0)"
+    }
+
+    func bothNonblankCountExpression(columns first: String, _ second: String) -> String {
+        guard recipeColumns.contains(first), recipeColumns.contains(second) else {
+            return "0"
+        }
+
+        return "COALESCE(SUM(CASE WHEN NULLIF(TRIM(\(first)), '') IS NOT NULL AND NULLIF(TRIM(\(second)), '') IS NOT NULL THEN 1 ELSE 0 END), 0)"
     }
 
     func coreDataTimestampExpression(column: String) -> String {
