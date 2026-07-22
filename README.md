@@ -4,16 +4,16 @@
 
 It opens Paprika's database read-only: it does not authenticate to Paprika Cloud, call a Paprika web API, or write back to the app's data.
 
-It is built around a few normal tasks:
+It is built to answer ordinary cooking questions:
 
-- inspect whether the local Paprika source is readable and current
-- read recipes, meals, groceries, and pantry items directly from canonical Paprika data
-- build and query paprika-pantry's local index for recipe search and derived cooking patterns
-- inspect cookbook/source rollups and source freshness without writing to the real Paprika DB
+- What is planned today, and what do I need to know before cooking it?
+- Which saved recipes fit an ingredient, time limit, rating, exclusion, or “haven't made lately” constraint?
+- What does a recipe mean by an ingredient, and is a conversion or substitution sensible here?
+- Which recipes have we made, liked, repeated, neglected, or never tried?
+- What is recorded in the pantry or grocery list?
+- How have the household's cooking habits and useful recipe sources changed over time?
 
-It also has a practical sync-adjacent helper:
-
-- launch the local Paprika app and optionally wait for the observed last-sync marker to advance
+When Paprika's local data needs refreshing, the tool can launch Paprika, wait for its observed sync marker to advance, and then rebuild its own search and cooking-pattern indexes. It still never writes to Paprika's database.
 
 ## Install
 
@@ -206,7 +206,7 @@ paprika-pantry recipes list
 paprika-pantry recipes show "Weeknight Pasta"
 ```
 
-`recipes show <uid>` is the full recipe detail boundary. It preserves publisher/source description separately from household-authored notes and also exposes difficulty, nutrition, source/image URLs, and bounded photo metadata when Paprika contains them. Photo output contains filenames, status, and existing Paprika-owned local paths—not copied image bytes. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
+`recipes show <uid>` is the full recipe detail boundary. Use it when choosing between candidates, understanding what a dish is, following the recipe, checking household modifications, answering a nutrition or difficulty question, or locating the original source and available photos. Publisher descriptions and household notes remain separate so one is not mistaken for the other. Photo output refers to existing Paprika-owned files; it does not copy image bytes. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
 
 Use paprika-pantry's local index when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
 
