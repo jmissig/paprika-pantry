@@ -183,6 +183,21 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.nutrition, "Per serving: 320 calories")
         XCTAssertEqual(recipe.sourceURL, "https://example.test/weeknight-soup")
         XCTAssertEqual(recipe.imageURL, "https://example.test/weeknight-soup.jpg")
+        XCTAssertEqual(recipe.photos.map(\.kind), [.primary, .additional, .additional])
+        XCTAssertEqual(recipe.photos.map(\.filename), ["primary.jpg", "step-1.jpg", "missing.jpg"])
+        XCTAssertNil(recipe.photos[0].uid)
+        XCTAssertEqual(recipe.photos[0].largeFilename, "primary-large.jpg")
+        XCTAssertEqual(recipe.photos[0].photoHash, "primary-hash")
+        XCTAssertTrue(recipe.photos[0].isDownloaded)
+        XCTAssertTrue(recipe.photos[0].isUploaded)
+        XCTAssertTrue(recipe.photos[0].localPath?.hasSuffix("Data/Photos/AAA/primary.jpg") == true)
+        XCTAssertTrue(recipe.photos[0].largeLocalPath?.hasSuffix("Data/Photos/AAA/primary-large.jpg") == true)
+        XCTAssertEqual(recipe.photos[1].uid, "PHOTO1")
+        XCTAssertEqual(recipe.photos[1].name, "Step one")
+        XCTAssertEqual(recipe.photos[1].order, 1)
+        XCTAssertTrue(recipe.photos[1].localPath?.hasSuffix("Data/Photos/AAA/step-1.jpg") == true)
+        XCTAssertEqual(recipe.photos[2].uid, "PHOTO2")
+        XCTAssertNil(recipe.photos[2].localPath)
         XCTAssertEqual(recipe.starRating, 4)
         XCTAssertTrue(recipe.isFavorite)
         XCTAssertEqual(recipe.prepTime, "10 min")
@@ -244,6 +259,14 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertThrowsError(try PaprikaSQLiteSource(databaseURL: databaseURL)) { error in
             XCTAssertEqual(error as? PaprikaSQLiteSourceError, .missingTable("ZRECIPECATEGORY"))
         }
+    }
+
+    func testPaprikaSQLiteSourceAllowsSchemasWithoutPhotoSupport() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabaseWithoutPhotos())
+
+        let recipe = try await source.fetchRecipe(uid: "AAA")
+
+        XCTAssertEqual(recipe.photos, [])
     }
 
     func testRecipeReadServiceReadsListAndShowDirectlyFromPaprikaSQLiteSource() throws {
@@ -452,6 +475,11 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let preferencesDirectoryURL = groupContainerURL.appendingPathComponent("Library/Preferences", isDirectory: true)
         try FileManager.default.createDirectory(at: databaseDirectoryURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: preferencesDirectoryURL, withIntermediateDirectories: true)
+        let recipePhotosURL = groupContainerURL.appendingPathComponent("Data/Photos/AAA", isDirectory: true)
+        try FileManager.default.createDirectory(at: recipePhotosURL, withIntermediateDirectories: true)
+        try Data().write(to: recipePhotosURL.appendingPathComponent("primary.jpg"))
+        try Data().write(to: recipePhotosURL.appendingPathComponent("primary-large.jpg"))
+        try Data().write(to: recipePhotosURL.appendingPathComponent("step-1.jpg"))
 
         let preferencesURL = preferencesDirectoryURL.appendingPathComponent("test.container.plist")
         let preferences = ["LastSyncedDate": "2026-04-18 01:08:36"]
@@ -495,12 +523,30 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     ZNAME VARCHAR,
                     ZNOTES VARCHAR,
                     ZNUTRITIONALINFO VARCHAR,
+                    ZPHOTO VARCHAR,
+                    ZPHOTOHASH VARCHAR,
+                    ZPHOTOISDOWNLOADED INTEGER,
+                    ZPHOTOISUPLOADED INTEGER,
+                    ZPHOTOLARGE VARCHAR,
                     ZPREPTIME VARCHAR,
                     ZSERVINGS VARCHAR,
                     ZSOURCE VARCHAR,
                     ZSOURCEURL VARCHAR,
                     ZSYNCHASH VARCHAR,
                     ZTOTALTIME VARCHAR,
+                    ZUID VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZRECIPEPHOTO (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZISDOWNLOADED INTEGER,
+                    ZISUPLOADED INTEGER,
+                    ZORDERFLAG INTEGER,
+                    ZRECIPE INTEGER,
+                    ZFILENAME VARCHAR,
+                    ZNAME VARCHAR,
+                    ZPHOTOHASH VARCHAR,
                     ZUID VARCHAR
                 )
                 """)
@@ -598,23 +644,37 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                 INSERT INTO ZRECIPE (
                     Z_PK, ZINTRASH, ZONFAVORITES, ZRATING, ZCREATED, ZCOOKTIME,
                     ZDESCRIPTIONTEXT, ZDIFFICULTY, ZDIRECTIONS, ZIMAGEURL, ZINGREDIENTS,
-                    ZNAME, ZNOTES, ZNUTRITIONALINFO, ZPREPTIME, ZSERVINGS, ZSOURCE,
-                    ZSOURCEURL, ZSYNCHASH, ZTOTALTIME, ZUID
+                    ZNAME, ZNOTES, ZNUTRITIONALINFO, ZPHOTO, ZPHOTOHASH,
+                    ZPHOTOISDOWNLOADED, ZPHOTOISUPLOADED, ZPHOTOLARGE, ZPREPTIME,
+                    ZSERVINGS, ZSOURCE, ZSOURCEURL, ZSYNCHASH, ZTOTALTIME, ZUID
                 ) VALUES
                     (1, 0, 1, 4, 765972000, '30 min', 'A bright bean soup.', 'Easy',
                      'Simmer.', 'https://example.test/weeknight-soup.jpg', 'Broth\nBeans',
                      'Weeknight Soup', 'Finish with lemon.', 'Per serving: 320 calories',
-                     '10 min', '4', 'Serious Eats', 'https://example.test/weeknight-soup',
-                     'hash-aaa', '40 min', 'AAA'),
+                     'primary.jpg', 'primary-hash', 1, 1, 'primary-large.jpg', '10 min',
+                     '4', 'Serious Eats', 'https://example.test/weeknight-soup', 'hash-aaa',
+                     '40 min', 'AAA'),
                     (2, 1, 0, 2, 765885600, NULL, 'Hidden', NULL, NULL, NULL, NULL,
-                     'Deleted Recipe', NULL, NULL, NULL, NULL, NULL, NULL,
+                     'Deleted Recipe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     NULL, NULL, NULL,
                      'hash-bbb', NULL, 'BBB'),
                     (3, 0, 0, NULL, NULL, NULL, 'Description sentinel.', NULL, NULL, NULL, NULL,
-                     'Description Only', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'CCC'),
+                     'Description Only', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     NULL, NULL, NULL, NULL, 'CCC'),
                     (4, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                     'Notes Only', 'Notes sentinel.', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'DDD'),
+                     'Notes Only', 'Notes sentinel.', NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     NULL, NULL, NULL, NULL, NULL, 'DDD'),
                     (5, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                     'Neither Field', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'EEE')
+                     'Neither Field', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     NULL, NULL, NULL, NULL, 'EEE')
+                """)
+            try db.execute(sql: """
+                INSERT INTO ZRECIPEPHOTO (
+                    Z_PK, ZISDOWNLOADED, ZISUPLOADED, ZORDERFLAG, ZRECIPE,
+                    ZFILENAME, ZNAME, ZPHOTOHASH, ZUID
+                ) VALUES
+                    (1, 1, 1, 1, 1, 'step-1.jpg', 'Step one', 'step-hash', 'PHOTO1'),
+                    (2, 0, 1, 2, 1, 'missing.jpg', 'Missing', 'missing-hash', 'PHOTO2')
                 """)
             try db.execute(sql: """
                 INSERT INTO Z_12CATEGORIES (Z_12RECIPES, Z_13CATEGORIES)
@@ -656,6 +716,39 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
                     (2, 0, 0, 3, NULL, 765892800, '', 'Paprika', '1 jar', '', 'PANTRY2'),
                     (3, 0, 1, NULL, NULL, NULL, NULL, 'Old Rice', '1 bag', 'deleted', 'PANTRY3')
                 """)
+        }
+
+        return databaseURL
+    }
+
+    private func makePaprikaSourceDatabaseWithoutPhotos() throws -> URL {
+        let root = try makeTemporaryDirectory()
+        let databaseURL = root.appendingPathComponent("Paprika.sqlite")
+        let queue = try DatabaseQueue(path: databaseURL.path)
+
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE Z_METADATA (Z_VERSION INTEGER PRIMARY KEY)")
+            try db.execute(sql: """
+                CREATE TABLE ZRECIPE (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZUID VARCHAR,
+                    ZNAME VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE ZRECIPECATEGORY (
+                    Z_PK INTEGER PRIMARY KEY,
+                    ZUID VARCHAR,
+                    ZNAME VARCHAR
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE Z_12CATEGORIES (
+                    Z_12RECIPES INTEGER,
+                    Z_13CATEGORIES INTEGER
+                )
+                """)
+            try db.execute(sql: "INSERT INTO ZRECIPE (Z_PK, ZUID, ZNAME) VALUES (1, 'AAA', 'No Photo Recipe')")
         }
 
         return databaseURL

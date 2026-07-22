@@ -103,6 +103,7 @@ final class SourceStatsServiceTests: XCTestCase {
             nutrition: nil,
             sourceURL: nil,
             imageURL: nil,
+            photos: [],
             starRating: nil,
             isFavorite: false,
             prepTime: nil,

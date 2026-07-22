@@ -64,6 +64,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
 
     private let dbQueue: DatabaseQueue
     private let schema: PaprikaSQLiteSchema
+    private let fileManager: FileManager
 
     public init(
         databaseURL: URL,
@@ -87,6 +88,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
 
             self.dbQueue = dbQueue
             self.schema = schema
+            self.fileManager = fileManager
             self.databaseURL = databaseURL
             self.inspection = inspection
         } catch let error as PaprikaSQLiteSourceError {
@@ -277,6 +279,11 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 \(self.schema.optionalTextExpression(column: "ZNUTRITIONALINFO")) AS nutrition,
                 \(self.schema.optionalTextExpression(column: "ZSOURCEURL")) AS source_url,
                 \(self.schema.optionalTextExpression(column: "ZIMAGEURL")) AS image_url,
+                \(self.schema.optionalTextExpression(column: "ZPHOTO")) AS photo_filename,
+                \(self.schema.optionalTextExpression(column: "ZPHOTOLARGE")) AS photo_large_filename,
+                \(self.schema.optionalTextExpression(column: "ZPHOTOHASH")) AS photo_hash,
+                \(self.schema.optionalValueExpression(column: "ZPHOTOISDOWNLOADED", from: self.schema.recipeColumns)) AS photo_is_downloaded,
+                \(self.schema.optionalValueExpression(column: "ZPHOTOISUPLOADED", from: self.schema.recipeColumns)) AS photo_is_uploaded,
                 \(self.schema.ratingExpression) AS star_rating,
                 \(self.schema.favoriteExpression) AS is_favorite,
                 \(self.schema.optionalTextExpression(column: "ZPREPTIME")) AS prep_time,
@@ -302,7 +309,9 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
             }
 
             let recipeID: Int64 = row["id"]
+            let recipeUID: String = row["uid"]
             let categoryReferences = try self.fetchCategoryReferences(recipeID: recipeID, db: db)
+            let photos = try self.fetchPhotos(recipeID: recipeID, recipeUID: recipeUID, recipeRow: row, db: db)
             let rawJSON = try self.makeRawJSON(row: row, categoryReferences: categoryReferences)
 
             return SourceRecipe(
@@ -318,6 +327,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 nutrition: row["nutrition"],
                 sourceURL: row["source_url"],
                 imageURL: row["image_url"],
+                photos: photos,
                 starRating: Self.decodeRating(row["star_rating"]),
                 isFavorite: Self.decodeBoolean(row["is_favorite"]),
                 prepTime: row["prep_time"],
@@ -356,6 +366,96 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 """,
             arguments: [recipeID]
         )
+    }
+
+    private func fetchPhotos(
+        recipeID: Int64,
+        recipeUID: String,
+        recipeRow: Row,
+        db: Database
+    ) throws -> [SourceRecipePhoto] {
+        var photos = [SourceRecipePhoto]()
+
+        let primaryFilename: String? = recipeRow["photo_filename"]
+        if let primaryFilename, !primaryFilename.isEmpty {
+            let largeFilename: String? = recipeRow["photo_large_filename"]
+            photos.append(
+                SourceRecipePhoto(
+                    kind: .primary,
+                    uid: nil,
+                    filename: primaryFilename,
+                    largeFilename: largeFilename,
+                    name: nil,
+                    order: nil,
+                    photoHash: recipeRow["photo_hash"],
+                    isDownloaded: Self.decodeBoolean(recipeRow["photo_is_downloaded"]),
+                    isUploaded: Self.decodeBoolean(recipeRow["photo_is_uploaded"]),
+                    localPath: resolvedPhotoPath(recipeUID: recipeUID, filename: primaryFilename),
+                    largeLocalPath: largeFilename.flatMap {
+                        resolvedPhotoPath(recipeUID: recipeUID, filename: $0)
+                    }
+                )
+            )
+        }
+
+        guard
+            let recipePhotoColumns = schema.recipePhotoColumns,
+            recipePhotoColumns.contains("ZRECIPE"),
+            recipePhotoColumns.contains("ZFILENAME"),
+            recipePhotoColumns.contains("ZUID")
+        else {
+            return photos
+        }
+
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT
+                    \(schema.optionalTextExpression(column: "ZUID", from: recipePhotoColumns, tableAlias: "photos")) AS uid,
+                    \(schema.optionalTextExpression(column: "ZFILENAME", from: recipePhotoColumns, tableAlias: "photos")) AS filename,
+                    \(schema.optionalTextExpression(column: "ZNAME", from: recipePhotoColumns, tableAlias: "photos")) AS name,
+                    \(schema.optionalValueExpression(column: "ZORDERFLAG", from: recipePhotoColumns, tableAlias: "photos")) AS photo_order,
+                    \(schema.optionalTextExpression(column: "ZPHOTOHASH", from: recipePhotoColumns, tableAlias: "photos")) AS photo_hash,
+                    \(schema.optionalValueExpression(column: "ZISDOWNLOADED", from: recipePhotoColumns, tableAlias: "photos")) AS is_downloaded,
+                    \(schema.optionalValueExpression(column: "ZISUPLOADED", from: recipePhotoColumns, tableAlias: "photos")) AS is_uploaded
+                FROM ZRECIPEPHOTO photos
+                WHERE photos.ZRECIPE = ?
+                  AND NULLIF(photos.ZFILENAME, '') IS NOT NULL
+                ORDER BY photo_order IS NULL, photo_order, uid
+                """,
+            arguments: [recipeID]
+        )
+
+        photos.append(contentsOf: rows.map { row in
+            let filename: String = row["filename"]
+            return SourceRecipePhoto(
+                kind: .additional,
+                uid: row["uid"],
+                filename: filename,
+                largeFilename: nil,
+                name: row["name"],
+                order: row["photo_order"],
+                photoHash: row["photo_hash"],
+                isDownloaded: Self.decodeBoolean(row["is_downloaded"]),
+                isUploaded: Self.decodeBoolean(row["is_uploaded"]),
+                localPath: resolvedPhotoPath(recipeUID: recipeUID, filename: filename),
+                largeLocalPath: nil
+            )
+        })
+
+        return photos
+    }
+
+    private func resolvedPhotoPath(recipeUID: String, filename: String) -> String? {
+        let candidate = databaseURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Photos", isDirectory: true)
+            .appendingPathComponent(recipeUID, isDirectory: true)
+            .appendingPathComponent(filename)
+            .standardizedFileURL
+
+        return fileManager.fileExists(atPath: candidate.path) ? candidate.path : nil
     }
 
     private func makeRawJSON(row: Row, categoryReferences: [String]) throws -> String {
@@ -461,6 +561,7 @@ private struct PaprikaSQLiteSchema: Sendable {
     let groceryListColumns: Set<String>?
     let groceryAisleColumns: Set<String>?
     let pantryItemColumns: Set<String>?
+    let recipePhotoColumns: Set<String>?
 
     static func inspect(_ db: Database) throws -> PaprikaSQLiteSchema {
         for table in requiredTables {
@@ -476,6 +577,7 @@ private struct PaprikaSQLiteSchema: Sendable {
         let groceryListColumns = try db.tableExists("ZGROCERYLIST") ? Set(db.columns(in: "ZGROCERYLIST").map(\.name)) : nil
         let groceryAisleColumns = try db.tableExists("ZGROCERYAISLE") ? Set(db.columns(in: "ZGROCERYAISLE").map(\.name)) : nil
         let pantryItemColumns = try db.tableExists("ZPANTRYITEM") ? Set(db.columns(in: "ZPANTRYITEM").map(\.name)) : nil
+        let recipePhotoColumns = try db.tableExists("ZRECIPEPHOTO") ? Set(db.columns(in: "ZRECIPEPHOTO").map(\.name)) : nil
 
         try requireColumn("Z_PK", in: "ZRECIPE", availableColumns: recipeColumns)
         try requireColumn("ZUID", in: "ZRECIPE", availableColumns: recipeColumns)
@@ -512,7 +614,8 @@ private struct PaprikaSQLiteSchema: Sendable {
             groceryItemColumns: groceryItemColumns,
             groceryListColumns: groceryListColumns,
             groceryAisleColumns: groceryAisleColumns,
-            pantryItemColumns: pantryItemColumns
+            pantryItemColumns: pantryItemColumns,
+            recipePhotoColumns: recipePhotoColumns
         )
     }
 
@@ -610,6 +713,18 @@ private struct PaprikaSQLiteSchema: Sendable {
 
         let qualifiedColumn = tableAlias.map { "\($0).\(column)" } ?? column
         return "NULLIF(\(qualifiedColumn), '')"
+    }
+
+    func optionalValueExpression(
+        column: String,
+        from availableColumns: Set<String>?,
+        tableAlias: String? = nil
+    ) -> String {
+        guard let availableColumns, availableColumns.contains(column) else {
+            return "NULL"
+        }
+
+        return tableAlias.map { "\($0).\(column)" } ?? column
     }
 
     func coreDataTimestampExpression(column: String) -> String {

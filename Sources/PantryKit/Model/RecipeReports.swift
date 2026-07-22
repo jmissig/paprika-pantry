@@ -225,6 +225,10 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         if let imageURL = recipe.imageURL, !imageURL.isEmpty {
             lines.append("image_url: \(imageURL)")
         }
+        if !recipe.photos.isEmpty {
+            lines.append("photos: \(recipe.photos.count)")
+            lines.append(contentsOf: recipe.photos.map(renderedRecipePhoto))
+        }
 
         if let usageStats {
             lines.append("usage_read_path: sidecar-derived")
@@ -321,6 +325,40 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
 
         return lines.joined(separator: "\n")
     }
+}
+
+private func renderedRecipePhoto(_ photo: SourceRecipePhoto) -> String {
+    var fields = [
+        photo.kind.rawValue,
+        photo.filename,
+        "downloaded=\(photo.isDownloaded ? "yes" : "no")",
+    ]
+
+    if let localPath = photo.localPath {
+        fields.append("local_path=\(localPath)")
+    }
+    fields.append("uploaded=\(photo.isUploaded ? "yes" : "no")")
+
+    if let uid = photo.uid {
+        fields.append("uid=\(uid)")
+    }
+    if let name = photo.name {
+        fields.append("name=\(name)")
+    }
+    if let order = photo.order {
+        fields.append("order=\(order)")
+    }
+    if let photoHash = photo.photoHash {
+        fields.append("hash=\(photoHash)")
+    }
+    if let largeFilename = photo.largeFilename {
+        fields.append("large_filename=\(largeFilename)")
+    }
+    if let largeLocalPath = photo.largeLocalPath {
+        fields.append("large_local_path=\(largeLocalPath)")
+    }
+
+    return fields.joined(separator: " | ")
 }
 
 public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {

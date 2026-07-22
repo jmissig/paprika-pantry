@@ -147,6 +147,21 @@ final class QueryReportsTests: XCTestCase {
                 nutrition: "Per serving: 320 calories",
                 sourceURL: "https://example.test/weeknight-soup",
                 imageURL: "https://example.test/weeknight-soup.jpg",
+                photos: [
+                    SourceRecipePhoto(
+                        kind: .primary,
+                        uid: nil,
+                        filename: "primary.jpg",
+                        largeFilename: "primary-large.jpg",
+                        name: nil,
+                        order: nil,
+                        photoHash: "primary-hash",
+                        isDownloaded: true,
+                        isUploaded: true,
+                        localPath: "/tmp/Data/Photos/AAA/primary.jpg",
+                        largeLocalPath: "/tmp/Data/Photos/AAA/primary-large.jpg"
+                    ),
+                ],
                 starRating: 5,
                 isFavorite: true,
                 prepTime: "10 min",
@@ -193,6 +208,8 @@ final class QueryReportsTests: XCTestCase {
         XCTAssertTrue(report.humanDescription.contains("nutrition:\nPer serving: 320 calories"))
         XCTAssertTrue(report.humanDescription.contains("source_url: https://example.test/weeknight-soup"))
         XCTAssertTrue(report.humanDescription.contains("image_url: https://example.test/weeknight-soup.jpg"))
+        XCTAssertTrue(report.humanDescription.contains("photos: 1"))
+        XCTAssertTrue(report.humanDescription.contains("primary | primary.jpg | downloaded=yes | local_path=/tmp/Data/Photos/AAA/primary.jpg"))
         XCTAssertTrue(report.humanDescription.contains("notes:\nUse lemon."))
         XCTAssertTrue(report.humanDescription.contains("usage_read_path: sidecar-derived"))
         XCTAssertTrue(report.humanDescription.contains("meal_count: 4"))
@@ -431,6 +448,7 @@ final class QueryReportsTests: XCTestCase {
                 nutrition: nil,
                 sourceURL: nil,
                 imageURL: nil,
+                photos: [],
                 starRating: nil,
                 isFavorite: false,
                 prepTime: "10 min",
@@ -481,6 +499,7 @@ final class QueryReportsTests: XCTestCase {
                 nutrition: nil,
                 sourceURL: nil,
                 imageURL: nil,
+                photos: [],
                 starRating: nil,
                 isFavorite: false,
                 prepTime: nil,

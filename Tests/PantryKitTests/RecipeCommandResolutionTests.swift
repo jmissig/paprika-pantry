@@ -391,6 +391,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
             nutrition: nil,
             sourceURL: nil,
             imageURL: nil,
+            photos: [],
             starRating: starRating,
             isFavorite: isFavorite,
             prepTime: nil,

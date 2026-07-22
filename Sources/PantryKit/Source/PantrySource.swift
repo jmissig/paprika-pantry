@@ -26,6 +26,51 @@ public struct SourceRecipeCategory: Codable, Equatable, Sendable {
     }
 }
 
+public struct SourceRecipePhoto: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Equatable, Sendable {
+        case primary
+        case additional
+    }
+
+    public let kind: Kind
+    public let uid: String?
+    public let filename: String
+    public let largeFilename: String?
+    public let name: String?
+    public let order: Int?
+    public let photoHash: String?
+    public let isDownloaded: Bool
+    public let isUploaded: Bool
+    public let localPath: String?
+    public let largeLocalPath: String?
+
+    public init(
+        kind: Kind,
+        uid: String?,
+        filename: String,
+        largeFilename: String?,
+        name: String?,
+        order: Int?,
+        photoHash: String?,
+        isDownloaded: Bool,
+        isUploaded: Bool,
+        localPath: String?,
+        largeLocalPath: String?
+    ) {
+        self.kind = kind
+        self.uid = uid
+        self.filename = filename
+        self.largeFilename = largeFilename
+        self.name = name
+        self.order = order
+        self.photoHash = photoHash
+        self.isDownloaded = isDownloaded
+        self.isUploaded = isUploaded
+        self.localPath = localPath
+        self.largeLocalPath = largeLocalPath
+    }
+}
+
 public struct SourceRecipe: Codable, Equatable, Sendable {
     public let uid: String
     public let name: String
@@ -39,6 +84,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     public let nutrition: String?
     public let sourceURL: String?
     public let imageURL: String?
+    public let photos: [SourceRecipePhoto]
     public let starRating: Int?
     public let isFavorite: Bool
     public let prepTime: String?
@@ -63,6 +109,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         nutrition: String?,
         sourceURL: String?,
         imageURL: String?,
+        photos: [SourceRecipePhoto],
         starRating: Int?,
         isFavorite: Bool,
         prepTime: String?,
@@ -86,6 +133,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         self.nutrition = nutrition
         self.sourceURL = sourceURL
         self.imageURL = imageURL
+        self.photos = photos
         self.starRating = starRating
         self.isFavorite = isFavorite
         self.prepTime = prepTime

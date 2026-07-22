@@ -51,6 +51,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
     public let nutrition: String?
     public let sourceURL: String?
     public let imageURL: String?
+    public let photos: [SourceRecipePhoto]
     public let starRating: Int?
     public let isFavorite: Bool
     public let prepTime: String?
@@ -75,6 +76,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
         nutrition: String?,
         sourceURL: String?,
         imageURL: String?,
+        photos: [SourceRecipePhoto],
         starRating: Int?,
         isFavorite: Bool,
         prepTime: String?,
@@ -99,6 +101,7 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
         self.nutrition = nutrition
         self.sourceURL = sourceURL
         self.imageURL = imageURL
+        self.photos = photos
         self.starRating = starRating
         self.isFavorite = isFavorite
         self.prepTime = prepTime
@@ -226,6 +229,7 @@ public struct RecipeReadService: Sendable {
             nutrition: recipe.nutrition,
             sourceURL: recipe.sourceURL,
             imageURL: recipe.imageURL,
+            photos: recipe.photos,
             starRating: recipe.starRating,
             isFavorite: recipe.isFavorite,
             prepTime: recipe.prepTime,
