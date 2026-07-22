@@ -5,8 +5,7 @@ Completed work should leave this file.
 
 ## Now
 
-- [ ] Use [docs/pattern-boundary-and-corrections.md](docs/pattern-boundary-and-corrections.md) to keep the next slices focused on cooking evidence primitives and simple attached notes, not dinner recommendations or correction machinery.
-- [ ] Add examples for existing mechanical recency/lapse query affordances (`meal_count`, `last_meal_at`, query-time `days_since_last_meal`, `median_meal_gap_days`) without labeling recipes as favorites.
+- [ ] Add practical interpretation examples for mechanical recency/lapse evidence, especially `last_meal_at` and `median_meal_gap_days`, without labeling recipes as favorites.
 
 ## Next
 - [ ] If real timings show `derive.ingredient_pairs` or pairing writes are slow, investigate incremental updates for ingredient pairings so `index rebuild` is not the only way to refresh pairing evidence.
