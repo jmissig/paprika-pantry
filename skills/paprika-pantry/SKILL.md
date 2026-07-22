@@ -1,129 +1,48 @@
 ---
 name: paprika-pantry
-description: Local read/query access to Paprika recipe, meal, grocery, and pantry data plus derived cooking-pattern evidence. Use when answering questions about what recipes exist, what has been cooked, what ingredients are on hand, or what cooking preferences can be inferred from local Paprika data.
+description: "Use when answering questions about Paprika recipes, planned or past meals, ingredients on hand, groceries, pantry contents, recipe updates, or household cooking patterns."
 ---
 
 # paprika-pantry
 
-Local, read-only access to Paprika's data plus derived usage patterns. Paprika is an app that helps you organize your recipes, make meal plans, and create grocery lists.
+Use the locally synced Paprika library as read-only household cooking context: recipes, notes, meals, ratings, groceries, pantry inventory, and cooking history.
 
-## Model
+## Start from the person's question
 
-Entities:
-- recipe (canonical, often includes cookbook/web site source)
-- meal (planned or cooked occurrence, distinct from a recipe)
-- grocery item (shopping list entry)
-- pantry item (on-hand inventory)
+- **Update, sync, or export.** No export is normally needed. Run `source launch-app --wait-for-sync`, then `index update`. Request an export only after direct access is diagnosed as unavailable.
+- **Today's menu.** Read `meals list`, select the scheduled meals, then fetch linked recipes needed to answer. Future meals are plans, not cooking history.
+- **Find something to make.** Apply the stated ingredient, exclusion, category, rating, time, tried/untried, recency, and lapse constraints. Inspect the best few recipes.
+- **Use this ingredient.** Search exact and related uses, then inspect ingredients, directions, and notes. Distinguish mechanical conversion, such as canned beans to dried, from substitution.
+- **What have we made or liked?** Combine ratings, favorites, meal count, recency, categories, source, and notes. Compare time windows when asked about change. Identify untried recipes; repetition may reflect convenience.
+- **What do we have or need?** Read pantry and groceries first. Paprika's recorded state may differ from the kitchen.
 
-Data types:
-- canonical: direct Paprika facts (recipes, meals, ratings, etc.)
-- derived: patterns from behavior (repeat cooking, recency, source affinity, ingredient patterns)
+## Answer workflow
 
-## Core behavior
+1. Retrieve relevant rows with `--format json`; use `--help` instead of guessing filters.
+2. Resolve recipe targets by UID. Use `recipes show <uid>` when ingredients, directions, notes, quantities, or the finished dish matter.
+3. Inspect the strongest candidates, then give a few useful results with distinguishing evidence and uncertainty.
 
-- retrieve first, then interpret
-- prefer canonical data for facts
-- use derived data for patterns/preferences
-- keep facts separate from inference
-- structured output often available for LLM processing
+Do not make the person run a follow-up command to understand the answer.
 
-## Core commands (illustrative)
+If search finds nothing, broaden once while preserving the important constraint. Then offer a pantry idea, a new recipe, or external search.
 
-- `paprika-pantry source status --format json`
-- `paprika-pantry doctor --format json`
-- `paprika-pantry recipes search "..." --format json`
-- `paprika-pantry recipes show "..." --format json`
-- `paprika-pantry meals list --format json`
-- `paprika-pantry pantry list --format json`
-- `paprika-pantry recipes cookbooks --format json`
-- `paprika-pantry recipes pairings --token tomato --sort meals --format json`
+## Evidence and interpretation
 
-Not exhaustive. Use `--help` and adapt to the current interface.
+- Canonical facts include recipes, ratings, notes, meals, groceries, and pantry records. Derived evidence includes repetition, recency, source rollups, and ingredient co-occurrence.
+- Separate observation from inference. Frequency is not quality; surface conflicts such as a high rating without repeats.
+- Pairings are co-occurrence evidence, not flavor or substitution rules. If they are stale, say so; use `index rebuild` only when the question needs fresh pairings.
+- `recipes show` is the fullest currently exposed recipe boundary, not proof that Paprika contains no other fields. The current CLI does not separately expose description, difficulty, nutrition, source/image URLs, or photo metadata, and may combine description with notes.
 
-Command boundaries: `source` reports on the real local Paprika database/app, `recipes` includes canonical recipe reads and recipe-derived sidecar evidence, `index` manages the owned sidecar, and top-level `doctor` diagnoses across source and sidecar health.
+Use concise culinary language grounded in the retrieved recipe. Do not invent ingredients, flavors, preferences, or reasons for a pattern.
 
-## Attachment targets
+## Command map
 
-Rows may include stable Paprika attachment handles for OpenClaw/Obsidian notes or follow-up reads. JSON uses `target` or `recipeTarget` objects; text uses compact handles such as `target=paprika.recipe:<uid>` or `recipe_target=paprika.recipe:<uid>`. Do not treat them as commands, and do not expect summary/derived outputs to contain full recipe details.
+- Refresh: `source launch-app --wait-for-sync`, then `index update`
+- Find/read: `recipes list`, `recipes search`, `recipes show <uid>`
+- Meals/inventory: `meals list`, `groceries list`, `pantry list`
+- Patterns: `recipes cookbooks`, `recipes pairings`
+- Diagnose: `source status`, `doctor`, `index stats`
 
-`recipes show <uid> --format json` is the full recipe detail boundary. It can include Paprika recipe notes. Pairings, meal rows, source rollups, list rows, and search rows should be read as partial evidence with a UID handle.
+Treat `paprika.recipe`, `paprika.meal`, and `paprika.source` targets as identity handles, not commands.
 
-## Recipe policy
-
-When asked for a recipe:
-1. query local Paprika first
-2. present best matches (count depends on context)
-
-If no results:
-- broaden once
-- if still none: say so, then offer:
-  - pantry-based idea
-  - novel recipe
-  - external search (perhaps based on sources found in paprika-pantry)
-
-Do not skip local lookup unless explicitly requested.
-
-
-## Read-only exploration mode
-
-Normal answers should use stable CLI verbs first. Before writing SQL, run `paprika-pantry --help` and relevant subcommand help when semantics are unclear.
-
-Use read-only SQL/Datasette only for exploration questions: source coverage, sidecar freshness, provenance examples, debugging surprising output, or discovering a repeated pattern that may deserve a future CLI verb. For canned SQL and Datasette setup, read `references/read-only-exploration.md` from this skill folder.
-
-Read-only SQL rules:
-- open the sidecar read-only / immutable
-- keep queries narrow and explain the exploration question
-- report counts, freshness, and caveats
-- do not treat ad hoc SQL as the normal chat contract
-- do not infer recommendations, substitutions, or preferences beyond returned evidence
-
-## Index freshness
-
-Use `paprika-pantry index update` for routine refreshes. Use `paprika-pantry index rebuild` when ingredient pairing evidence needs refreshing; pairings are heavier and may intentionally lag routine indexes. If `recipes pairings` warns that pairing evidence is stale or missing, say that clearly before interpreting it.
-
-## Preference reasoning
-
-Infer taste from:
-- repeat cooking cadence
-- recency
-- ratings/favorites
-- source/cookbook patterns
-- ingredient & ingredient-combo recurrence
-
-For ingredient pairings, treat `recipes pairings` output as inspectable evidence only: counts, meal usage, ratings/favorites, and recipe examples. Do not turn it into unsupported substitution or flavor claims.
-
-Use this to reason about:
-- what is actually liked
-- trusted sources
-- recurring flavor patterns
-- changes over time
-
-Rules:
-- describe evidence briefly
-- separate fact vs inference
-- surface conflicts (e.g. high rating, no repeats)
-- frequency ≠ absolute quality
-
-## Taste reasoning style
-
-Use concise culinary or sensory language to describe patterns.
-
-- ground descriptions in observed data
-- do not introduce unsupported ingredients or flavors
-- avoid absolute or authoritative claims
-
-Make it feel experiential, but keep it evidence-based.
-
-## Response
-
-- concise
-- evidence-backed
-- indicate inferred vs observed
-- acknowledge weak or missing data
-- do not make the human run a follow-up command to understand a recipe answer; fetch full details yourself when ingredients, directions, or notes are needed
-
-## Style
-
-retrieve → interpret → respond  
-few strong results over long lists  
-tool provides evidence, not conclusions
+Use read-only SQL or Datasette only for source-coverage, provenance, freshness, or debugging questions; see `references/read-only-exploration.md`. Never write to the Paprika database.
