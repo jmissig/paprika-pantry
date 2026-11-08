@@ -585,17 +585,22 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func indexStats() throws -> PantryIndexStats {
-        let provenance = try indexProvenance()
-        var issue: String?
-        if let expectedContract {
-            do { try requireCompatible(expectedContract) } catch { issue = error.localizedDescription }
-        }
-        let compatibilityIssue = issue
-        let incompatibleFamilies = expectedContract.map { contract in
-            Self.allFamilies.filter { family in !provenance.contains { $0.family == family && $0.contract == contract.encoded } }
-        } ?? []
-        return try dbQueue.read { db in
-            PantryIndexStats(
+        try indexStats(afterProvenanceRead: nil)
+    }
+
+    func indexStats(afterProvenanceRead: (() throws -> Void)?) throws -> PantryIndexStats {
+        try dbQueue.read { db in
+            let provenance = try Self.indexProvenance(db)
+            try afterProvenanceRead?()
+            var compatibilityIssue: String?
+            if let expectedContract {
+                do { try Self.requireCompatible(expectedContract, families: Self.allFamilies, db: db) }
+                catch { compatibilityIssue = error.localizedDescription }
+            }
+            let incompatibleFamilies = expectedContract.map { contract in
+                Self.allFamilies.filter { family in !provenance.contains { $0.family == family && $0.contract == contract.encoded } }
+            } ?? []
+            return PantryIndexStats(
                 recipeSearchDocumentCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents") ?? 0,
                 recipeFeatureCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_features") ?? 0,
                 recipeFeaturesWithTotalTimeCount: try Int.fetchOne(
@@ -1242,32 +1247,39 @@ public struct PantrySidecarStore: @unchecked Sendable {
         now: @escaping @Sendable () -> Date = Date.init,
         phaseClock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) async throws -> RecipeIndexesRebuildSummary {
+        try await buildRecipeIndexes(from: source, refreshIngredientPairEvidence: refreshIngredientPairEvidence, now: now, phaseClock: phaseClock)
+    }
+
+    func buildRecipeIndexes(
+        from source: any PantrySource,
+        refreshIngredientPairEvidence: Bool = true,
+        now: @escaping @Sendable () -> Date = Date.init,
+        phaseClock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        hooks: IndexBuildHooks = IndexBuildHooks()
+    ) async throws -> RecipeIndexesRebuildSummary {
+        let baseline = try await dbQueue.read(IndexBuildBaseline.capture)
+        try await hooks.afterBaseline?()
         let source: any PantrySource = try (source as? PaprikaSQLiteSource)?.snapshot() ?? source
         let contract = (source as? PaprikaSQLiteSource)?.indexContract
-        if !refreshIngredientPairEvidence, let contract { try requireCompatible(contract) }
+        if !refreshIngredientPairEvidence, let contract { try baseline.requireCompatible(contract) }
         let dependencySignature = try (source as? PaprikaSQLiteSource)?.categoryDependencySignature()
-        let previousProvenance = try indexProvenance()
-        let previousDependencies = previousProvenance.first { $0.family == "recipe-search" }?.dependencySignature
-        let previousGenerations = previousProvenance.map { $0.family + ":" + $0.generation }.sorted()
+        let previousDependencies = baseline.provenance.first { $0.family == "recipe-search" }?.dependencySignature
         let generation = UUID().uuidString
         var phaseTimings = RecipeIndexPhaseTimingRecorder(clock: phaseClock)
         let startedAt = now()
-        let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
-        let featureRunID = try startIndexRun(named: Self.recipeFeatureIndexName, startedAt: startedAt)
-        let ingredientRunID = try startIndexRun(named: Self.recipeIngredientIndexName, startedAt: startedAt)
-        let usageRunID = try startIndexRun(named: Self.recipeUsageIndexName, startedAt: startedAt)
-        let ingredientPairRunID = refreshIngredientPairEvidence
-            ? try startIndexRun(named: Self.ingredientPairIndexName, startedAt: startedAt)
-            : nil
-
-        if let contract {
-            let ids: [Int64] = [searchRunID, featureRunID, ingredientRunID, usageRunID] + (ingredientPairRunID.map { [$0] } ?? [])
-            try await dbQueue.write { db in
-                for id in ids {
-                    try db.execute(sql: "UPDATE index_runs SET source_contract=?, generation=? WHERE id=?", arguments: [contract.encoded, generation, id])
-                }
+        let names: [String] = [Self.recipeSearchIndexName, Self.recipeFeatureIndexName, Self.recipeIngredientIndexName, Self.recipeUsageIndexName]
+            + (refreshIngredientPairEvidence ? [Self.ingredientPairIndexName] : [])
+        // Atomic setup: a failed metadata write cannot leave orphan running rows.
+        let ids = try await dbQueue.write { db in
+            try baseline.requireUnchanged(db)
+            return try names.map { name in
+                let id = try startIndexRun(named: name, startedAt: startedAt, in: db)
+                try db.execute(sql: "UPDATE index_runs SET source_contract=?, generation=? WHERE id=?", arguments: [contract?.encoded, generation, id])
+                return id
             }
         }
+        let searchRunID = ids[0], featureRunID = ids[1], ingredientRunID = ids[2], usageRunID = ids[3]
+        let ingredientPairRunID = refreshIngredientPairEvidence ? ids[4] : nil
         do {
             var phaseItemCounts = [RecipeIndexPhase: Int]()
             let categoriesStartedAt = phaseClock()
@@ -1283,7 +1295,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
             let activeRecipeUIDs = Set(activeStubs.map(\.uid))
             let routineUpdatePlan = try makeRecipeRoutineUpdatePlan(
                 activeStubs: activeStubs,
-                usePartialUpdate: !refreshIngredientPairEvidence && dependencySignature == previousDependencies
+                usePartialUpdate: !refreshIngredientPairEvidence && dependencySignature == previousDependencies,
+                baseline: baseline
             )
             let recipeStubsToFetch = refreshIngredientPairEvidence
                 ? activeStubs
@@ -1411,11 +1424,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
             }
             let sourceState = Self.makeStoredSourceState(from: source, observedAt: indexedAt)
             let writeTransactionStartedAt = phaseClock()
+            try await hooks.beforePublication?()
             let transactionResult = try await dbQueue.write { db in
-                if !refreshIngredientPairEvidence {
-                    let currentGenerations = try String.fetchAll(db, sql: "SELECT family || ':' || generation FROM index_provenance ORDER BY family")
-                    guard currentGenerations == previousGenerations else { throw IndexCompatibilityError.concurrentUpdate }
-                }
+                try baseline.requireUnchanged(db)
                 if refreshIngredientPairEvidence {
                     try Self.dropIngredientPairSecondaryIndexes(in: db)
                 }
@@ -1790,44 +1801,19 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 sourceState: sourceState
             )
         } catch {
-            try finishIndexRun(
-                id: searchRunID,
-                status: .failed,
-                finishedAt: now(),
-                recipeCount: 0,
-                errorMessage: String(describing: error)
-            )
-            try finishIndexRun(
-                id: featureRunID,
-                status: .failed,
-                finishedAt: now(),
-                recipeCount: 0,
-                errorMessage: String(describing: error)
-            )
-            try finishIndexRun(
-                id: ingredientRunID,
-                status: .failed,
-                finishedAt: now(),
-                recipeCount: 0,
-                errorMessage: String(describing: error)
-            )
-            try finishIndexRun(
-                id: usageRunID,
-                status: .failed,
-                finishedAt: now(),
-                recipeCount: 0,
-                errorMessage: String(describing: error)
-            )
-            if let ingredientPairRunID {
-                try finishIndexRun(
-                    id: ingredientPairRunID,
-                    status: .failed,
-                    finishedAt: now(),
-                    recipeCount: 0,
-                    errorMessage: String(describing: error)
-                )
-            }
+            // Synchronous cleanup remains possible even when the task is cancelled.
+            // Keep the original error if failure reporting itself cannot be persisted.
+            recordBuildFailure(ids: ids, at: now(), error: error)
             throw error
+        }
+    }
+
+    private func recordBuildFailure(ids: [Int64], at date: Date, error: Error) {
+        try? dbQueue.write { db in
+            for id in ids {
+                try finishIndexRun(id: id, status: .failed, finishedAt: date, recipeCount: 0,
+                                   errorMessage: String(describing: error), in: db)
+            }
         }
     }
 
@@ -1969,8 +1955,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
         )
     }
 
-    private func startIndexRun(named indexName: String, startedAt: Date) throws -> Int64 {
-        try dbQueue.write { db in
+    private func startIndexRun(named indexName: String, startedAt: Date, in db: Database) throws -> Int64 {
             try db.execute(
                 sql: """
                 INSERT INTO index_runs (
@@ -1986,7 +1971,6 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 ]
             )
             return db.lastInsertedRowID
-        }
     }
 
     private func finishIndexRun(
@@ -2046,20 +2030,23 @@ public struct PantrySidecarStore: @unchecked Sendable {
 
     private func makeRecipeRoutineUpdatePlan(
         activeStubs: [SourceRecipeStub],
-        usePartialUpdate: Bool
+        usePartialUpdate: Bool,
+        baseline: IndexBuildBaseline
     ) throws -> RecipeRoutineUpdatePlan {
         guard usePartialUpdate else {
             return RecipeRoutineUpdatePlan(
                 changedStubs: activeStubs,
                 skippedRecipeCount: 0,
                 deletedRecipeUIDs: try dbQueue.read { db in
-                    Set(try Self.fetchExistingRoutineRecipeIndexRows(db: db).keys).subtracting(Set(activeStubs.map(\.uid)))
+                    try baseline.requireUnchanged(db)
+                    return Set(try Self.fetchExistingRoutineRecipeIndexRows(db: db).keys).subtracting(Set(activeStubs.map(\.uid)))
                 }
             )
         }
 
         let activeRecipeUIDs = Set(activeStubs.map(\.uid))
         return try dbQueue.read { db in
+            try baseline.requireUnchanged(db)
             guard
                 try latestSuccessfulIndexRun(named: Self.recipeSearchIndexName, db: db) != nil,
                 try latestSuccessfulIndexRun(named: Self.recipeFeatureIndexName, db: db) != nil,

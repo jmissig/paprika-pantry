@@ -46,10 +46,12 @@ extension PantrySidecarStore {
     public static let allFamilies = routineFamilies + ["ingredient-pairs"]
 
     public func indexProvenance() throws -> [IndexBuildProvenance] {
-        try dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM index_provenance ORDER BY family").map {
-                IndexBuildProvenance(family: $0["family"], contract: $0["contract"], generation: $0["generation"], builtAt: $0["built_at"], dependencySignature: $0["dependency_signature"])
-            }
+        try dbQueue.read(Self.indexProvenance)
+    }
+
+    static func indexProvenance(_ db: Database) throws -> [IndexBuildProvenance] {
+        try Row.fetchAll(db, sql: "SELECT * FROM index_provenance ORDER BY family").map {
+            IndexBuildProvenance(family: $0["family"], contract: $0["contract"], generation: $0["generation"], builtAt: $0["built_at"], dependencySignature: $0["dependency_signature"])
         }
     }
 
@@ -57,7 +59,7 @@ extension PantrySidecarStore {
         try dbQueue.read { try Self.requireCompatible(contract, families: families, db: $0) }
     }
 
-    private static func requireCompatible(_ contract: IndexSourceContract, families: [String], db: Database) throws {
+    static func requireCompatible(_ contract: IndexSourceContract, families: [String], db: Database) throws {
         for family in families {
             guard let builtContract = try String.fetchOne(db, sql: "SELECT contract FROM index_provenance WHERE family=?", arguments: [family]) else {
                 throw IndexCompatibilityError.rebuildRequired("\(family) has no verified build provenance")
@@ -85,4 +87,32 @@ extension PantrySidecarStore {
             try db.execute(sql: "INSERT OR REPLACE INTO index_provenance (family, contract, generation, built_at, dependency_signature) VALUES (?, ?, ?, ?, ?)", arguments: [family, contract.encoded, generation, at, dependencies])
         }
     }
+}
+
+/// Captured before source extraction; successful run IDs also cover fixture sources
+/// that deliberately have no Paprika contract/provenance.
+struct IndexBuildBaseline: Equatable, Sendable {
+    let provenance: [IndexBuildProvenance]
+    let successfulRuns: [Int64]
+
+    static func capture(_ db: Database) throws -> Self {
+        Self(provenance: try PantrySidecarStore.indexProvenance(db),
+             successfulRuns: try Int64.fetchAll(db, sql: "SELECT MAX(id) FROM index_runs WHERE status='success' GROUP BY index_name ORDER BY index_name"))
+    }
+    func requireUnchanged(_ db: Database) throws {
+        guard try self == Self.capture(db) else { throw IndexCompatibilityError.concurrentUpdate }
+    }
+    func requireCompatible(_ contract: IndexSourceContract) throws {
+        for family in PantrySidecarStore.allFamilies {
+            guard provenance.contains(where: { $0.family == family && $0.contract == contract.encoded }) else {
+                throw IndexCompatibilityError.rebuildRequired("\(family) baseline has no compatible provenance")
+            }
+        }
+    }
+}
+
+/// Internal deterministic test seams; production callers use empty hooks.
+struct IndexBuildHooks: Sendable {
+    var afterBaseline: (@Sendable () async throws -> Void)?
+    var beforePublication: (@Sendable () async throws -> Void)?
 }

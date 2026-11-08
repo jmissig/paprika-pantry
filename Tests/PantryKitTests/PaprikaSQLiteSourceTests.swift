@@ -696,6 +696,100 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(before, after)
     }
 
+    func testAllBuildModesRejectCompetingPublication() async throws {
+        for winnerFull in [true, false] {
+        for full in [true, false] {
+            for beforeExtraction in [true, false] {
+                let url = try makePaprikaSourceDatabase()
+                let source = try PaprikaSQLiteSource(databaseURL: url)
+                let store = try memorySidecar()
+                _ = try await store.rebuildRecipeIndexes(from: source)
+                let queue = try DatabaseQueue(path: url.path)
+                let recorder = ProvenanceRecorder()
+                let compete: @Sendable () async throws -> Void = {
+                    try await queue.write { try $0.execute(sql: "UPDATE ZRECIPE SET ZNAME='WinnerNewName', ZSYNCHASH='winner' WHERE ZUID='AAA'") }
+                    _ = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: winnerFull)
+                    await recorder.save(try store.indexProvenance())
+                }
+                var hooks = IndexBuildHooks()
+                if beforeExtraction { hooks.afterBaseline = compete } else { hooks.beforePublication = compete }
+                do {
+                    _ = try await store.buildRecipeIndexes(from: source, refreshIngredientPairEvidence: full, hooks: hooks)
+                    XCTFail("Overlapping build must fail")
+                } catch {
+                    XCTAssertTrue(error.localizedDescription.contains("changed while"), "\(error)")
+                }
+                XCTAssertEqual(try store.searchRecipes(query: "WinnerNewName").first?.uid, "AAA")
+                let running = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs WHERE status='running'") }
+                XCTAssertEqual(running, 0)
+                let expected = await recorder.value
+                XCTAssertEqual(try store.indexProvenance(), expected)
+                if !beforeExtraction {
+                    let failed = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs WHERE status='failed'") }
+                    XCTAssertEqual(failed, full ? 5 : 4)
+                }
+            }
+        }
+        }
+    }
+
+    func testPartialBuildCannotAdoptCompetingSourceContract() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let queue = try DatabaseQueue(path: url.path)
+        try await queue.write { try $0.execute(sql: "INSERT INTO Z_METADATA (Z_VERSION, Z_UUID) VALUES (1, 'first-source')") }
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let hooks = IndexBuildHooks(afterBaseline: {
+            try await queue.write { try $0.execute(sql: "UPDATE Z_METADATA SET Z_UUID='replacement-source'") }
+            _ = try await store.rebuildRecipeIndexes(from: PaprikaSQLiteSource(databaseURL: url))
+        })
+        do {
+            _ = try await store.buildRecipeIndexes(from: source, refreshIngredientPairEvidence: false, hooks: hooks)
+            XCTFail("Must reject changed source baseline")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("rebuild") || error.localizedDescription.contains("changed while")) }
+        try store.requireCompatible(PaprikaSQLiteSource(databaseURL: url).indexContract)
+        XCTAssertThrowsError(try store.requireCompatible(source.indexContract))
+    }
+
+    func testAttemptSetupFailureIsAtomic() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexProvenance()
+        let beforeRuns = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs") }
+        try await store.dbQueue.write { try $0.execute(sql: "CREATE TRIGGER reject_attempt BEFORE UPDATE OF source_contract ON index_runs BEGIN SELECT RAISE(ABORT, 'setup-failure'); END") }
+        do {
+            _ = try await store.rebuildRecipeIndexes(from: source)
+            XCTFail("Must reject metadata failure")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("setup-failure")) }
+        XCTAssertEqual(try store.indexProvenance(), before)
+        let afterRuns = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs") }
+        XCTAssertEqual(afterRuns, beforeRuns)
+    }
+
+    func testDiagnosticsUseOneReadSnapshot() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let root = try makeTemporaryDirectory()
+        let path = root.appendingPathComponent("diagnostics.sqlite")
+        let queue = try PantrySidecarDatabase(path: path).openQueue()
+        try await queue.writeWithoutTransaction { try $0.execute(sql: "PRAGMA journal_mode=WAL") }
+        let store = PantrySidecarStore(dbQueue: queue, expectedContract: source.indexContract)
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexStats()
+        let writer = try DatabaseQueue(path: path.path)
+        let during = try store.indexStats(afterProvenanceRead: {
+            try writer.write { db in
+                try db.execute(sql: "DELETE FROM recipe_search_documents; UPDATE index_provenance SET contract='competing-contract', generation='competing-generation'")
+            }
+        })
+        XCTAssertEqual(during, before)
+        let after = try store.indexStats()
+        XCTAssertEqual(after.recipeSearchDocumentCount, 0)
+        XCTAssertFalse(after.recipeSearchReady)
+        XCTAssertNotNil(after.compatibilityIssue)
+    }
+
     private func makeStore() throws -> PantrySidecarStore {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("pantry.sqlite")
@@ -1004,4 +1098,9 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.date(from: value)
     }
+}
+
+private actor ProvenanceRecorder {
+    var value: [IndexBuildProvenance] = []
+    func save(_ value: [IndexBuildProvenance]) { self.value = value }
 }
