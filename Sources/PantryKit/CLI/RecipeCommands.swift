@@ -21,6 +21,7 @@ public struct RecipesCommand: ParsableCommand {
 }
 
 public struct RecipesListCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List recipes from the configured pantry source with canonical filters plus optional sidecar ingredient include/exclude filters and derived time constraints."
@@ -101,7 +102,7 @@ public struct RecipesListCommand: PantryLeafCommand {
         )
     }
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let source = try context.makeSource()
         let recipeReadService = RecipeReadService(source: source)
@@ -167,8 +168,7 @@ public struct RecipesListCommand: PantryLeafCommand {
             compatibleUsage = false
         }
 
-        let recipes = try BlockingAsync.run { [derivedFeaturesByUID, usageStatsByUID] in
-            try await recipeReadService.listRecipes(
+        let recipes = try await recipeReadService.listRecipes(
                 filters: canonicalFilters,
                 derivedConstraints: derivedConstraints,
                 usageConstraints: usageConstraints,
@@ -177,7 +177,6 @@ public struct RecipesListCommand: PantryLeafCommand {
                 usageStatsByUID: usageStatsByUID,
                 referenceDate: now
             )
-        }
         let filteredRecipes = matchingRecipeUIDs.map { requiredUIDs in
             recipes.filter { requiredUIDs.contains($0.uid) }
         } ?? recipes
@@ -205,6 +204,7 @@ public struct RecipesListCommand: PantryLeafCommand {
 }
 
 public struct RecipesShowCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "show",
         abstract: "Show one source recipe by UID or name."
@@ -214,14 +214,12 @@ public struct RecipesShowCommand: PantryLeafCommand {
     public var selector: String
 
     public init() {}
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let source = try context.makeSource()
         let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
-        let recipe = try BlockingAsync.run {
-            try await recipeReadService.resolveRecipe(selector: selector)
-        }
+        let recipe = try await recipeReadService.resolveRecipe(selector: selector)
         var derivedFeatures: RecipeDerivedFeatures?
         var usageStats: RecipeUsageStats?
         var enrichmentIssue: String?
@@ -255,6 +253,7 @@ public struct RecipesShowCommand: PantryLeafCommand {
 }
 
 public struct RecipesSearchCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "search",
         abstract: "Search recipes through the owned sidecar index with canonical filters plus optional sidecar ingredient include/exclude filters and derived time constraints."
@@ -341,7 +340,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         )
     }
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             throw ValidationError("Search query must not be empty.")
@@ -436,6 +435,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
 }
 
 public struct RecipesFeaturesCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "features",
         abstract: "Show sidecar-derived recipe time and ingredient-line features for one recipe."
@@ -445,7 +445,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     public var selector: String
 
     public init() {}
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let source = try context.makeSource()
         let store = try context.makeReadStore(source: source)
@@ -455,9 +455,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
 
         let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
-        let recipe = try BlockingAsync.run {
-            try await recipeReadService.resolveRecipe(selector: selector)
-        }
+        let recipe = try await recipeReadService.resolveRecipe(selector: selector)
 
         guard let features = try store.fetchRecipeFeatures(uid: recipe.uid) else {
             throw ValidationError("No derived feature row exists for recipe `\(recipe.uid)`. Run `paprika-pantry index rebuild` first.")
@@ -478,6 +476,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
 }
 
 public struct RecipesIngredientsCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "ingredients",
         abstract: "Show source ingredient lines beside sidecar-normalized ingredient tokens for one recipe."
@@ -487,7 +486,7 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
     public var selector: String
 
     public init() {}
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let source = try context.makeSource()
         let store = try context.makeReadStore(source: source)
@@ -497,9 +496,7 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
 
         let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
-        let recipe = try BlockingAsync.run {
-            try await recipeReadService.resolveRecipe(selector: selector)
-        }
+        let recipe = try await recipeReadService.resolveRecipe(selector: selector)
         let ingredientIndex = try store.fetchRecipeIngredientIndex(uid: recipe.uid)
         let indexStats = try store.indexStats()
         let now = Date()
@@ -516,6 +513,7 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
 }
 
 public struct RecipesPairingsCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "pairings",
         abstract: "List sidecar-derived ingredient token co-occurrence evidence across recipes."
@@ -567,7 +565,7 @@ public struct RecipesPairingsCommand: PantryLeafCommand {
         }
     }
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let store = try context.makeReadStore(source: context.makeSource())
         let indexStats = try store.indexStats()
@@ -755,6 +753,7 @@ private func validateRecipeUsageQueryOptions(
 }
 
 public struct RecipesCookbooksCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "cookbooks",
         abstract: "Show sidecar-backed cookbook/source aggregates from canonical recipe source fields."
@@ -774,7 +773,7 @@ public struct RecipesCookbooksCommand: PantryLeafCommand {
 
     public init() {}
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         guard limit > 0 else {
             throw ValidationError("--limit must be greater than zero.")
         }

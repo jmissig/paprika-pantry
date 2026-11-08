@@ -17,6 +17,7 @@ public struct SourceCommand: ParsableCommand {
 }
 
 public struct SourceLaunchAppCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "launch-app",
         abstract: "Launch the local Paprika app. This does not sync directly, but Paprika may sync on launch."
@@ -33,7 +34,7 @@ public struct SourceLaunchAppCommand: PantryLeafCommand {
 
     public init() {}
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         guard timeoutSeconds >= 0 else {
             throw ValidationError("--timeout-seconds must be zero or greater.")
         }
@@ -119,6 +120,7 @@ public struct SourceLaunchAppCommand: PantryLeafCommand {
 }
 
 public struct SourceLastSyncTimeCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "last-sync-time",
         abstract: "Show the last observed Paprika sync completion time from local metadata."
@@ -126,7 +128,7 @@ public struct SourceLastSyncTimeCommand: PantryLeafCommand {
 
     public init() {}
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
         try context.write(SourceLastSyncReport(snapshot: snapshot, paths: context.paths, now: Date()))
@@ -174,6 +176,7 @@ private func paprikaSyncHasAdvanced(
 }
 
 public struct SourceStatusCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "status",
         abstract: "Show readiness and health of the configured Paprika source."
@@ -181,7 +184,7 @@ public struct SourceStatusCommand: PantryLeafCommand {
 
     public init() {}
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let snapshot = try context.makeSourceProvider().diagnose()
         try context.write(SourceStatusReport(snapshot: snapshot, paths: context.paths, now: Date()))
@@ -189,6 +192,7 @@ public struct SourceStatusCommand: PantryLeafCommand {
 }
 
 public struct SourceStatsCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "stats",
         abstract: "Show direct source counts and sampled recipe coverage."
@@ -199,7 +203,7 @@ public struct SourceStatsCommand: PantryLeafCommand {
 
     public init() {}
 
-    public mutating func run() throws {
+    public mutating func run() async throws {
         guard sample >= 0 else {
             throw ValidationError("--sample must be zero or greater.")
         }
@@ -207,9 +211,7 @@ public struct SourceStatsCommand: PantryLeafCommand {
         let context = try makeContext()
         let sampleLimit = sample
         let sourceStatsService = try context.makeSourceStatsService()
-        let snapshot = try BlockingAsync.run {
-            try await sourceStatsService.makeSnapshot(sampleLimit: sampleLimit)
-        }
+        let snapshot = try await sourceStatsService.makeSnapshot(sampleLimit: sampleLimit)
         try context.write(SourceStatsReport(snapshot: snapshot, paths: context.paths))
     }
 }

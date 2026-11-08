@@ -1502,7 +1502,7 @@ final class PantrySidecarStoreTests: XCTestCase {
 
     private func makeStore() throws -> PantrySidecarStore {
         let database = try makeDatabase()
-        return PantrySidecarStore(dbQueue: try database.openQueue())
+        return PantrySidecarStore(fixtureQueue: try database.openQueue())
     }
 
     private func makeSearchFieldsRecipe(

@@ -3,7 +3,7 @@ import XCTest
 @testable import PantryKit
 
 final class SourceStatsServiceTests: XCTestCase {
-    func testMakeSnapshotReportsCountsAndSampleCoverage() throws {
+    func testMakeSnapshotReportsCountsAndSampleCoverage() async throws {
         let source = InMemoryPantrySource(
             stubs: [
                 SourceRecipeStub(uid: "CCC", name: "Zucchini Pasta", sourceFingerprint: "hash-ccc"),
@@ -21,9 +21,7 @@ final class SourceStatsServiceTests: XCTestCase {
         )
         let service = SourceStatsService(source: source)
 
-        let snapshot = try BlockingAsync.run {
-            try await service.makeSnapshot(sampleLimit: 5)
-        }
+        let snapshot = try await service.makeSnapshot(sampleLimit: 5)
 
         XCTAssertEqual(snapshot.recipeStubCount, 3)
         XCTAssertEqual(snapshot.activeRecipeCount, 2)
@@ -44,7 +42,7 @@ final class SourceStatsServiceTests: XCTestCase {
         XCTAssertTrue(snapshot.sampleFailures.isEmpty)
     }
 
-    func testMakeSnapshotCapturesSampleFailuresWithoutFailingWholeReport() throws {
+    func testMakeSnapshotCapturesSampleFailuresWithoutFailingWholeReport() async throws {
         let source = InMemoryPantrySource(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Apple Cake", sourceFingerprint: "hash-aaa"),
@@ -60,16 +58,12 @@ final class SourceStatsServiceTests: XCTestCase {
         )
         let service = SourceStatsService(source: source)
 
-        let snapshot = try BlockingAsync.run {
-            try await service.makeSnapshot(sampleLimit: 1)
-        }
+        let snapshot = try await service.makeSnapshot(sampleLimit: 1)
 
         XCTAssertEqual(snapshot.sampledRecipeCount, 1)
         XCTAssertEqual(snapshot.sampleFailureCount, 0)
 
-        let failingSnapshot = try BlockingAsync.run {
-            try await service.makeSnapshot(sampleLimit: 2)
-        }
+        let failingSnapshot = try await service.makeSnapshot(sampleLimit: 2)
 
         XCTAssertEqual(failingSnapshot.sampledRecipeCount, 1)
         XCTAssertEqual(failingSnapshot.sampleFailureCount, 1)
@@ -85,7 +79,7 @@ final class SourceStatsServiceTests: XCTestCase {
         )
     }
 
-    func testMakeSnapshotReportsRecipeFieldCoverage() throws {
+    func testMakeSnapshotReportsRecipeFieldCoverage() async throws {
         let source = InMemoryPantrySource(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Both", sourceFingerprint: "hash-aaa"),
@@ -153,9 +147,7 @@ final class SourceStatsServiceTests: XCTestCase {
         )
         let service = SourceStatsService(source: source)
 
-        let snapshot = try BlockingAsync.run {
-            try await service.makeSnapshot(sampleLimit: 0)
-        }
+        let snapshot = try await service.makeSnapshot(sampleLimit: 0)
 
         XCTAssertEqual(snapshot.recipeFieldCoverage.descriptionCount, 2)
         XCTAssertEqual(snapshot.recipeFieldCoverage.notesCount, 2)

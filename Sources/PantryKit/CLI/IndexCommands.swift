@@ -17,13 +17,14 @@ public struct IndexCommand: ParsableCommand {
 }
 
 public struct IndexStatsCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "stats",
         abstract: "Show sidecar index status."
     )
 
     public init() {}
-    public mutating func run() throws {
+    public mutating func run() async throws {
         let context = try makeContext()
         let source = try? context.makeSource()
         try context.write(IndexStatsReport(stats: context.diagnosticStats(source: source), paths: context.paths, now: Date()))
@@ -31,18 +32,20 @@ public struct IndexStatsCommand: PantryLeafCommand {
 }
 
 public struct IndexRebuildCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "rebuild",
         abstract: "Fully rebuild owned sidecar indexes, including heavier ingredient token-pair evidence for `recipes pairings`."
     )
 
     public init() {}
-    public mutating func run() throws {
-        try runIndexRefresh(commandName: "index rebuild", refreshIngredientPairEvidence: true)
+    public mutating func run() async throws {
+        try await runIndexRefresh(commandName: "index rebuild", refreshIngredientPairEvidence: true)
     }
 }
 
 public struct IndexUpdateCommand: PantryLeafCommand {
+    @OptionGroup public var runtimeOptions: RuntimeOptions
     public static let configuration = CommandConfiguration(
         commandName: "update",
         abstract: "Refresh routine owned sidecar indexes without recomputing ingredient token-pair evidence.",
@@ -50,8 +53,8 @@ public struct IndexUpdateCommand: PantryLeafCommand {
     )
 
     public init() {}
-    public mutating func run() throws {
-        try runIndexRefresh(commandName: "index update", refreshIngredientPairEvidence: false)
+    public mutating func run() async throws {
+        try await runIndexRefresh(commandName: "index update", refreshIngredientPairEvidence: false)
     }
 }
 
@@ -59,18 +62,16 @@ private func performIndexRefresh(
     using command: some PantryLeafCommand,
     commandName: String,
     refreshIngredientPairEvidence: Bool
-) throws {
+) async throws {
     let context = try command.makeContext()
     let source = try context.makeSource()
-    let store = try context.makeSidecarStore()
-    let summary = try BlockingAsync.run {
-        try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: refreshIngredientPairEvidence)
-    }
+    let store = try context.makeIndexWriter()
+    let summary = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: refreshIngredientPairEvidence)
     try context.write(IndexRebuildReport(command: commandName, summary: summary, paths: context.paths))
 }
 
 private extension PantryLeafCommand {
-    func runIndexRefresh(commandName: String, refreshIngredientPairEvidence: Bool) throws {
-        try performIndexRefresh(using: self, commandName: commandName, refreshIngredientPairEvidence: refreshIngredientPairEvidence)
+    func runIndexRefresh(commandName: String, refreshIngredientPairEvidence: Bool) async throws {
+        try await performIndexRefresh(using: self, commandName: commandName, refreshIngredientPairEvidence: refreshIngredientPairEvidence)
     }
 }

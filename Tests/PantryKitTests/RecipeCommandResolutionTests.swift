@@ -11,10 +11,9 @@ final class RecipeCommandResolutionTests: XCTestCase {
             try? FileManager.default.removeItem(at: temporaryDirectoryURL)
         }
         temporaryDirectoryURL = nil
-        RuntimeConfiguration.setCurrent(try RuntimeOptionsHarness.parse([]).runtimeOptions)
     }
 
-    func testResolveRecipePrefersUIDBeforeNameMatch() throws {
+    func testResolveRecipePrefersUIDBeforeNameMatch() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "MATCH", name: "UID Winner", sourceFingerprint: "hash-match"),
@@ -26,15 +25,13 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let resolved = try BlockingAsync.run {
-            try await service.resolveRecipe(selector: "MATCH")
-        }
+        let resolved = try await service.resolveRecipe(selector: "MATCH")
 
         XCTAssertEqual(resolved.uid, "MATCH")
         XCTAssertEqual(resolved.name, "UID Winner")
     }
 
-    func testResolveRecipeFallsBackToExactCaseInsensitiveName() throws {
+    func testResolveRecipeFallsBackToExactCaseInsensitiveName() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
@@ -44,14 +41,12 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let resolved = try BlockingAsync.run {
-            try await service.resolveRecipe(selector: "weeknight soup")
-        }
+        let resolved = try await service.resolveRecipe(selector: "weeknight soup")
 
         XCTAssertEqual(resolved.uid, "AAA")
     }
 
-    func testResolveRecipeThrowsAmbiguityErrorForDuplicateNames() throws {
+    func testResolveRecipeThrowsAmbiguityErrorForDuplicateNames() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Curry", sourceFingerprint: "hash-aaa"),
@@ -63,11 +58,10 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
-            try BlockingAsync.run {
-                try await service.resolveRecipe(selector: "CURRY")
-            }
-        ) { error in
+        do {
+            _ = try await service.resolveRecipe(selector: "CURRY")
+            XCTFail("Expected ambiguous recipe")
+        } catch {
             guard case let RecipeReadServiceError.ambiguousRecipeName(selector, matchingUIDs) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
@@ -77,14 +71,13 @@ final class RecipeCommandResolutionTests: XCTestCase {
         }
     }
 
-    func testResolveRecipeThrowsNotFoundErrorWhenSelectorMisses() {
+    func testResolveRecipeThrowsNotFoundErrorWhenSelectorMisses() async throws {
         let service = makeRecipeReadService(stubs: [], recipesByUID: [:])
 
-        XCTAssertThrowsError(
-            try BlockingAsync.run {
-                try await service.resolveRecipe(selector: "missing")
-            }
-        ) { error in
+        do {
+            _ = try await service.resolveRecipe(selector: "missing")
+            XCTFail("Expected missing recipe")
+        } catch {
             guard case let RecipeReadServiceError.recipeNotFound(selector) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
@@ -93,7 +86,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
         }
     }
 
-    func testListRecipesReadsActiveRecipesFromSourceAndResolvesCategoryNames() throws {
+    func testListRecipesReadsActiveRecipesFromSourceAndResolvesCategoryNames() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "BBB", name: "Deleted Recipe", sourceFingerprint: "hash-bbb", isDeleted: true),
@@ -115,9 +108,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes()
-        }
+        let listed = try await service.listRecipes()
 
         XCTAssertEqual(
             listed,
@@ -136,7 +127,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
         )
     }
 
-    func testListRecipesAppliesCanonicalRatingAndFavoriteFilters() throws {
+    func testListRecipesAppliesCanonicalRatingAndFavoriteFilters() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Favorite Five", sourceFingerprint: "hash-aaa"),
@@ -152,17 +143,15 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes(
+        let listed = try await service.listRecipes(
                 filters: RecipeQueryFilters(favoritesOnly: true, minRating: 4),
                 sort: .rating
             )
-        }
 
         XCTAssertEqual(listed.map(\.uid), ["AAA", "BBB"])
     }
 
-    func testListRecipesAppliesCanonicalCategoryFiltersCaseInsensitively() throws {
+    func testListRecipesAppliesCanonicalCategoryFiltersCaseInsensitively() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Weeknight Soup", sourceFingerprint: "hash-aaa"),
@@ -181,16 +170,14 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes(
+        let listed = try await service.listRecipes(
                 filters: RecipeQueryFilters(categoryNames: [" dinner ", "SOUP"])
             )
-        }
 
         XCTAssertEqual(listed.map(\.uid), ["AAA"])
     }
 
-    func testListRecipesSortsByRatingThenFavoriteThenName() throws {
+    func testListRecipesSortsByRatingThenFavoriteThenName() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Alpha", sourceFingerprint: "hash-aaa"),
@@ -204,14 +191,12 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes(sort: .rating)
-        }
+        let listed = try await service.listRecipes(sort: .rating)
 
         XCTAssertEqual(listed.map(\.uid), ["BBB", "AAA", "CCC"])
     }
 
-    func testListRecipesAppliesDerivedConstraintsAndFewestIngredientSort() throws {
+    func testListRecipesAppliesDerivedConstraintsAndFewestIngredientSort() async throws {
         let service = makeRecipeReadService(
             stubs: [
                 SourceRecipeStub(uid: "AAA", name: "Longer", sourceFingerprint: "hash-aaa"),
@@ -225,8 +210,7 @@ final class RecipeCommandResolutionTests: XCTestCase {
             ]
         )
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes(
+        let listed = try await service.listRecipes(
                 derivedConstraints: RecipeDerivedConstraints(maxTotalTimeMinutes: 30),
                 sort: .fewestIngredients,
                 derivedFeaturesByUID: [
@@ -265,7 +249,6 @@ final class RecipeCommandResolutionTests: XCTestCase {
                     ),
                 ]
             )
-        }
 
         XCTAssertEqual(listed.map(\.uid), ["BBB", "AAA"])
     }

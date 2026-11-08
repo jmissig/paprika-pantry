@@ -21,8 +21,10 @@ public enum IndexCompatibilityError: Error, LocalizedError {
     case rebuildRequired(String)
     case concurrentUpdate
     case futureSidecar
+    case invalidRole(String)
     public var errorDescription: String? {
         switch self {
+        case .invalidRole(let reason): return reason
         case .rebuildRequired(let reason):
             return "Sidecar rebuild required: \(reason). Run `paprika-pantry index rebuild` with the same source and --home."
         case .concurrentUpdate:
@@ -73,13 +75,21 @@ extension PantrySidecarStore {
     /// Validation and evidence read share one SQLite read transaction.
     func readCompatible<T>(_ families: [String], _ body: (Database) throws -> T) throws -> T {
         try dbQueue.read { db in
-            if let expectedContract { try Self.requireCompatible(expectedContract, families: families, db: db) }
+            switch role {
+            case .reader(let contract): try Self.requireCompatible(contract, families: families, db: db)
+            case .fixture: break
+            default: throw IndexCompatibilityError.invalidRole("Derived queries require a source-bound evidence reader")
+            }
             return try body(db)
         }
     }
 
     func requireBoundCompatibility(_ families: [String]) throws {
-        if let expectedContract { try requireCompatible(expectedContract, families: families) }
+        switch role {
+        case .reader(let contract): try requireCompatible(contract, families: families)
+        case .fixture: break
+        default: throw IndexCompatibilityError.invalidRole("Derived queries require a source-bound evidence reader")
+        }
     }
 
     func writeProvenance(contract: IndexSourceContract, families: [String], generation: String, at: String, dependencies: String?, db: Database) throws {
@@ -115,4 +125,6 @@ struct IndexBuildBaseline: Equatable, Sendable {
 struct IndexBuildHooks: Sendable {
     var afterBaseline: (@Sendable () async throws -> Void)?
     var beforePublication: (@Sendable () async throws -> Void)?
+    var duringPublication: (@Sendable (Database) throws -> Void)?
+    var afterPublication: (@Sendable () async -> Void)?
 }

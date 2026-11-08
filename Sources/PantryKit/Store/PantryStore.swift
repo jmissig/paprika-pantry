@@ -578,10 +578,31 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
 public struct PantrySidecarStore: Sendable {
     public let dbQueue: DatabaseQueue
 
-    let expectedContract: IndexSourceContract?
-    public init(dbQueue: DatabaseQueue, expectedContract: IndexSourceContract? = nil) {
-        self.expectedContract = expectedContract
+    enum Role: Sendable {
+        case reader(IndexSourceContract)
+        case writer
+        case inspector(IndexSourceContract?)
+        case fixture
+    }
+    let role: Role
+    var expectedContract: IndexSourceContract? {
+        switch role {
+        case .reader(let contract): return contract
+        case .inspector(let contract): return contract
+        case .writer, .fixture: return nil
+        }
+    }
+    public init(dbQueue: DatabaseQueue, expectedContract: IndexSourceContract) {
         self.dbQueue = dbQueue
+        self.role = .reader(expectedContract)
+    }
+    init(fixtureQueue: DatabaseQueue) {
+        self.dbQueue = fixtureQueue
+        self.role = .fixture
+    }
+    init(dbQueue: DatabaseQueue, role: Role) {
+        self.dbQueue = dbQueue
+        self.role = role
     }
 
     public func indexStats() throws -> PantryIndexStats {
@@ -1257,12 +1278,19 @@ public struct PantrySidecarStore: Sendable {
         phaseClock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         hooks: IndexBuildHooks = IndexBuildHooks()
     ) async throws -> RecipeIndexesRebuildSummary {
+        switch role {
+        case .writer, .fixture: break
+        default: throw IndexCompatibilityError.invalidRole("Index writes require an index writer")
+        }
+        try Task.checkCancellation()
         let baseline = try await dbQueue.read(IndexBuildBaseline.capture)
         try await hooks.afterBaseline?()
-        let source: any PantrySource = try (source as? PaprikaSQLiteSource)?.snapshot() ?? source
-        let contract = (source as? PaprikaSQLiteSource)?.indexContract
+        try Task.checkCancellation()
+        let source: any PantrySource = try (source as? any IndexablePantrySource)?.makeIndexSnapshot() ?? source
+        try Task.checkCancellation()
+        let contract = (source as? any IndexablePantrySource)?.indexContract
         if !refreshIngredientPairEvidence, let contract { try baseline.requireCompatible(contract) }
-        let dependencySignature = try (source as? PaprikaSQLiteSource)?.categoryDependencySignature()
+        let dependencySignature = try (source as? any IndexablePantrySource)?.categoryDependencySignature()
         let previousDependencies = baseline.provenance.first { $0.family == "recipe-search" }?.dependencySignature
         let generation = UUID().uuidString
         var phaseTimings = RecipeIndexPhaseTimingRecorder(clock: phaseClock)
@@ -1281,6 +1309,7 @@ public struct PantrySidecarStore: Sendable {
         let searchRunID = ids[0], featureRunID = ids[1], ingredientRunID = ids[2], usageRunID = ids[3]
         let ingredientPairRunID = refreshIngredientPairEvidence ? ids[4] : nil
         do {
+            try Task.checkCancellation()
             var phaseItemCounts = [RecipeIndexPhase: Int]()
             let categoriesStartedAt = phaseClock()
             let categoryNamesByUID = try await loadCategoryNamesByUID(from: source)
@@ -1333,6 +1362,7 @@ public struct PantrySidecarStore: Sendable {
                 phaseTimings.add(.deriveRecipeDocumentsFeaturesIngredients, startedAt: phaseClock())
             }
             for stub in recipeStubsToFetch {
+                try Task.checkCancellation()
                 let fetchRecipeStartedAt = phaseClock()
                 let recipe = try await source.fetchRecipe(uid: stub.uid)
                 phaseTimings.add(.sourceFetchRecipes, startedAt: fetchRecipeStartedAt)
@@ -1353,6 +1383,7 @@ public struct PantrySidecarStore: Sendable {
             phaseItemCounts[.deriveRecipeDocumentsFeaturesIngredients] = recipeStubsToFetch.count
             phaseItemCounts[.deriveUsageStats] = meals.count
 
+            try Task.checkCancellation()
             let indexedAt = now()
             let indexedAtString = DatabaseTimestamp.encode(indexedAt)
             let sortedDocuments: [RecipeSearchDocument]
@@ -1384,6 +1415,7 @@ public struct PantrySidecarStore: Sendable {
             let sortedIngredientPairSummaries: [IngredientPairEvidenceSummary]
             let sortedIngredientPairEvidence: [IngredientPairRecipeEvidenceRow]
             if refreshIngredientPairEvidence {
+                try Task.checkCancellation()
                 (sortedIngredientPairSummaries, sortedIngredientPairEvidence) = phaseTimings.measure(.deriveIngredientPairs) {
                     let ingredientPairDerivation = Self.deriveIngredientPairEvidence(
                         ingredientIndexes: sortedIngredientIndexes,
@@ -1425,6 +1457,7 @@ public struct PantrySidecarStore: Sendable {
             let sourceState = Self.makeStoredSourceState(from: source, observedAt: indexedAt)
             let writeTransactionStartedAt = phaseClock()
             try await hooks.beforePublication?()
+            try Task.checkCancellation()
             let transactionResult = try await dbQueue.write { db in
                 try baseline.requireUnchanged(db)
                 if refreshIngredientPairEvidence {
@@ -1451,6 +1484,7 @@ public struct PantrySidecarStore: Sendable {
                 }
                 try db.execute(sql: "DELETE FROM source_state")
 
+                try hooks.duringPublication?(db)
                 for document in sortedDocuments {
                     try db.execute(
                         sql: """
@@ -1769,6 +1803,7 @@ public struct PantrySidecarStore: Sendable {
                 }
                 return (finishedAt: finishedAt, storedCounts: storedCounts)
             }
+            await hooks.afterPublication?()
             phaseTimings.add(.sidecarWriteTransaction, startedAt: writeTransactionStartedAt)
             phaseItemCounts[.sidecarWriteTransaction] = refreshIngredientPairEvidence
                 ? recipeSearchDocumentCount
@@ -1869,16 +1904,7 @@ public struct PantrySidecarStore: Sendable {
         from source: any PantrySource,
         observedAt: Date
     ) -> PantryStoredSourceState? {
-        guard let source = source as? PaprikaSQLiteSource else {
-            return nil
-        }
-
-        return PantryStoredSourceState(
-            sourceType: PantrySourceType.paprikaSQLite,
-            sourceLocation: source.databaseURL.path,
-            observedAt: observedAt,
-            paprikaSync: source.inspection.paprikaSync
-        )
+        (source as? any IndexablePantrySource)?.storedSourceState(observedAt: observedAt)
     }
 
     private func writeStoredSourceState(

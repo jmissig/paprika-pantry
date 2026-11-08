@@ -280,16 +280,12 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.photos, [])
     }
 
-    func testRecipeReadServiceReadsListAndShowDirectlyFromPaprikaSQLiteSource() throws {
+    func testRecipeReadServiceReadsListAndShowDirectlyFromPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let service = RecipeReadService(source: source)
 
-        let listed = try BlockingAsync.run {
-            try await service.listRecipes()
-        }
-        let recipe = try BlockingAsync.run {
-            try await service.resolveRecipe(selector: "weeknight soup")
-        }
+        let listed = try await service.listRecipes()
+        let recipe = try await service.resolveRecipe(selector: "weeknight soup")
 
         XCTAssertEqual(
             listed,
@@ -346,13 +342,11 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(recipe.sourceFingerprint, "hash-aaa")
     }
 
-    func testMealReadServiceListsMealsDirectlyFromPaprikaSQLiteSource() throws {
+    func testMealReadServiceListsMealsDirectlyFromPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let service = try MealReadService(source: source)
 
-        let meals = try BlockingAsync.run {
-            try await service.listMeals()
-        }
+        let meals = try await service.listMeals()
 
         XCTAssertEqual(
             meals,
@@ -377,13 +371,11 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         )
     }
 
-    func testGroceryReadServiceListsGroceriesDirectlyFromPaprikaSQLiteSource() throws {
+    func testGroceryReadServiceListsGroceriesDirectlyFromPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let service = try GroceryReadService(source: source)
 
-        let groceries = try BlockingAsync.run {
-            try await service.listGroceries()
-        }
+        let groceries = try await service.listGroceries()
 
         XCTAssertEqual(
             groceries,
@@ -414,13 +406,11 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         )
     }
 
-    func testPantryItemReadServiceListsPantryItemsDirectlyFromPaprikaSQLiteSource() throws {
+    func testPantryItemReadServiceListsPantryItemsDirectlyFromPaprikaSQLiteSource() async throws {
         let source = try PaprikaSQLiteSource(databaseURL: try makePaprikaSourceDatabase())
         let service = try PantryItemReadService(source: source)
 
-        let pantryItems = try BlockingAsync.run {
-            try await service.listPantryItems()
-        }
+        let pantryItems = try await service.listPantryItems()
 
         XCTAssertEqual(
             pantryItems,
@@ -500,7 +490,7 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
     private func memorySidecar() throws -> PantrySidecarStore {
         let queue = try DatabaseQueue()
         try PantrySidecarDatabase.migrator().migrate(queue)
-        return PantrySidecarStore(dbQueue: queue)
+        return PantrySidecarStore(fixtureQueue: queue)
     }
 
     func testV4ReadsCollectionsMealsAndPantryWithoutInventingDefaultMembership() async throws {
@@ -774,8 +764,8 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         let path = root.appendingPathComponent("diagnostics.sqlite")
         let queue = try PantrySidecarDatabase(path: path).openQueue()
         try await queue.writeWithoutTransaction { try $0.execute(sql: "PRAGMA journal_mode=WAL") }
+        _ = try await PantrySidecarStore(fixtureQueue: queue).rebuildRecipeIndexes(from: source)
         let store = PantrySidecarStore(dbQueue: queue, expectedContract: source.indexContract)
-        _ = try await store.rebuildRecipeIndexes(from: source)
         let before = try store.indexStats()
         let writer = try DatabaseQueue(path: path.path)
         let during = try store.indexStats(afterProvenanceRead: {
@@ -809,11 +799,72 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(failed, 5)
     }
 
+    func testCancellationAfterCommitDoesNotReportRollback() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexProvenance()
+        let task = Task {
+            try await store.buildRecipeIndexes(from: source, hooks: IndexBuildHooks(afterPublication: {
+                withUnsafeCurrentTask { $0?.cancel() }
+            }))
+        }
+        _ = try await task.value
+        XCTAssertNotEqual(try store.indexProvenance(), before)
+        XCTAssertEqual(try store.indexStats().lastRecipeSearchRun?.status, .success)
+    }
+
+    func testStoreRolesCannotBypassReadOrWriteBoundaries() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let fixture = try memorySidecar()
+        _ = try await fixture.rebuildRecipeIndexes(from: source)
+        for role in [PantrySidecarStore.Role.writer, .inspector(source.indexContract)] {
+            let store = PantrySidecarStore(dbQueue: fixture.dbQueue, role: role)
+            XCTAssertThrowsError(try store.searchRecipes(query: "soup"))
+            XCTAssertThrowsError(try store.fetchRecipeFeatures(uid: "AAA"))
+            XCTAssertThrowsError(try store.requireBoundCompatibility(["recipe-search"]))
+            _ = try store.indexStats()
+        }
+        let reader = PantrySidecarStore(dbQueue: fixture.dbQueue, expectedContract: source.indexContract)
+        XCTAssertFalse(try reader.searchRecipes(query: "soup").isEmpty)
+        do {
+            _ = try await reader.rebuildRecipeIndexes(from: source)
+            XCTFail("Reader must not write")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("writer")) }
+    }
+
+    func testCancellationInsidePublicationRollsBackMutations() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexProvenance()
+        let count = try store.indexStats().recipeSearchDocumentCount
+        let entered = expectation(description: "publication has deleted old rows")
+        let resume = DispatchSemaphore(value: 0)
+        let task = Task {
+            try await store.buildRecipeIndexes(from: source, hooks: IndexBuildHooks(duringPublication: { db in
+                XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents"), 0)
+                entered.fulfill()
+                // Block only GRDB's dedicated writer queue, never a Swift executor.
+                XCTAssertEqual(resume.wait(timeout: .now() + 5), .success)
+            }))
+        }
+        await fulfillment(of: [entered], timeout: 5)
+        task.cancel()
+        resume.signal()
+        do { _ = try await task.value; XCTFail("Cancelled transaction must roll back") }
+        catch { XCTAssertTrue(error is CancellationError, "\(error)") }
+        XCTAssertEqual(try store.indexProvenance(), before)
+        XCTAssertEqual(try store.indexStats().recipeSearchDocumentCount, count)
+        let failed = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs WHERE status='failed'") }
+        XCTAssertEqual(failed, 5)
+    }
+
     private func makeStore() throws -> PantrySidecarStore {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("pantry.sqlite")
         let database = PantrySidecarDatabase(path: databaseURL)
-        return PantrySidecarStore(dbQueue: try database.openQueue())
+        return PantrySidecarStore(fixtureQueue: try database.openQueue())
     }
 
     private func makePaprikaSourceDatabase() throws -> URL {

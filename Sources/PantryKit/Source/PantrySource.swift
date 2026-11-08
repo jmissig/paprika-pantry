@@ -361,3 +361,11 @@ public protocol GroceriesReadablePantrySource: PantrySource {
 public protocol PantryItemsReadablePantrySource: PantrySource {
     func listPantryItems() async throws -> [SourcePantryItem]
 }
+
+/// Narrow source-owned boundary for consistent index extraction.
+protocol IndexablePantrySource: PantrySource {
+    var indexContract: IndexSourceContract { get }
+    func makeIndexSnapshot() throws -> any IndexablePantrySource
+    func categoryDependencySignature() throws -> String
+    func storedSourceState(observedAt: Date) -> PantryStoredSourceState
+}

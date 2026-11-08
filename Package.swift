@@ -31,7 +31,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "paprika-pantry",
-            dependencies: ["PantryKit"]
+            dependencies: ["PantryKit", .product(name: "ArgumentParser", package: "swift-argument-parser")]
         ),
         .testTarget(
             name: "PantryKitTests",

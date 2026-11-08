@@ -20,27 +20,22 @@ public struct CommandContext: Sendable {
         PantrySidecarDatabase(path: paths.databaseFile)
     }
 
-    public func makeReadStore(source: (any PantrySource)? = nil) throws -> PantrySidecarStore {
-        PantrySidecarStore(dbQueue: try makeSidecarDatabase().openReadOnlyQueue(),
-                          expectedContract: (source as? PaprikaSQLiteSource)?.indexContract)
+    public func makeReadStore(source: any PantrySource) throws -> PantrySidecarStore {
+        guard let source = source as? any IndexablePantrySource else {
+            throw IndexCompatibilityError.invalidRole("Source has no index compatibility contract")
+        }
+        return PantrySidecarStore(dbQueue: try makeSidecarDatabase().openReadOnlyQueue(), expectedContract: source.indexContract)
     }
 
     public func diagnosticStats(source: (any PantrySource)? = nil) -> PantryIndexStats {
-        do { return try makeReadStore(source: source).indexStats() }
-        catch { return .unavailable(error.localizedDescription) }
+        do {
+            return try PantrySidecarStore(dbQueue: makeSidecarDatabase().openReadOnlyQueue(),
+                role: .inspector((source as? any IndexablePantrySource)?.indexContract)).indexStats()
+        } catch { return .unavailable(error.localizedDescription) }
     }
 
-    public func makeSidecarStore(bindToSource: Bool = false) throws -> PantrySidecarStore {
-        let source = bindToSource ? try makeSource() as? PaprikaSQLiteSource : nil
-        return PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue(), expectedContract: source?.indexContract)
-    }
-
-    public func makeDatabase() -> PantrySidecarDatabase {
-        makeSidecarDatabase()
-    }
-
-    public func makeStore() throws -> PantrySidecarStore {
-        try makeSidecarStore()
+    public func makeIndexWriter() throws -> PantrySidecarStore {
+        PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue(), role: .writer)
     }
 
     public func makeSourceProvider(
@@ -86,11 +81,13 @@ public struct CommandContext: Sendable {
     }
 }
 
-public protocol PantryLeafCommand: ParsableCommand {}
+public protocol PantryLeafCommand: AsyncParsableCommand {
+    var runtimeOptions: RuntimeOptions { get }
+}
 
 extension PantryLeafCommand {
     func makeContext() throws -> CommandContext {
-        try CommandContext(runtimeOptions: RuntimeConfiguration.current)
+        try CommandContext(runtimeOptions: runtimeOptions)
     }
 
     func emitStub(

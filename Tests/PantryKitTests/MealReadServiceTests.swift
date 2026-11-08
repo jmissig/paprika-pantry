@@ -2,7 +2,7 @@ import XCTest
 @testable import PantryKit
 
 final class MealReadServiceTests: XCTestCase {
-    func testListMealsFiltersDeletedAndSortsNewestFirst() throws {
+    func testListMealsFiltersDeletedAndSortsNewestFirst() async throws {
         let source = InMemoryPantrySource(
             stubs: [],
             categories: [],
@@ -37,9 +37,7 @@ final class MealReadServiceTests: XCTestCase {
         )
         let service = try MealReadService(source: source)
 
-        let meals = try BlockingAsync.run {
-            try await service.listMeals()
-        }
+        let meals = try await service.listMeals()
 
         XCTAssertEqual(
             meals,

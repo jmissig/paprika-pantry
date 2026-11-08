@@ -2,7 +2,7 @@ import XCTest
 @testable import PantryKit
 
 final class GroceryReadServiceTests: XCTestCase {
-    func testListGroceriesFiltersDeletedAndSortsUnpurchasedFirst() throws {
+    func testListGroceriesFiltersDeletedAndSortsUnpurchasedFirst() async throws {
         let source = InMemoryPantrySource(
             stubs: [],
             categories: [],
@@ -46,9 +46,7 @@ final class GroceryReadServiceTests: XCTestCase {
         )
         let service = try GroceryReadService(source: source)
 
-        let groceries = try BlockingAsync.run {
-            try await service.listGroceries()
-        }
+        let groceries = try await service.listGroceries()
 
         XCTAssertEqual(
             groceries,

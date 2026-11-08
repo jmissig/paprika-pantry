@@ -77,7 +77,7 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
 // FileManager is not Sendable in this SDK. Stored state is immutable; only
 // thread-safe, delegate-free file operations are used. Injected managers must
 // preserve that contract (tests use immutable home-directory overrides).
-public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesReadablePantrySource, PantryItemsReadablePantrySource, @unchecked Sendable {
+public final class PaprikaSQLiteSource: IndexablePantrySource, MealsReadablePantrySource, GroceriesReadablePantrySource, PantryItemsReadablePantrySource, @unchecked Sendable {
     public let databaseURL: URL
     public let inspection: PaprikaSQLiteSourceInspection
 
@@ -135,6 +135,13 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         try copy.writeWithoutTransaction { try $0.execute(sql: "PRAGMA query_only = 1") }
         return try PaprikaSQLiteSource(queue: copy, original: self)
     }
+
+    func storedSourceState(observedAt: Date) -> PantryStoredSourceState {
+        PantryStoredSourceState(sourceType: PantrySourceType.paprikaSQLite,
+            sourceLocation: databaseURL.path, observedAt: observedAt, paprikaSync: inspection.paprikaSync)
+    }
+
+    func makeIndexSnapshot() throws -> any IndexablePantrySource { try snapshot() }
 
     public var indexContract: IndexSourceContract {
         IndexSourceContract(identity: inspection.storeIdentity, layout: inspection.schemaFlavor,

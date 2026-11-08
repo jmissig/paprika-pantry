@@ -23,18 +23,6 @@ public struct RuntimeOptions: ParsableArguments, Sendable {
     public init() {}
 }
 
-public enum RuntimeConfiguration {
-    nonisolated(unsafe) private static var currentOptions = RuntimeOptions()
-
-    public static var current: RuntimeOptions {
-        currentOptions
-    }
-
-    public static func setCurrent(_ options: RuntimeOptions) {
-        currentOptions = options
-    }
-}
-
 extension RuntimeOptions {
     func resolvedOutputFormat() throws -> OutputFormat {
         if json {

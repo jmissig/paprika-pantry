@@ -1,3 +1,0 @@
-import PantryKit
-
-PantryCLI.main()

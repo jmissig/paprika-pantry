@@ -4,7 +4,7 @@ import ArgumentParser
 private let pantryCLIVersion = "2.0.0"
 // VERSION-SYNC-END
 
-public struct PantryCLI: ParsableCommand {
+public struct PantryCLI: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "paprika-pantry",
         abstract: "Local-first Paprika reader and query CLI.",
@@ -27,6 +27,5 @@ public struct PantryCLI: ParsableCommand {
 
     public mutating func validate() throws {
         _ = try runtimeOptions.resolvedOutputFormat()
-        RuntimeConfiguration.setCurrent(runtimeOptions)
     }
 }
