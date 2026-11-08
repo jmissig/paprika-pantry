@@ -2,6 +2,16 @@
 
 Date: 2026-11-08. Status: implemented for version 2.0.0; validated locally (unit/integration tests and isolated v4 end-to-end reads/rebuild).
 
+## Hardening follow-up
+
+The compatibility design below was implemented before the
+[2.0 hardening plan](2.0-hardening-plan.md). The hardening pass supersedes the old
+open-time migration and optional-binding mechanics: only index writers migrate;
+queries are source-bound and read-only; canonical reads tolerate unavailable
+sidecars; all publications validate a pre-extraction baseline; diagnostics use one
+read transaction. Swift tools 6.2, GRDB 7 and native async commands are now the
+implementation baseline. Original semantic/open checkpoints below remain valid.
+
 ## Boundary and evidence
 
 Paprika alone migrates its canonical database. paprika-pantry detects and reads the
@@ -94,7 +104,7 @@ Do not launch an app, trigger sync, or upgrade it as a side effect of inspection
 
 ## 4. Sidecar: structural migrations are not data freshness
 
-Current facts: `PantrySidecarDatabase` uses named GRDB migrations on open;
+Pre-implementation facts (historical): `PantrySidecarDatabase` used named GRDB migrations on open;
 `source_state` records path/sync observation but no source schema or adapter version;
 routine updates skip recipes by source fingerprints; pairing evidence is deliberately
 left untouched by `index update`. Final index rows are published in a write transaction.

@@ -66,12 +66,12 @@ Non-goals / anti-goals:
 ## Current state
 
 Current stack:
-- Swift 6 package targeting macOS 13+
+- Swift tools 6.2 minimum, Swift 6 language mode, targeting macOS 13+
 - `PantryKit` library target
 - `paprika-pantry` executable target
 - `PantryKitTests` test target
 - `swift-argument-parser` for CLI parsing
-- GRDB for SQLite access
+- GRDB 7.12+ for SQLite access; ArgumentParser 1.8.2+; commit `Package.resolved`
 - `Makefile` wrappers for build/test/install/version sync
 
 Current command surface includes:
@@ -80,7 +80,7 @@ Current command surface includes:
 - `paprika-pantry source last-sync-time`
 - `paprika-pantry source stats`
 - `paprika-pantry source launch-app [--wait-for-sync]`
-- `paprika-pantry recipes list|show|search|features|ingredients|pairings|cookbooks`
+- `paprika-pantry recipes list|show|search|features|ingredients|pairings|cookbooks|collections`
 - `paprika-pantry meals list`
 - `paprika-pantry groceries list`
 - `paprika-pantry pantry list`
@@ -95,6 +95,11 @@ Current source layout:
 - `Sources/PantryKit/Support`: output formats, config, paths, helpers
 - `Sources/paprika-pantry`: executable entry point
 - `Tests/PantryKitTests`: unit/integration tests
+- `Store/PantryStore.swift`: store roles and shared identifiers
+- `Store/IndexQueries.swift`: read/query SQL and diagnostics
+- `Store/IndexBuild.swift`: build orchestration, attempt lifecycle and atomic publication
+- `Recipes/RecipeIndexDerivation.swift`: pure interpretation, with no database access
+- `Model/IndexModels.swift`: index/evidence models; `Support/IndexDates.swift`: date codecs
 - `docs/`: architecture notes and focused implementation specs
 
 ## Validation
@@ -324,12 +329,19 @@ If a sidecar-derived answer would be surprising, the CLI should be able to show 
 - Detect observed v3/v4 schema layouts structurally; never migrate canonical Paprika.
 - Product term **Collections** maps to what Paprika calls **Cookbooks**. Keep
   collection identity separate from publication/source rollups (`recipes cookbooks`).
-- Use source-bound sidecar stores for production derived reads. Unbound stores are
-  for diagnostics, index writers, and isolated fixtures; do not bypass compatibility
-  gates when exposing evidence.
+- Use explicit store roles: source-bound evidence reader, index writer, diagnostic
+  inspector, and internal fixture initializer. Writers/inspectors cannot serve
+  derived evidence; readers/inspectors cannot rebuild. Do not bypass these gates.
+- Read-only commands never create/migrate sidecars. Canonical recipe list/detail
+  reads may omit unavailable enrichments; required indexed constraints must fail.
+- Commands use native AsyncParsableCommand and command-owned RuntimeOptions. Do
+  not restore semaphore bridges or mutable process-global command options.
 - Schema/adapter/derivation/source identity changes require an explicit full rebuild.
   Named GRDB migrations do not confer freshness. Publish provenance with index rows
   in the same transaction and keep pairing provenance separate on routine updates.
+  Capture baseline before extraction and validate it for both update and rebuild.
+  Read diagnostic provenance/readiness/counts in one transaction. Cancellation before
+  commit preserves old results; after commit, report the successful publication.
 - Use a consistent SQLite backup snapshot for extraction, never mix live source
   generations. Keep source/sidecar contract versions independent of the CLI version.
 - No inferred default Collection membership from null references. New numeric times

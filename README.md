@@ -9,6 +9,8 @@ skills for OpenClaw, Codex, and Claude Code.
 
 ## Install
 
+Requires macOS 13 or later and Swift 6.2 or later to build.
+
 From this repository, build and install:
 
 ```bash
@@ -45,6 +47,10 @@ paprika-pantry meals list
 ```
 
 If something isn't working, run `paprika-pantry doctor` for a diagnosis and next step.
+You can still read recipes with `recipes list` and `recipes show` if the index is
+missing or unavailable; cooking-history extras may be omitted. Search and indexed
+filters need a working index. If an index belongs to a newer paprika-pantry version,
+use that version or choose a separate `--home` rather than overwriting it.
 
 ## Find something to cook
 

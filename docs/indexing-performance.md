@@ -39,6 +39,19 @@ Unknown legacy provenance requires explicit `index rebuild`, not inferred freshn
 The initial v3/v4 transition rebuilds every family; regular updates leave pairing
 provenance untouched. A failed transaction preserves the prior rows and provenance.
 
+Capture the sidecar baseline before the source snapshot. Baseline contracts,
+generations and dependency signatures are read together; incremental row selection
+checks that baseline in its own read transaction. Both build modes compare the
+baseline again within publication. A competing publication aborts old work rather
+than letting a slower full rebuild replace newer results. Attempt setup is atomic;
+failed/cancelled writes preserve the previous generation and mark their attempts
+failed when reporting can be persisted. Diagnostic counts/provenance share one read.
+
+Implementation ownership: `IndexBuild.swift` owns the transaction; `IndexQueries.swift`
+owns read SQL; `IndexCompatibility.swift` owns contracts/baselines; pure derivation
+lives in `Recipes/RecipeIndexDerivation.swift`. Do not split transaction ownership
+when maintaining these files.
+
 A source snapshot is captured with GRDB's SQLite backup API into an in-memory
 queue before extraction. This includes committed WAL data and avoids holding a
 source read transaction through expensive derivation/sidecar writing. Snapshot

@@ -9,7 +9,7 @@ Use Paprika as read-only context: recipes, descriptions, notes, meals, ratings, 
 
 ## Start from the person's question
 
-- **Update, sync, or export.** No export is normally needed. Run `source launch-app --wait-for-sync`, then `index update`. Request an export only after direct access is diagnosed as unavailable.
+- **Update, sync, or export.** No export is normally needed. After Paprika finishes syncing, run `index update`. Use `source launch-app --wait-for-sync` only where app/preference discovery has been verified; it remains unverified for Paprika 4, so have the operator open/sync v4 manually. Request an export only after direct access is diagnosed as unavailable.
 - **Today's menu.** Read `meals list`, select the scheduled meals, then fetch linked recipes needed to answer. Future meals are plans, not cooking history.
 - **Find something to make.** Apply the stated constraints and inspect the best few. Use description, notes, difficulty, or nutrition only to distinguish choices.
 - **Use this ingredient.** Search exact and related uses, then inspect recipe detail. Distinguish mechanical conversion, such as canned beans to dried, from substitution.
@@ -35,6 +35,12 @@ contracts. If `index update` or a derived query reports rebuild required, do not
 use stale cached evidence as if compatible. Follow the operator's authorized
 refresh scope; direct `recipes list/show`, meals, groceries and pantry remain
 available without rebuilding. Pairing evidence retains its own last-rebuild date.
+Canonical reads may report `enrichmentIssue`; do not invent missing usage facts or
+freshness. Read/diagnostic commands never create or migrate the sidecar. Explicit
+indexed filters still require valid evidence. A future-version sidecar requires a
+compatible binary or a separate `--home`, not rebuilding with this older binary.
+Concurrent publication errors mean retry the authorized index operation; never
+present a rejected attempt as a successful refresh.
 
 Collections are Paprika's Cookbooks. `recipes cookbooks` still means publication/
 source aggregates. A null collection reference is unknown, not proven default
@@ -53,7 +59,7 @@ Use concise culinary language grounded in the retrieved recipe. Do not invent in
 
 ## Command map
 
-- Refresh: `source launch-app --wait-for-sync`, then `index update`
+- Refresh: after Paprika syncs, `index update`; the optional `source launch-app --wait-for-sync` helper is not yet verified for v4
 - Find/read: `recipes list`, `recipes search`, `recipes show <uid>`
 - Meals/inventory: `meals list`, `groceries list`, `pantry list`
 - Patterns: `recipes cookbooks`, `recipes pairings`

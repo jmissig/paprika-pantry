@@ -53,15 +53,31 @@ results. Original text fields remain the basis until the new semantics are verif
   v4 app bundle/preference discovery still needs validation. Do not infer it from
   successful reads of a copied database or reuse ambient preferences for that copy.
 
-Version 2 migrates its own sidecar structure on open. That does not establish data
-freshness. Missing legacy provenance, changed source identity/layout, or changed
+Only explicit index-writing operations open/create/migrate the sidecar for writing.
+Read/query/diagnostic operations inspect an existing sidecar read-only. Schema
+migration does not establish data freshness. Missing legacy provenance, changed source identity/layout, or changed
 interpretation contracts require an explicit full `index rebuild`. Do not silently
 promote a routine update to the expensive pairing rebuild. Incompatible derived
 results are blocked; canonical list/detail reads omit incompatible enrichments.
+Canonical output uses `enrichmentIssue` (JSON) / `enrichment_unavailable` (text) to
+explain omitted extras, without fabricating usage or freshness. Required indexed
+constraints never disappear silently. A future-version sidecar needs its compatible
+binary or a separate home; do not suggest rebuilding over unknown migrations.
+`doctor` retains source diagnostics even if the sidecar is missing or unreadable.
 
 Builds extract a consistent SQLite backup snapshot into memory, then publish rows
 and provenance atomically. Failure preserves the previous generation without
 relabeling it as compatible. Routine updates leave pairing provenance unchanged.
+Both update and rebuild capture a baseline before source extraction and reject a
+competing publication inside their write transaction. Retry explicitly; a rejected
+build never overwrites the winner. Diagnostics use one read transaction.
+
+The CLI uses native async commands with command-owned options. Cancellation is
+checked around expensive work and is honored by GRDB's async writes. Cancellation
+before commit rolls back final rows/provenance; attempt failure reporting uses a
+synchronous cleanup transaction. Cancellation after commit does not relabel success
+as rollback. This is task-cancellation behavior, not a promise of graceful SIGINT
+handling. Abrupt process termination may leave a running attempt record.
 See [indexing-performance.md](indexing-performance.md) for dependency invalidation
 and [paprika-4-compatibility-plan.md](paprika-4-compatibility-plan.md) for schema,
 transition, rollback, and validation details.
