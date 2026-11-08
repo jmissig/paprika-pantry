@@ -39,6 +39,8 @@ public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Send
                 }
             }
 
+            if let scale = meal.scale { fields.append("scale=\(scale)") }
+            if let kind = meal.isIngredient { fields.append("ingredient_only=\(kind)") }
             lines.append(fields.joined(separator: " "))
         }
 
@@ -46,7 +48,7 @@ public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Send
     }
 
     public var csvHeaders: [String] {
-        ["uid", "name", "scheduled_at", "meal_type", "recipe_uid", "recipe_name"]
+        ["uid", "name", "scheduled_at", "meal_type", "recipe_uid", "recipe_name", "scale", "is_ingredient"]
     }
 
     public var csvRows: [[String]] {
@@ -58,6 +60,8 @@ public struct MealsListReport: ConsoleRenderable, CSVRenderable, Equatable, Send
                 $0.mealType ?? "",
                 $0.recipeUID ?? "",
                 $0.recipeName ?? "",
+                $0.scale ?? "",
+                $0.isIngredient.map(String.init) ?? "",
             ]
         }
     }

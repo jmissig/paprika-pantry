@@ -1,7 +1,9 @@
 import Foundation
 import GRDB
+import CryptoKit
 
 public enum PaprikaSQLiteSourceError: Error, LocalizedError, Equatable {
+    case unsupportedSchema(String)
     case missingDatabase(URL)
     case unreadableDatabase(String)
     case missingTable(String)
@@ -11,6 +13,8 @@ public enum PaprikaSQLiteSourceError: Error, LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
+        case .unsupportedSchema(let reason):
+            return "Unsupported Paprika schema: \(reason)"
         case .missingDatabase(let databaseURL):
             return "Paprika.sqlite was not found at \(databaseURL.path)."
         case .unreadableDatabase(let message):
@@ -28,6 +32,10 @@ public enum PaprikaSQLiteSourceError: Error, LocalizedError, Equatable {
 }
 
 public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
+    public let capabilities: [String]
+    public let contractSignature: String
+    public let structuralDigest: String
+    public let storeIdentity: String
     public let schemaFlavor: String
     public let requiredTables: [String]
     public let accessMode: String
@@ -38,6 +46,10 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
     public let appInstallation: PaprikaAppInstallation?
 
     public init(
+        capabilities: [String] = [],
+        contractSignature: String = "",
+        structuralDigest: String = "",
+        storeIdentity: String = "",
         schemaFlavor: String,
         requiredTables: [String],
         accessMode: String,
@@ -47,6 +59,10 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
         paprikaSync: PaprikaSyncDetails? = nil,
         appInstallation: PaprikaAppInstallation? = nil
     ) {
+        self.capabilities = capabilities
+        self.contractSignature = contractSignature
+        self.structuralDigest = structuralDigest
+        self.storeIdentity = storeIdentity
         self.schemaFlavor = schemaFlavor
         self.requiredTables = requiredTables
         self.accessMode = accessMode
@@ -95,6 +111,40 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
             throw error
         } catch {
             throw PaprikaSQLiteSourceError.unreadableDatabase(error.localizedDescription)
+        }
+    }
+
+    private init(queue: DatabaseQueue, original: PaprikaSQLiteSource) throws {
+        self.dbQueue = queue
+        self.databaseURL = original.databaseURL
+        self.fileManager = original.fileManager
+        let schema = try queue.read(PaprikaSQLiteSchema.inspect)
+        self.schema = schema
+        self.inspection = try queue.read { db in
+            try schema.makeInspection(db: db, databaseURL: original.databaseURL, fileManager: original.fileManager)
+        }
+    }
+
+    /// SQLite backup captures committed pages including WAL in a bounded extraction snapshot.
+    public func snapshot() throws -> PaprikaSQLiteSource {
+        let copy = try DatabaseQueue()
+        try dbQueue.backup(to: copy)
+        try copy.writeWithoutTransaction { try $0.execute(sql: "PRAGMA query_only = 1") }
+        return try PaprikaSQLiteSource(queue: copy, original: self)
+    }
+
+    public var indexContract: IndexSourceContract {
+        IndexSourceContract(identity: inspection.storeIdentity, layout: inspection.schemaFlavor,
+            schemaSignature: inspection.contractSignature)
+    }
+
+    public func categoryDependencySignature() throws -> String {
+        try dbQueue.read { db in
+            let categories = try Row.fetchAll(db, sql: "SELECT ZUID, ZNAME, \(schema.categoryDeletedExpression) AS deleted FROM ZRECIPECATEGORY ORDER BY ZUID")
+            let links = try Row.fetchAll(db, sql: "SELECT r.ZUID AS recipe, c.ZUID AS category FROM \(schema.categoryTable) l JOIN ZRECIPE r ON r.Z_PK=l.\(schema.recipeLink) JOIN ZRECIPECATEGORY c ON c.Z_PK=l.\(schema.categoryLink) ORDER BY r.ZUID,c.ZUID")
+            let parts = categories.map { row -> [String] in [row["ZUID"] ?? "", row["ZNAME"] ?? "", String(row["deleted"] as Int? ?? 0)] }
+                + links.map { row -> [String] in [row["recipe"] ?? "", row["category"] ?? ""] }
+            return stableDigest(String(decoding: try JSONEncoder().encode(parts), as: UTF8.self))
         }
     }
 
@@ -149,6 +199,8 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
     public func listMeals() async throws -> [SourceMeal] {
         let sql = """
             SELECT
+                \(self.schema.optionalTextExpression(column: "ZSCALE", from: self.schema.mealColumns, tableAlias: "meals")) AS scale,
+                \(self.schema.optionalValueExpression(column: "ZISINGREDIENT", from: self.schema.mealColumns, tableAlias: "meals")) AS is_ingredient,
                 meals.ZUID AS uid,
                 COALESCE(NULLIF(meals.ZNAME, ''), recipe.ZNAME) AS name,
                 \(self.schema.mealTimestampExpression) AS scheduled_at,
@@ -176,7 +228,8 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                     mealType: row["meal_type"],
                     recipeUID: row["recipe_uid"],
                     recipeName: row["recipe_name"],
-                    isDeleted: Self.decodeBoolean(row["is_deleted"])
+                    isDeleted: Self.decodeBoolean(row["is_deleted"]),
+                    scale: row["scale"], isIngredient: row["is_ingredient"]
                 )
             }
         }
@@ -228,6 +281,9 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
         let sql = """
             SELECT
                 items.ZUID AS uid,
+                \(self.schema.optionalTextExpression(column: "ZNOTES", from: self.schema.pantryItemColumns, tableAlias: "items")) AS notes,
+                \(self.schema.supportsLocations ? "(SELECT ZUID FROM ZPANTRYLOCATION WHERE Z_PK=items.ZLOCATION AND lower(COALESCE(ZSTATUS, '')) != 'deleted')" : "NULL") AS location_uid,
+                \(self.schema.supportsLocations ? "(SELECT ZNAME FROM ZPANTRYLOCATION WHERE Z_PK=items.ZLOCATION AND lower(COALESCE(ZSTATUS, '')) != 'deleted')" : "NULL") AS location_name,
                 COALESCE(NULLIF(items.ZINGREDIENT, ''), NULLIF(items.ZQUANTITY, '')) AS name,
                 \(self.schema.optionalTextExpression(column: "ZQUANTITY", from: self.schema.pantryItemColumns, tableAlias: "items")) AS quantity,
                 \(self.schema.pantryAisleNameExpression) AS aisle_name,
@@ -258,7 +314,8 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                     expirationDate: row["expiration_date"],
                     hasExpiration: Self.decodeBoolean(row["has_expiration"]),
                     isInStock: Self.decodeBoolean(row["is_in_stock"]),
-                    isDeleted: Self.decodeBoolean(row["is_deleted"])
+                    isDeleted: Self.decodeBoolean(row["is_deleted"]),
+                    locationUID: row["location_uid"], locationName: row["location_name"], notes: row["notes"]
                 )
             }
         }
@@ -302,6 +359,7 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
     public func fetchRecipe(uid: String) async throws -> SourceRecipe {
         let sql = """
             SELECT
+                \(self.schema.optionalValueExpression(column: "ZCOOKBOOK", from: self.schema.recipeColumns)) AS collection_id,
                 Z_PK AS id,
                 ZUID AS uid,
                 ZNAME AS name,
@@ -372,9 +430,31 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
                 createdAt: row["created_at"],
                 updatedAt: row["updated_at"],
                 sourceFingerprint: row["source_fingerprint"],
-                rawJSON: rawJSON
+                rawJSON: rawJSON,
+                collection: try self.collectionContext(id: row["collection_id"], db: db)
             )
         }
+    }
+
+    public func listCollections() throws -> [SourceCollection] {
+        guard schema.supportsCollections else {
+            throw PaprikaSQLiteSourceError.unsupportedSchema("Collections are unavailable in this source layout.")
+        }
+        return try dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT ZUID, ZNAME, ZISDEFAULT FROM ZCOOKBOOK WHERE lower(COALESCE(ZSTATUS, '')) != 'deleted' ORDER BY ZNAME, ZUID").map {
+                SourceCollection(uid: $0["ZUID"], name: $0["ZNAME"], isDefault: Self.decodeBoolean($0["ZISDEFAULT"]))
+            }
+        }
+    }
+
+    private func collectionContext(id: Int64?, db: Database) throws -> RecipeCollectionContext? {
+        guard schema.supportsCollections else { return nil }
+        // Do not infer default membership from a null relationship: observed but not yet verified.
+        guard let id else { return RecipeCollectionContext(uid: nil, name: nil, resolution: "null-reference") }
+        guard let row = try Row.fetchOne(db, sql: "SELECT ZUID, ZNAME FROM ZCOOKBOOK WHERE Z_PK = ? AND lower(COALESCE(ZSTATUS, '')) != 'deleted'", arguments: [id]) else {
+            return RecipeCollectionContext(uid: nil, name: nil, resolution: "missing-reference")
+        }
+        return RecipeCollectionContext(uid: row["ZUID"], name: row["ZNAME"], resolution: "explicit")
     }
 
     private static func openReadOnlyQueue(databaseURL: URL) throws -> DatabaseQueue {
@@ -392,10 +472,10 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
             db,
             sql: """
                 SELECT categories.ZUID
-                FROM Z_12CATEGORIES links
+                FROM \(self.schema.categoryTable) links
                 INNER JOIN ZRECIPECATEGORY categories
-                    ON categories.Z_PK = links.Z_13CATEGORIES
-                WHERE links.Z_12RECIPES = ?
+                    ON categories.Z_PK = links.\(self.schema.categoryLink)
+                WHERE links.\(self.schema.recipeLink) = ?
                   AND categories.ZUID IS NOT NULL
                 ORDER BY categories.ZNAME COLLATE NOCASE, categories.ZUID
                 """,
@@ -608,11 +688,16 @@ public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesRead
 }
 
 private struct PaprikaSQLiteSchema: Sendable {
-    static let schemaFlavor = "paprika-3-core-data"
+    let categoryTable: String
+    let recipeLink: String
+    let categoryLink: String
+    let collectionColumns: Set<String>?
+    let locationColumns: Set<String>?
+    var schemaFlavor: String { categoryTable == "Z_12CATEGORIES" ? "paprika-3-core-data" : "paprika-4-core-data" }
+    var requiredTables: [String] { ["ZRECIPE", "ZRECIPECATEGORY", categoryTable, "Z_METADATA"] }
     static let requiredTables = [
         "ZRECIPE",
         "ZRECIPECATEGORY",
-        "Z_12CATEGORIES",
         "Z_METADATA",
     ]
 
@@ -632,9 +717,19 @@ private struct PaprikaSQLiteSchema: Sendable {
             try requireTable(table, in: db)
         }
 
+        let candidates = [
+            ("Z_12CATEGORIES", "Z_12RECIPES", "Z_13CATEGORIES"),
+            ("Z_15CATEGORIES", "Z_15RECIPES", "Z_16CATEGORIES"),
+        ]
+        let matches = try candidates.filter { try db.tableExists($0.0) }
+        guard matches.count == 1, let layout = matches.first else {
+            throw PaprikaSQLiteSourceError.unsupportedSchema("Expected exactly one supported category relationship (v3 or v4); found \(matches.count).")
+        }
+        let collectionColumns = try db.tableExists("ZCOOKBOOK") ? Set(db.columns(in: "ZCOOKBOOK").map(\.name)) : nil
+        let locationColumns = try db.tableExists("ZPANTRYLOCATION") ? Set(db.columns(in: "ZPANTRYLOCATION").map(\.name)) : nil
         let recipeColumns = try Set(db.columns(in: "ZRECIPE").map(\.name))
         let categoryColumns = try Set(db.columns(in: "ZRECIPECATEGORY").map(\.name))
-        let recipeCategoryLinkColumns = try Set(db.columns(in: "Z_12CATEGORIES").map(\.name))
+        let recipeCategoryLinkColumns = try Set(db.columns(in: layout.0).map(\.name))
         let mealColumns = try db.tableExists("ZMEAL") ? Set(db.columns(in: "ZMEAL").map(\.name)) : nil
         let mealTypeColumns = try db.tableExists("ZMEALTYPE") ? Set(db.columns(in: "ZMEALTYPE").map(\.name)) : nil
         let groceryItemColumns = try db.tableExists("ZGROCERYITEM") ? Set(db.columns(in: "ZGROCERYITEM").map(\.name)) : nil
@@ -651,25 +746,12 @@ private struct PaprikaSQLiteSchema: Sendable {
         try requireColumn("ZUID", in: "ZRECIPECATEGORY", availableColumns: categoryColumns)
         try requireColumn("ZNAME", in: "ZRECIPECATEGORY", availableColumns: categoryColumns)
 
-        try requireColumn("Z_12RECIPES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
-        try requireColumn("Z_13CATEGORIES", in: "Z_12CATEGORIES", availableColumns: recipeCategoryLinkColumns)
-
-        if let mealColumns {
-            try requireColumn("ZUID", in: "ZMEAL", availableColumns: mealColumns)
-            try requireColumn("ZNAME", in: "ZMEAL", availableColumns: mealColumns)
-        }
-
-        if let groceryItemColumns {
-            try requireColumn("ZUID", in: "ZGROCERYITEM", availableColumns: groceryItemColumns)
-            try requireColumn("ZNAME", in: "ZGROCERYITEM", availableColumns: groceryItemColumns)
-        }
-
-        if let pantryItemColumns {
-            try requireColumn("ZUID", in: "ZPANTRYITEM", availableColumns: pantryItemColumns)
-            try requireColumn("ZINGREDIENT", in: "ZPANTRYITEM", availableColumns: pantryItemColumns)
-        }
+        try requireColumn(layout.1, in: layout.0, availableColumns: recipeCategoryLinkColumns)
+        try requireColumn(layout.2, in: layout.0, availableColumns: recipeCategoryLinkColumns)
 
         return PaprikaSQLiteSchema(
+            categoryTable: layout.0, recipeLink: layout.1, categoryLink: layout.2,
+            collectionColumns: collectionColumns, locationColumns: locationColumns,
             recipeColumns: recipeColumns,
             categoryColumns: categoryColumns,
             recipeCategoryLinkColumns: recipeCategoryLinkColumns,
@@ -824,22 +906,72 @@ private struct PaprikaSQLiteSchema: Sendable {
         return "CASE WHEN \(qualifiedColumn) IS NULL THEN NULL ELSE datetime(\(qualifiedColumn) + 978307200, 'unixepoch') END"
     }
 
+    var supportsMeals: Bool {
+        has(["ZUID", "ZNAME", "ZRECIPE", "ZTYPE"], in: mealColumns) && has(["Z_PK", "ZNAME"], in: mealTypeColumns)
+    }
+    var supportsGroceries: Bool {
+        has(["ZUID", "ZNAME", "ZLIST", "ZAISLE"], in: groceryItemColumns) && has(["Z_PK", "ZNAME"], in: groceryListColumns) && has(["Z_PK", "ZNAME"], in: groceryAisleColumns)
+    }
+    var supportsPantry: Bool {
+        has(["ZUID", "ZINGREDIENT", "ZQUANTITY", "ZAISLE"], in: pantryItemColumns) && has(["Z_PK", "ZNAME"], in: groceryAisleColumns)
+    }
+    private func has(_ columns: Set<String>, in available: Set<String>?) -> Bool {
+        available.map { columns.isSubset(of: $0) } == true
+    }
     func requireMealSupport() throws {
-        guard mealColumns != nil else {
-            throw PaprikaSQLiteSourceError.missingTable("ZMEAL")
-        }
+        guard mealColumns != nil else { throw PaprikaSQLiteSourceError.missingTable("ZMEAL") }
+        guard supportsMeals else { throw PaprikaSQLiteSourceError.unsupportedSchema("Meal fields or relationships unavailable.") }
     }
-
     func requireGrocerySupport() throws {
-        guard groceryItemColumns != nil else {
-            throw PaprikaSQLiteSourceError.missingTable("ZGROCERYITEM")
-        }
+        guard groceryItemColumns != nil else { throw PaprikaSQLiteSourceError.missingTable("ZGROCERYITEM") }
+        guard supportsGroceries else { throw PaprikaSQLiteSourceError.unsupportedSchema("Grocery fields or relationships unavailable.") }
+    }
+    func requirePantrySupport() throws {
+        guard pantryItemColumns != nil else { throw PaprikaSQLiteSourceError.missingTable("ZPANTRYITEM") }
+        guard supportsPantry else { throw PaprikaSQLiteSourceError.unsupportedSchema("Pantry fields or relationships unavailable.") }
     }
 
-    func requirePantrySupport() throws {
-        guard pantryItemColumns != nil else {
-            throw PaprikaSQLiteSourceError.missingTable("ZPANTRYITEM")
+    var supportsCollections: Bool {
+        collectionColumns.map { Set(["Z_PK", "ZUID", "ZNAME", "ZISDEFAULT", "ZSTATUS"]).isSubset(of: $0) } == true && recipeColumns.contains("ZCOOKBOOK")
+    }
+    var supportsLocations: Bool {
+        locationColumns.map { Set(["Z_PK", "ZUID", "ZNAME", "ZSTATUS"]).isSubset(of: $0) } == true && pantryItemColumns?.contains("ZLOCATION") == true
+    }
+    var capabilities: [String] {
+        var result = ["recipes", "categories"]
+        if supportsMeals { result.append("meals") }
+        if supportsGroceries { result.append("groceries") }
+        if supportsPantry { result.append("pantry") }
+        if has(["ZUID", "ZRECIPE", "ZFILENAME"], in: recipePhotoColumns) { result.append("photos") }
+        if supportsCollections { result.append("collections") }
+        if supportsLocations { result.append("pantry-locations") }
+        if pantryItemColumns?.contains("ZNOTES") == true { result.append("pantry-notes") }
+        if mealColumns?.contains("ZSCALE") == true { result.append("meal-scale") }
+        if mealColumns?.contains("ZISINGREDIENT") == true { result.append("meal-ingredient-kind") }
+        return result.sorted()
+    }
+    var contractSignature: String {
+        // Only columns this adapter consumes participate; unrelated future fields are additive.
+        let consumed: Set<String> = ["Z_PK", "ZUID", "ZNAME", "ZINGREDIENTS", "ZDIRECTIONS", "ZDESCRIPTIONTEXT", "ZNOTES", "ZDIFFICULTY", "ZNUTRITIONALINFO", "ZSOURCE", "ZSOURCEURL", "ZIMAGEURL", "ZPHOTO", "ZPHOTOLARGE", "ZPHOTOHASH", "ZPHOTOISDOWNLOADED", "ZPHOTOISUPLOADED", "ZRATING", "ZONFAVORITES", "ZPREPTIME", "ZCOOKTIME", "ZTOTALTIME", "ZSERVINGS", "ZCREATED", "ZSYNCHASH", "ZINTRASH", "ZSTATUS", "ZRECIPE", "ZTYPE", "ZDATE", "ZSCALE", "ZISINGREDIENT", "ZQUANTITY", "ZINGREDIENT", "ZINSTRUCTION", "ZLIST", "ZAISLE", "ZPURCHASED", "ZRECIPENAME", "ZINSTOCK", "ZHASEXPIRATION", "ZPURCHASEDATE", "ZEXPIRATIONDATE", "ZCOOKBOOK", "ZLOCATION", "ZISDEFAULT", "ZFILENAME", "ZORDERFLAG", "ZISDOWNLOADED", "ZISUPLOADED", "ZRECIPEUID"]
+        let shapes: [(String, Set<String>?)] = [("recipe", recipeColumns), ("category", categoryColumns), ("meal", mealColumns), ("mealType", mealTypeColumns), ("grocery", groceryItemColumns), ("groceryList", groceryListColumns), ("aisle", groceryAisleColumns), ("pantry", pantryItemColumns), ("photo", recipePhotoColumns), ("collection", collectionColumns), ("location", locationColumns)]
+        return stableDigest(([schemaFlavor] + shapes.map { name, columns in
+            name + ":" + (columns.map { $0.intersection(consumed).sorted().joined(separator: ",") } ?? "unavailable")
+        }).joined(separator: "\n"))
+    }
+
+    static func structureDigest(_ db: Database) throws -> String {
+        let tables = try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        let shape = try tables.map { table in
+            table + ":" + (try db.columns(in: table).map { $0.name + ":" + $0.type }.sorted().joined(separator: ","))
+        }.joined(separator: "\n")
+        return stableDigest(shape)
+    }
+    static func storeIdentity(_ db: Database, databaseURL: URL) throws -> String {
+        if try db.columns(in: "Z_METADATA").contains(where: { $0.name == "Z_UUID" }),
+           let uuid = try String.fetchOne(db, sql: "SELECT Z_UUID FROM Z_METADATA LIMIT 1"), !uuid.isEmpty {
+            return "store:" + uuid
         }
+        return "path:" + databaseURL.resolvingSymlinksInPath().path
     }
 
     func makeInspection(
@@ -863,8 +995,12 @@ private struct PaprikaSQLiteSchema: Sendable {
         let appInstallation = Self.inspectPaprikaAppInstallation(fileManager: fileManager)
 
         return PaprikaSQLiteSourceInspection(
-            schemaFlavor: Self.schemaFlavor,
-            requiredTables: Self.requiredTables,
+            capabilities: capabilities,
+            contractSignature: contractSignature,
+            structuralDigest: try Self.structureDigest(db),
+            storeIdentity: try Self.storeIdentity(db, databaseURL: databaseURL),
+            schemaFlavor: schemaFlavor,
+            requiredTables: requiredTables,
             accessMode: "read-only",
             queryOnly: queryOnly,
             journalMode: journalMode,
@@ -952,6 +1088,11 @@ private struct PaprikaSQLiteSchema: Sendable {
         }
 
         let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        let knownSourcePaths = [
+            "Library/Group Containers/72KVKW69K8.com.hindsightlabs.paprika.mac.v3/Data/Database/Paprika.sqlite",
+            "Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite",
+        ].map { homeDirectory.appendingPathComponent($0).standardizedFileURL.path }
+        guard knownSourcePaths.contains(databaseURL.standardizedFileURL.path) else { return candidates }
         candidates.append(
             (
                 signalSource: "group-container-preferences",
@@ -1058,4 +1199,8 @@ private extension String {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+}
+
+func stableDigest(_ value: String) -> String {
+    SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
 }

@@ -1,240 +1,77 @@
 # paprika-pantry
 
-`paprika-pantry` is a command-line tool for querying the local database used by Paprika 3 for Mac. It includes skills that help OpenClaw, ChatGPT, and Claude use the tool to answer questions about recipes, meals, groceries, pantry items, and cooking patterns.
+Search your Paprika recipes, check meal plans and grocery lists, and explore what
+you've cooked before—from the command line or through an AI assistant.
 
-It opens Paprika's database read-only: it does not authenticate to Paprika Cloud, call a Paprika web API, or write back to the app's data.
-
-It is built to answer ordinary cooking questions:
-
-- What is planned today, and what do I need to know before cooking it?
-- Which saved recipes fit an ingredient, time limit, rating, exclusion, or “haven't made lately” constraint?
-- What does a recipe mean by an ingredient, and is a conversion or substitution sensible here?
-- Which recipes have we made, liked, repeated, neglected, or never tried?
-- What is recorded in the pantry or grocery list?
-- How have the household's cooking habits and useful recipe sources changed over time?
-
-When Paprika's local data needs refreshing, the tool can launch Paprika, wait for its observed sync marker to advance, and then rebuild its own search and cooking-pattern indexes. It still never writes to Paprika's database.
+`paprika-pantry` works with Paprika 3 and 4 for Mac. It reads your local data without
+changing it, and doesn't need your Paprika account credentials. It also includes
+skills for OpenClaw, Codex, and Claude Code.
 
 ## Install
 
-Build and install the binary:
+From this repository, build and install:
 
 ```bash
 make install
 ```
 
-That installs `paprika-pantry` to `~/bin/paprika-pantry` by default.
+The command is installed at `~/bin/paprika-pantry`. Add `~/bin` to your `PATH` if
+needed. To choose another location, use `make install PREFIX="$HOME/.local"`.
 
-If `~/bin` is not already on your `PATH`, add it first.
-
-If you want a different install location:
-
-```bash
-sudo make install PREFIX="/usr/local"
-```
-
-To install the repo's agent skill for OpenClaw (the default), Codex, or Claude Code:
+To install the instructions for your AI assistant, choose one:
 
 ```bash
-make install-skill
-make install-skill SKILL_TARGET=codex
-make install-skill SKILL_TARGET=claude
+make install-skill                       # OpenClaw
+make install-skill SKILL_TARGET=codex     # Codex
+make install-skill SKILL_TARGET=claude    # Claude Code
 ```
 
-The default destinations are:
+## Get started
 
-- OpenClaw: `$OPENCLAW_HOME/skills/paprika-pantry`, with `OPENCLAW_HOME` defaulting to `~/.openclaw`
-- Codex: `$CODEX_HOME/skills/paprika-pantry`, with `CODEX_HOME` defaulting to `~/.codex`
-- Claude Code: `$CLAUDE_CONFIG_DIR/skills/paprika-pantry`, with `CLAUDE_CONFIG_DIR` defaulting to `~/.claude`
-
-Set the corresponding home/config variable to install elsewhere. `SKILLS_DIR` can also override the final skills directory directly.
-
-## First Run
-
-Paprika 3 for macOS must be installed on the same Mac and must have created its local database, normally by completing at least one app sync. `paprika-pantry` reads that on-disk database directly; no Paprika account credentials are needed by this tool.
-
-The normal first check is:
+Open Paprika on this Mac and let it finish syncing. Then check access and build
+the search index:
 
 ```bash
 paprika-pantry source status
+paprika-pantry index rebuild
 ```
 
-That checks that the Paprika 3 Mac app is installed, its local SQLite database was found, and the database looks like the format `paprika-pantry` expects. `paprika-pantry doctor` cuts across both that real source and paprika-pantry's owned sidecar index.
-
-## Update Index
-
-To refresh paprika-pantry's local index after Paprika has synced, do:
+Now try:
 
 ```bash
-paprika-pantry source last-sync-time
-paprika-pantry index update
-```
-
-`index update` is the normal path: it refreshes search, derived recipe features, usage stats, and ingredient tokens. `index rebuild` does that plus the heavier ingredient-pairing evidence used by `recipes pairings`; run it occasionally when you want pairings refreshed too.
-
-On Macs where Paprika is not being actively used, you can nudge a sync first, then update:
-
-```bash
-paprika-pantry source launch-app --wait-for-sync
-paprika-pantry index update
-```
-
-After that, the usual commands are things like:
-
-```bash
-paprika-pantry recipes list
 paprika-pantry recipes search risotto
-paprika-pantry recipes cookbooks
-paprika-pantry index stats
-paprika-pantry doctor
+paprika-pantry recipes show "Mushroom Risotto"
+paprika-pantry meals list
 ```
 
-## Output Formats
+If something isn't working, run `paprika-pantry doctor` for a diagnosis and next step.
 
-Commands default to compact human-readable output.
-
-- `--format text` forces compact operator-oriented text
-- `--format json` forces machine-readable JSON
-- `--json` is a shortcut for `--format json`
-- `--format csv` is supported only on row-oriented reports for now
-
-Prefer `--format json` in docs, scripts, and agent usage.
-
-Recipe, meal, pairing-evidence, and source-rollup rows include stable attachment handles for OpenClaw/Obsidian notes or follow-up reads. JSON uses structured `target` or `recipeTarget` objects. Text uses compact handles like `target=paprika.recipe:<uid>` or `recipe_target=paprika.recipe:<uid>`. These identify Paprika objects; they are not embedded commands and they are not full recipe records.
-
-Examples:
+## Find something to cook
 
 ```bash
-paprika-pantry recipes list --format json
-paprika-pantry recipes search risotto --format json
-paprika-pantry groceries list --format csv
-paprika-pantry recipes cookbooks --format csv
-```
-
-Not every command flattens honestly to CSV. Detail and diagnostic commands continue to support text and JSON output only, and will fail clearly if asked for CSV.
-
-## Common Commands
-
-Most people will use these:
-
-```bash
-paprika-pantry doctor
-paprika-pantry source status
-paprika-pantry source last-sync-time
-paprika-pantry source stats
-paprika-pantry recipes cookbooks
-paprika-pantry recipes cookbooks --sort recipes --min-recipes 2 --format csv
-paprika-pantry source launch-app
-paprika-pantry source launch-app --wait-for-sync
-paprika-pantry source launch-app --wait-for-sync --timeout-seconds 300
-
-paprika-pantry recipes list
+# Favorites and highly rated recipes
 paprika-pantry recipes list --favorite
 paprika-pantry recipes list --min-rating 4
-paprika-pantry recipes list --category Dinner --category Weeknight
-paprika-pantry recipes list --ingredient basil --ingredient "green onion"
-paprika-pantry recipes list --exclude-ingredient anchovy
+
+# Dinner with ingredients you want to use—or avoid
+paprika-pantry recipes list --category Dinner --ingredient basil
+paprika-pantry recipes search tofu --exclude-ingredient peanut
+
+# Something quick, or something you haven't made recently
 paprika-pantry recipes list --max-total-time-minutes 30 --sort fewest-ingredients
-paprika-pantry recipes list --min-meal-count 2 --sort recent
 paprika-pantry recipes list --min-days-since-last-meal 90 --sort lapsed
-paprika-pantry recipes list --format csv
 
-paprika-pantry recipes show "Mushroom Risotto"
-paprika-pantry recipes show 8D4A0D7E-EXAMPLE-UID --format json
-paprika-pantry recipes search risotto
-paprika-pantry recipes search "crispy tofu" --min-rating 4 --format json
-paprika-pantry recipes search tostada --max-days-since-last-meal 60 --format json
-paprika-pantry recipes features "Mushroom Risotto"
-paprika-pantry recipes ingredients "Mushroom Risotto"
-paprika-pantry recipes pairings --token tomato --sort meals
-
-paprika-pantry meals list
-paprika-pantry meals list --format csv
-paprika-pantry groceries list
-paprika-pantry groceries list --format csv
-paprika-pantry pantry list
-paprika-pantry pantry list --format csv
-
-paprika-pantry index stats
-paprika-pantry index update
-paprika-pantry index rebuild
-paprika-pantry doctor
-paprika-pantry doctor --format json
-```
-
-## Read-Only Exploration
-
-For one-off inspection, debugging, or agent investigation across sidecar tables, see [docs/read-only-exploration.md](docs/read-only-exploration.md).
-
-Use the CLI first when a stable command answers the question. Use read-only SQL/Datasette for exploration: coverage checks, freshness checks, provenance examples, and debugging surprising derived evidence.
-
-## Source Readiness and Sync Observation
-
-`paprika-pantry` is read-only against the real Paprika database.
-
-The source-related commands exist to make that legible:
-
-```bash
-paprika-pantry source status
-paprika-pantry doctor
-paprika-pantry source last-sync-time
-```
-
-`source status` reports on the real Paprika database/app boundary. Top-level `doctor` combines that source diagnosis with sidecar index health.
-
-The sync-related reporting is observational, not a real sync API.
-
-Today that means:
-
-- `source last-sync-time` reads the locally observed Paprika last-sync marker
-- `source launch-app` launches the Mac app
-- `source launch-app --wait-for-sync` launches the app and waits for that observed last-sync timestamp to advance
-
-This is useful because Paprika often syncs on launch, even though `paprika-pantry` is not calling a direct sync command.
-
-## Recipe Queries
-
-There are two main recipe paths:
-
-1. direct canonical reads from the local Paprika source
-2. local index-backed search and derived features built from that source
-
-Use direct reads when you want the canonical recipe record:
-
-```bash
-paprika-pantry recipes list
+# Read a recipe, including its notes and original source
 paprika-pantry recipes show "Weeknight Pasta"
 ```
 
-`recipes show <uid>` is the full recipe detail boundary. Use it when choosing between candidates, understanding what a dish is, following the recipe, checking household modifications, answering a nutrition or difficulty question, or locating the original source and available photos. Publisher descriptions and household notes remain separate so one is not mistaken for the other. Photo output refers to existing Paprika-owned files; it does not copy image bytes. List, search, meal, pairing, and source-rollup outputs stay partial: they expose why a row matched plus stable target identity such as a recipe UID.
+Use a recipe's ID instead of its name if multiple recipes share a name.
 
-Use paprika-pantry's local index when you want query affordances like ingredient filtering, derived time limits, or usage-aware ranking:
+Cooking history is a useful clue, not a rating: a recipe last made 90 days ago,
+with a usual gap of 14 days, has been out of rotation. That doesn't tell us whether
+you still like it. Favorites, ratings, and your notes provide the rest of the picture.
 
-```bash
-paprika-pantry recipes search risotto --max-total-time-minutes 45
-paprika-pantry recipes search tofu --ingredient scallion --exclude-ingredient peanut
-```
-
-To inspect the derived layer for one recipe:
-
-```bash
-paprika-pantry recipes features "Weeknight Pasta"
-paprika-pantry recipes ingredients "Weeknight Pasta"
-```
-
-To inspect ingredient token pairings across recipes:
-
-```bash
-paprika-pantry recipes pairings --token tomato --sort meals
-```
-
-Pairings are evidence, not recommendations. They come from `index rebuild`, and the command will warn if the pairing evidence is older than the routine index.
-
-Meal-history fields are also evidence. Recipe list/search can filter by linked meal count, days since last meal, and median meal gap, but those facts do not mean a recipe is loved, disliked, forgotten, or a good dinner suggestion by themselves.
-
-## Meals, Groceries, and Pantry
-
-These commands read directly from local Paprika data:
+## Check plans and shopping lists
 
 ```bash
 paprika-pantry meals list
@@ -242,41 +79,93 @@ paprika-pantry groceries list
 paprika-pantry pantry list
 ```
 
-They are meant to be simple extraction commands, not a replacement UI for Paprika.
+These read the information saved in Paprika. With Paprika 4, meals also show recipe
+scale and ingredient-only entries; pantry items include locations and notes when
+available. A planned meal isn't proof it was cooked, and a pantry entry isn't a
+fresh inventory check.
 
-## Cookbook / Source Rollups
+## Collections and recipe sources
 
-If paprika-pantry's local index has been built, you can inspect cookbook or source rollups from canonical recipe source fields:
+We call Paprika 4's **Cookbooks** **Collections**. To list those collections:
+
+```bash
+paprika-pantry recipes collections
+```
+
+Ordinary recipe lists include recipes from all collections. Recipe details show
+the collection when known.
+
+The separate `recipes cookbooks` command groups recipes by their original source,
+such as a published cookbook or website:
 
 ```bash
 paprika-pantry recipes cookbooks
 paprika-pantry recipes cookbooks --sort average-rating
-paprika-pantry recipes cookbooks --sort recipes --min-recipes 3
-paprika-pantry recipes cookbooks --format csv
 ```
 
-This is useful for questions like:
+To see which ingredients appear together in saved recipes:
 
-- which cookbooks have the most recipes here?
-- which sources have the best ratings?
-- which cookbook clusters are strong enough to trust?
+```bash
+paprika-pantry recipes pairings --token tomato --sort meals
+```
 
-## What This Tool Is and Is Not
+These pairings describe your recipe collection; they aren't flavor recommendations.
 
-`paprika-pantry` is:
+## Keep results up to date
 
-- a local-first Paprika reader
-- a query CLI over canonical local Paprika data
-- a local index for search and derived facts we actually use
-- a tool for humans and local agents that need trustworthy evidence quickly
+After Paprika finishes syncing, refresh search and cooking history:
 
-It is not:
+```bash
+paprika-pantry index update
+```
 
-- a write path into the real Paprika DB
-- a full Paprika replacement app
-- a background sync service
-- a generic Paprika SDK
-- an opaque recommendation engine
+Run `paprika-pantry index rebuild` when you also want to refresh ingredient pairings.
+It does more work and can take longer.
+
+You can also ask paprika-pantry to open Paprika and wait for a newer sync time:
+
+```bash
+paprika-pantry source launch-app --wait-for-sync
+paprika-pantry index update
+```
+
+This relies on Paprika syncing after launch; it doesn't directly control cloud
+sync. The launch-and-wait helper hasn't yet been verified with Paprika 4. For now,
+open Paprika 4 yourself and let it sync before updating the index.
+
+## Upgrading to 2.0 or Paprika 4
+
+Both Paprika 3 and 4 are supported; you don't need to upgrade Paprika to use this
+release. After upgrading paprika-pantry from 1.x, or after upgrading Paprika to 4,
+rebuild the index once:
+
+```bash
+paprika-pantry source status
+paprika-pantry index rebuild
+paprika-pantry doctor
+```
+
+This rebuilds paprika-pantry's own search data, not your Paprika library. You can
+still read recipes and lists before rebuilding, but searches and cooking-history
+features may ask you to rebuild first. Afterward, return to `index update` for
+normal refreshes.
+
+Don't reuse the updated index with paprika-pantry 1.x. If you need to try an older
+version, give it a separate data directory with `--home`.
+
+## Export results and find more options
+
+Output is readable text by default. Use JSON for scripts or CSV for spreadsheets:
+
+```bash
+paprika-pantry recipes search risotto --format json
+paprika-pantry recipes list --format csv
+paprika-pantry groceries list --format csv
+```
+
+CSV is available for lists; recipe details and diagnostics support text and JSON.
+For more filters and options, use `paprika-pantry --help` or a command's own help,
+such as `paprika-pantry recipes list --help`.
 
 ---
 

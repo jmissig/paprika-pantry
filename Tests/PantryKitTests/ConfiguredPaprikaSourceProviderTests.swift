@@ -94,7 +94,7 @@ final class ConfiguredPaprikaSourceProviderTests: XCTestCase {
         XCTAssertNotNil(source as? PaprikaSQLiteSource)
     }
 
-    func testDefaultPaprikaSQLiteDiscoveryPrefersGroupContainerPath() throws {
+    func testDefaultPaprikaSQLiteDiscoveryRejectsAmbiguousStores() throws {
         let paths = try makePaths()
         let providerFileManager = try makeProviderFileManager()
         let homeDirectory = providerFileManager.homeDirectoryForCurrentUser
@@ -115,10 +115,10 @@ final class ConfiguredPaprikaSourceProviderTests: XCTestCase {
 
         let snapshot = try provider.diagnose()
 
-        XCTAssertEqual(snapshot.status, .ready)
+        XCTAssertEqual(snapshot.status, .invalid)
         XCTAssertEqual(snapshot.sourceType, PantrySourceType.paprikaSQLite)
-        XCTAssertEqual(snapshot.displayName, "default Paprika SQLite")
-        XCTAssertEqual(snapshot.sourceLocation, groupContainerDatabaseURL.path)
+        XCTAssertTrue(snapshot.message.contains("Multiple Paprika databases"))
+        XCTAssertNil(snapshot.sourceLocation)
     }
 
     func testMissingSourceConfigurationReportsNotConfigured() throws {

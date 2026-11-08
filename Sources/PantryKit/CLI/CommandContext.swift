@@ -20,8 +20,9 @@ public struct CommandContext: Sendable {
         PantrySidecarDatabase(path: paths.databaseFile)
     }
 
-    public func makeSidecarStore() throws -> PantrySidecarStore {
-        PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue())
+    public func makeSidecarStore(bindToSource: Bool = false) throws -> PantrySidecarStore {
+        let source = bindToSource ? try makeSource() as? PaprikaSQLiteSource : nil
+        return PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue(), expectedContract: source?.indexContract)
     }
 
     public func makeDatabase() -> PantrySidecarDatabase {

@@ -48,6 +48,8 @@ public struct PantryItemsListReport: ConsoleRenderable, CSVRenderable, Equatable
                 }
             }
 
+            if let location = pantryItem.locationName { fields.append("location=\(location)") }
+            if let notes = pantryItem.notes { fields.append("notes=\(notes)") }
             lines.append(fields.joined(separator: " "))
         }
 
@@ -64,7 +66,7 @@ public struct PantryItemsListReport: ConsoleRenderable, CSVRenderable, Equatable
             "is_in_stock",
             "purchase_date",
             "has_expiration",
-            "expiration_date",
+            "expiration_date", "location_uid", "location_name", "notes",
         ]
     }
 
@@ -80,6 +82,7 @@ public struct PantryItemsListReport: ConsoleRenderable, CSVRenderable, Equatable
                 $0.purchaseDate ?? "",
                 $0.hasExpiration ? "true" : "false",
                 $0.expirationDate ?? "",
+                $0.locationUID ?? "", $0.locationName ?? "", $0.notes ?? "",
             ]
         }
     }

@@ -20,7 +20,7 @@ Underlying philosophy: **software is ephemeral**. Old code should earn its keep.
 
 ## Project brief
 
-`paprika-pantry` is a small local CLI for reading Paprika 3 data directly from the real local Paprika SQLite database and querying it as compact local evidence.
+`paprika-pantry` is a small local CLI for reading Paprika 3/4 data directly from the real local Paprika SQLite database and querying it as compact local evidence.
 
 This project is:
 - a local-first Paprika reader and query CLI
@@ -37,7 +37,7 @@ It helps answer questions like:
 - what substitution or pairing evidence exists in our cooking history?
 
 Source of truth:
-- Canonical data: the real local Paprika 3 SQLite database, opened read-only
+- Canonical data: the real local Paprika SQLite database, opened read-only
 - Owned/derived data: `paprika-pantry`’s local sidecar/index database, rebuildable from Paprika source data and derived analysis
 - Human-facing usage guide: `README.md`
 - Active backlog: `TODO.md`
@@ -152,7 +152,7 @@ Use repo-local, fixture, sandboxed, or temporary paths for tests. Do not rely on
 Preferred high-level flow:
 
 ```text
-Paprika 3 local SQLite database (read-only)
+Paprika 3/4 local SQLite database (read-only)
     -> Paprika read adapter / mapper
     -> stable internal domain/query model
     -> optional sidecar SQLite store for indexes and derived facts
@@ -319,6 +319,24 @@ Do not duplicate whole canonical Paprika entities into the sidecar unless a conc
 
 If a sidecar-derived answer would be surprising, the CLI should be able to show the evidence, counts, or contributing recipes/meals that led to it.
 
+### Source compatibility and version 2 sidecars
+
+- Detect observed v3/v4 schema layouts structurally; never migrate canonical Paprika.
+- Product term **Collections** maps to what Paprika calls **Cookbooks**. Keep
+  collection identity separate from publication/source rollups (`recipes cookbooks`).
+- Use source-bound sidecar stores for production derived reads. Unbound stores are
+  for diagnostics, index writers, and isolated fixtures; do not bypass compatibility
+  gates when exposing evidence.
+- Schema/adapter/derivation/source identity changes require an explicit full rebuild.
+  Named GRDB migrations do not confer freshness. Publish provenance with index rows
+  in the same transaction and keep pairing provenance separate on routine updates.
+- Use a consistent SQLite backup snapshot for extraction, never mix live source
+  generations. Keep source/sidecar contract versions independent of the CLI version.
+- No inferred default Collection membership from null references. New numeric times
+  and structured nutrition remain deferred until their semantics are validated.
+- `docs/paprika-4-compatibility-plan.md` records the rollout design and remaining
+  validation checkpoints; `docs/indexing-performance.md` owns update behavior.
+
 ### Sync observation
 
 The sync-related behavior is observational, not a real sync API.
@@ -410,10 +428,10 @@ Watch for:
 ## Documentation and project hygiene
 
 Use this docs split:
-- `README.md` — human-facing usage guide: install, purpose, normal commands, practical examples
+- `README.md` — human-facing usage guide: install, purpose, normal commands, practical examples, and necessary upgrade steps. Keep schema/provenance mechanics, output contracts, and agent procedures in `docs/`, not README.
 - `TODO.md` — active backlog / near-term parking lot, not a philosophy dump
 - `AGENTS.md` — durable architecture, constraints, source-of-truth boundaries, project posture, validation, and agent guidance
-- `docs/` — focused architecture notes/specs when details would bloat `AGENTS.md`
+- `docs/` — agent-facing operations, architecture, implementation contracts, and investigation procedures; start with `docs/agent-operations.md` for tool/evidence boundaries.
 - `skills/paprika-pantry/SKILL.md` — OpenClaw skill instructions for using the installed tool
 
 `make install-skill` installs into the shared managed OpenClaw skill root at `~/.openclaw/skills/` by default. Set `SKILL_TARGET=codex` or `SKILL_TARGET=claude` to install into the corresponding Codex or Claude Code skills root. Workspace-local `skills/` directories are user-controlled override layers with higher precedence; do not treat an active workspace shadow as the canonical install destination.

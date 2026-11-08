@@ -103,6 +103,9 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
                 parts.append("categories=\(recipe.categories.joined(separator: ", "))")
             }
 
+            if let collection = recipe.collection {
+                parts.append("collection=\(collection.name ?? collection.resolution)")
+            }
             if let sourceName = recipe.sourceName, !sourceName.isEmpty {
                 parts.append("source=\(sourceName)")
             }
@@ -124,11 +127,11 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
     }
 
     public var csvHeaders: [String] {
-        recipeResultCSVHeaders
+        recipeResultCSVHeaders + ["collection_uid", "collection_name", "collection_resolution"]
     }
 
     public var csvRows: [[String]] {
-        recipes.map(recipeCSVRow)
+        recipes.map { recipeCSVRow($0) + [$0.collection?.uid ?? "", $0.collection?.name ?? "", $0.collection?.resolution ?? ""] }
     }
 }
 
@@ -176,6 +179,10 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             lines.append("categories: \(recipe.categories.joined(separator: ", "))")
         }
 
+        if let collection = recipe.collection {
+            lines.append("collection: \(collection.name ?? collection.resolution)")
+            if let uid = collection.uid { lines.append("collection_uid: \(uid)") }
+        }
         if let sourceName = recipe.sourceName, !sourceName.isEmpty {
             lines.append("source_name: \(sourceName)")
         }
@@ -399,6 +406,7 @@ public struct IndexStatsReport: ConsoleRenderable, Equatable, Sendable {
     public var humanDescription: String {
         var lines = [
             "\(command): Owned sidecar index status.",
+            "compatibility: \(stats.compatibilityIssue ?? (stats.compatibilityChecked ? "compatible; see per-family build times" : "unverified; no readable source selected"))",
             "source_state_captured: \(stats.sourceState == nil ? "no" : "yes")",
             "recipe_search_ready: \(stats.recipeSearchReady ? "yes" : "no")",
             "recipe_search_documents: \(stats.recipeSearchDocumentCount)",

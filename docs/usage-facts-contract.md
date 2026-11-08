@@ -8,7 +8,7 @@ Paprika remains canonical for recipe content. The sidecar is rebuildable and sto
 
 Use Paprika meal `scheduledAt` as the meal timestamp.
 
-Ignore meals that are deleted, missing `scheduledAt`, or scheduled in the future. For per-recipe usage facts, also ignore meals without a recipe UID.
+Ignore meals that are deleted, missing `scheduledAt`, or scheduled in the future. For per-recipe usage facts, also ignore meals without a recipe UID or explicitly marked ingredient-only in Paprika 4. Recipe scale does not multiply occurrences.
 
 Dataset-level `total_meal_count` includes all qualifying meals with a valid non-future `scheduledAt`, even when no recipe UID is attached. Duplicate same-day meals count separately.
 

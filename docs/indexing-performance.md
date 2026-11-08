@@ -29,3 +29,23 @@ Usage stats are still a full refresh during `index update`. Meal edits can chang
 Ingredient pair evidence is not touched by `index update`. Run `index rebuild` when pairings should be refreshed.
 
 Keep corpus- and machine-specific benchmark snapshots in ignored `local/benchmarks/` files. Committed documentation should describe the measurement method and the behavior it is intended to validate without publishing private corpus details.
+
+## Version 2 compatibility and dependency invalidation
+
+Named sidecar migrations add per-family `index_provenance` and attempt provenance
+on `index_runs`. Source identity, supported schema signature, adapter version and
+derivation version must match before a production derived read or partial update.
+Unknown legacy provenance requires explicit `index rebuild`, not inferred freshness.
+The initial v3/v4 transition rebuilds every family; regular updates leave pairing
+provenance untouched. A failed transaction preserves the prior rows and provenance.
+
+A source snapshot is captured with GRDB's SQLite backup API into an in-memory
+queue before extraction. This includes committed WAL data and avoids holding a
+source read transaction through expensive derivation/sidecar writing. Snapshot
+memory scales with the source database size, not the larger derived sidecar size.
+
+Category names and relationship membership are hashed independently of recipe
+sync hashes. Changes disable routine recipe skips so FTS cannot retain old category
+labels. Missing ingredient lines/tokens also prevent skipping unchanged recipes.
+Only adapter-consumed schema fields affect compatibility; unrelated additive
+columns change the diagnostic digest but do not force rebuilding.

@@ -105,6 +105,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
     public let displayName: String?
     public let implementation: String?
     public let sourceLocation: String?
+    public let capabilities: [String]?
+    public let structuralDigest: String?
     public let schemaFlavor: String?
     public let accessMode: String?
     public let queryOnly: Bool?
@@ -120,6 +122,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         displayName: String?,
         implementation: String?,
         sourceLocation: String?,
+        capabilities: [String]? = nil,
+        structuralDigest: String? = nil,
         schemaFlavor: String? = nil,
         accessMode: String? = nil,
         queryOnly: Bool? = nil,
@@ -134,6 +138,8 @@ public struct PantrySourceDoctorSnapshot: Codable, Equatable, Sendable {
         self.displayName = displayName
         self.implementation = implementation
         self.sourceLocation = sourceLocation
+        self.capabilities = capabilities
+        self.structuralDigest = structuralDigest
         self.schemaFlavor = schemaFlavor
         self.accessMode = accessMode
         self.queryOnly = queryOnly
@@ -193,6 +199,8 @@ public struct ConfiguredPaprikaSourceProvider: PantrySourceProvider, @unchecked 
                     displayName: displayName,
                     implementation: "direct Paprika SQLite source",
                     sourceLocation: databaseURL.path,
+                    capabilities: source.inspection.capabilities,
+                    structuralDigest: source.inspection.structuralDigest,
                     schemaFlavor: source.inspection.schemaFlavor,
                     accessMode: source.inspection.accessMode,
                     queryOnly: source.inspection.queryOnly,
@@ -251,6 +259,11 @@ public struct ConfiguredPaprikaSourceProvider: PantrySourceProvider, @unchecked 
             )
         }
 
+        if source?.paprikaSQLite?.databasePath?.trimmedNonEmpty == nil,
+           source?.paprikaSQLite?.databasePathEnvironmentVariable.flatMap({ environment[$0]?.trimmedNonEmpty }) == nil,
+           Self.defaultPaprikaSQLiteURLs(fileManager: fileManager).count > 1 {
+            return .invalid(displayName: nil, error: .invalidConfiguration("Multiple Paprika databases found; configure an explicit database path."))
+        }
         guard let source else {
             if let databaseURL = Self.defaultPaprikaSQLiteURL(fileManager: fileManager) {
                 return .paprikaSQLite(
@@ -316,21 +329,25 @@ public struct ConfiguredPaprikaSourceProvider: PantrySourceProvider, @unchecked 
     }
 
     private static func defaultPaprikaSQLiteURL(fileManager: FileManager) -> URL? {
+        defaultPaprikaSQLiteURLs(fileManager: fileManager).first
+    }
+    private static func defaultPaprikaSQLiteURLs(fileManager: FileManager) -> [URL] {
         let candidatePaths = [
             "Library/Group Containers/72KVKW69K8.com.hindsightlabs.paprika.mac.v3/Data/Database/Paprika.sqlite",
             "Library/Application Support/Paprika Recipe Manager 3/Paprika.sqlite",
         ]
 
+        var result = [URL]()
         for relativePath in candidatePaths {
             let databaseURL = fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent(relativePath)
                 .standardizedFileURL
             if fileManager.fileExists(atPath: databaseURL.path) {
-                return databaseURL
+                result.append(databaseURL.resolvingSymlinksInPath())
             }
         }
 
-        return nil
+        return Array(Set(result))
     }
 }
 

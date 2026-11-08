@@ -26,6 +26,21 @@ Do not make the person run a follow-up command to understand the answer.
 
 If search finds nothing, broaden once while preserving the important constraint. Then offer a pantry idea, a new recipe, or external search.
 
+## Source and index compatibility
+
+`source status` detects supported Paprika 3/4 database layouts. Never migrate the
+Paprika database. Version 2.x sidecars require one explicit `index rebuild` after
+upgrading from 1.x, changing source layout/store, or changing interpretation
+contracts. If `index update` or a derived query reports rebuild required, do not
+use stale cached evidence as if compatible. Follow the operator's authorized
+refresh scope; direct `recipes list/show`, meals, groceries and pantry remain
+available without rebuilding. Pairing evidence retains its own last-rebuild date.
+
+Collections are Paprika's Cookbooks. `recipes cookbooks` still means publication/
+source aggregates. A null collection reference is unknown, not proven default
+membership. Meal `scale` is not meal count; ingredient-only entries are not recipe
+usage. Pantry notes/location are recorded evidence, not verification of inventory.
+
 ## Evidence and interpretation
 
 - Canonical facts include recipes, ratings, notes, meals, groceries, and pantry records. Derived evidence includes repetition, recency, source rollups, and ingredient co-occurrence.
@@ -42,6 +57,7 @@ Use concise culinary language grounded in the retrieved recipe. Do not invent in
 - Find/read: `recipes list`, `recipes search`, `recipes show <uid>`
 - Meals/inventory: `meals list`, `groceries list`, `pantry list`
 - Patterns: `recipes cookbooks`, `recipes pairings`
+- Collections: `recipes collections` (Paprika calls these Cookbooks; not publication/source rollups)
 - Diagnose: `source status`, `doctor`, `index stats`
 
 Treat `paprika.recipe`, `paprika.meal`, and `paprika.source` targets as identity handles, not commands.

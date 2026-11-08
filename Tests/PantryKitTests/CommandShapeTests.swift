@@ -9,6 +9,6 @@ final class CommandShapeTests: XCTestCase {
 
     func testRecipesContainsCookbookAggregateCommand() {
         let names = RecipesCommand.configuration.subcommands.map { $0.configuration.commandName }
-        XCTAssertEqual(names, ["list", "show", "search", "features", "ingredients", "pairings", "cookbooks"])
+        XCTAssertEqual(names, ["list", "show", "search", "features", "ingredients", "pairings", "cookbooks", "collections"])
     }
 }

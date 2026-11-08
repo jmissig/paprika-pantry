@@ -37,6 +37,10 @@ public struct PantryIndexRun: Codable, Equatable, Sendable {
 }
 
 public struct PantryIndexStats: Codable, Equatable, Sendable {
+    public let compatibilityChecked: Bool
+    public let incompatibleFamilies: [String]
+    public let compatibilityIssue: String?
+    public let provenance: [IndexBuildProvenance]
     public let recipeSearchDocumentCount: Int
     public let recipeFeatureCount: Int
     public let recipeFeaturesWithTotalTimeCount: Int
@@ -86,8 +90,13 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         lastSuccessfulRecipeUsageRun: PantryIndexRun? = nil,
         lastIngredientPairRun: PantryIndexRun? = nil,
         lastSuccessfulIngredientPairRun: PantryIndexRun? = nil,
-        sourceState: PantryStoredSourceState? = nil
+        sourceState: PantryStoredSourceState? = nil,
+        compatibilityIssue: String? = nil, provenance: [IndexBuildProvenance] = [], incompatibleFamilies: [String] = [], compatibilityChecked: Bool = false
     ) {
+        self.compatibilityChecked = compatibilityChecked
+        self.incompatibleFamilies = incompatibleFamilies
+        self.compatibilityIssue = compatibilityIssue
+        self.provenance = provenance
         self.recipeSearchDocumentCount = recipeSearchDocumentCount
         self.recipeFeatureCount = recipeFeatureCount
         self.recipeFeaturesWithTotalTimeCount = recipeFeaturesWithTotalTimeCount
@@ -115,23 +124,23 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
     }
 
     public var recipeSearchReady: Bool {
-        recipeSearchDocumentCount > 0 && lastSuccessfulRecipeSearchRun != nil
+        !incompatibleFamilies.contains("recipe-search") && recipeSearchDocumentCount > 0 && lastSuccessfulRecipeSearchRun != nil
     }
 
     public var recipeFeaturesReady: Bool {
-        recipeFeatureCount > 0 && lastSuccessfulRecipeFeatureRun != nil
+        !incompatibleFamilies.contains("recipe-features") && recipeFeatureCount > 0 && lastSuccessfulRecipeFeatureRun != nil
     }
 
     public var recipeIngredientIndexReady: Bool {
-        lastSuccessfulRecipeIngredientRun != nil
+        !incompatibleFamilies.contains("recipe-ingredients") && lastSuccessfulRecipeIngredientRun != nil
     }
 
     public var recipeUsageStatsReady: Bool {
-        lastSuccessfulRecipeUsageRun != nil
+        !incompatibleFamilies.contains("recipe-usage") && lastSuccessfulRecipeUsageRun != nil
     }
 
     public var ingredientPairEvidenceReady: Bool {
-        lastSuccessfulIngredientPairRun != nil
+        !incompatibleFamilies.contains("ingredient-pairs") && lastSuccessfulIngredientPairRun != nil
     }
 }
 
@@ -561,12 +570,23 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
 public struct PantrySidecarStore: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
 
-    public init(dbQueue: DatabaseQueue) {
+    let expectedContract: IndexSourceContract?
+    public init(dbQueue: DatabaseQueue, expectedContract: IndexSourceContract? = nil) {
+        self.expectedContract = expectedContract
         self.dbQueue = dbQueue
     }
 
     public func indexStats() throws -> PantryIndexStats {
-        try dbQueue.read { db in
+        let provenance = try indexProvenance()
+        var issue: String?
+        if let expectedContract {
+            do { try requireCompatible(expectedContract) } catch { issue = error.localizedDescription }
+        }
+        let compatibilityIssue = issue
+        let incompatibleFamilies = expectedContract.map { contract in
+            Self.allFamilies.filter { family in !provenance.contains { $0.family == family && $0.contract == contract.encoded } }
+        } ?? []
+        return try dbQueue.read { db in
             PantryIndexStats(
                 recipeSearchDocumentCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_search_documents") ?? 0,
                 recipeFeatureCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_features") ?? 0,
@@ -615,7 +635,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 lastSuccessfulRecipeUsageRun: try latestSuccessfulIndexRun(named: Self.recipeUsageIndexName, db: db),
                 lastIngredientPairRun: try latestIndexRun(named: Self.ingredientPairIndexName, db: db),
                 lastSuccessfulIngredientPairRun: try latestSuccessfulIndexRun(named: Self.ingredientPairIndexName, db: db),
-                sourceState: try fetchStoredSourceState(db: db)
+                sourceState: try fetchStoredSourceState(db: db),
+                compatibilityIssue: compatibilityIssue, provenance: provenance, incompatibleFamilies: incompatibleFamilies, compatibilityChecked: expectedContract != nil
             )
         }
     }
@@ -635,7 +656,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
             return []
         }
 
-        return try dbQueue.read { db in
+        return try readCompatible(["recipe-search", "recipe-features", "recipe-usage", "recipe-ingredients"]) { db in
             var arguments: StatementArguments = [normalizedQuery]
             var conditions = ["recipe_search_fts MATCH ?"]
             let applyCategoryFilterAfterRead = !filters.categoryNames.isEmpty || !usageConstraints.isDefault
@@ -775,7 +796,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
         minRecipeCount: Int = 1,
         minRatedRecipeCount: Int = 0
     ) throws -> [CookbookAggregateSummary] {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-search", "recipe-usage"]) { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -886,7 +907,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func fetchRecipeFeatures(uid: String) throws -> RecipeDerivedFeatures? {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-features"]) { db in
             guard
                 let row = try Row.fetchOne(
                     db,
@@ -916,7 +937,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func fetchRecipeUsageStats(uid: String) throws -> RecipeUsageStats? {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-usage"]) { db in
             guard
                 let row = try Row.fetchOne(
                     db,
@@ -949,7 +970,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func fetchAllRecipeFeatures() throws -> [String: RecipeDerivedFeatures] {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-features"]) { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -980,7 +1001,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func fetchAllRecipeUsageStats() throws -> [String: RecipeUsageStats] {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-usage"]) { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -1014,7 +1035,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
     }
 
     public func fetchRecipeIngredientIndex(uid: String) throws -> RecipeIngredientIndex? {
-        try dbQueue.read { db in
+        return try readCompatible(["recipe-ingredients"]) { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
@@ -1087,7 +1108,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
             return []
         }
 
-        return try dbQueue.read { db in
+        return try readCompatible(["recipe-ingredients"]) { db in
             var conditions = [String]()
             var arguments = StatementArguments()
             Self.appendIngredientFilterSQL(
@@ -1132,7 +1153,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
             return []
         }
 
-        return try dbQueue.read { db in
+        return try readCompatible(["ingredient-pairs"]) { db in
             var conditions = [
                 "basis = ?",
                 "recipe_count >= ?",
@@ -1213,6 +1234,14 @@ public struct PantrySidecarStore: @unchecked Sendable {
         now: @escaping @Sendable () -> Date = Date.init,
         phaseClock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) async throws -> RecipeIndexesRebuildSummary {
+        let source: any PantrySource = try (source as? PaprikaSQLiteSource)?.snapshot() ?? source
+        let contract = (source as? PaprikaSQLiteSource)?.indexContract
+        if !refreshIngredientPairEvidence, let contract { try requireCompatible(contract) }
+        let dependencySignature = try (source as? PaprikaSQLiteSource)?.categoryDependencySignature()
+        let previousProvenance = try indexProvenance()
+        let previousDependencies = previousProvenance.first { $0.family == "recipe-search" }?.dependencySignature
+        let previousGenerations = previousProvenance.map { $0.family + ":" + $0.generation }.sorted()
+        let generation = UUID().uuidString
         var phaseTimings = RecipeIndexPhaseTimingRecorder(clock: phaseClock)
         let startedAt = now()
         let searchRunID = try startIndexRun(named: Self.recipeSearchIndexName, startedAt: startedAt)
@@ -1223,6 +1252,14 @@ public struct PantrySidecarStore: @unchecked Sendable {
             ? try startIndexRun(named: Self.ingredientPairIndexName, startedAt: startedAt)
             : nil
 
+        if let contract {
+            let ids: [Int64] = [searchRunID, featureRunID, ingredientRunID, usageRunID] + (ingredientPairRunID.map { [$0] } ?? [])
+            try await dbQueue.write { db in
+                for id in ids {
+                    try db.execute(sql: "UPDATE index_runs SET source_contract=?, generation=? WHERE id=?", arguments: [contract.encoded, generation, id])
+                }
+            }
+        }
         do {
             var phaseItemCounts = [RecipeIndexPhase: Int]()
             let categoriesStartedAt = phaseClock()
@@ -1238,7 +1275,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
             let activeRecipeUIDs = Set(activeStubs.map(\.uid))
             let routineUpdatePlan = try makeRecipeRoutineUpdatePlan(
                 activeStubs: activeStubs,
-                usePartialUpdate: !refreshIngredientPairEvidence
+                usePartialUpdate: !refreshIngredientPairEvidence && dependencySignature == previousDependencies
             )
             let recipeStubsToFetch = refreshIngredientPairEvidence
                 ? activeStubs
@@ -1367,6 +1404,10 @@ public struct PantrySidecarStore: @unchecked Sendable {
             let sourceState = Self.makeStoredSourceState(from: source, observedAt: indexedAt)
             let writeTransactionStartedAt = phaseClock()
             let transactionResult = try await dbQueue.write { db in
+                if !refreshIngredientPairEvidence {
+                    let currentGenerations = try String.fetchAll(db, sql: "SELECT family || ':' || generation FROM index_provenance ORDER BY family")
+                    guard currentGenerations == previousGenerations else { throw IndexCompatibilityError.concurrentUpdate }
+                }
                 if refreshIngredientPairEvidence {
                     try Self.dropIngredientPairSecondaryIndexes(in: db)
                 }
@@ -1654,6 +1695,15 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     try writeStoredSourceState(sourceState, in: db)
                 }
 
+                if let contract {
+                    try writeProvenance(contract: contract, families: refreshIngredientPairEvidence ? Self.allFamilies : Self.routineFamilies,
+                        generation: generation, at: indexedAtString, dependencies: dependencySignature, db: db)
+                } else {
+                    // Non-Paprika fixture/custom sources cannot inherit a prior Paprika contract.
+                    for family in (refreshIngredientPairEvidence ? Self.allFamilies : Self.routineFamilies) {
+                        try db.execute(sql: "DELETE FROM index_provenance WHERE family=?", arguments: [family])
+                    }
+                }
                 let storedCounts = try Self.fetchRecipeIndexStoredCounts(db: db)
                 let finishedAt = now()
                 try finishIndexRun(
@@ -1994,7 +2044,9 @@ public struct PantrySidecarStore: @unchecked Sendable {
             return RecipeRoutineUpdatePlan(
                 changedStubs: activeStubs,
                 skippedRecipeCount: 0,
-                deletedRecipeUIDs: []
+                deletedRecipeUIDs: try dbQueue.read { db in
+                    Set(try Self.fetchExistingRoutineRecipeIndexRows(db: db).keys).subtracting(Set(activeStubs.map(\.uid)))
+                }
             )
         }
 
@@ -2008,7 +2060,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 return RecipeRoutineUpdatePlan(
                     changedStubs: activeStubs,
                     skippedRecipeCount: 0,
-                    deletedRecipeUIDs: []
+                    deletedRecipeUIDs: Set(try Self.fetchExistingRoutineRecipeIndexRows(db: db).keys).subtracting(activeRecipeUIDs)
                 )
             }
 
@@ -2021,7 +2073,8 @@ public struct PantrySidecarStore: @unchecked Sendable {
                     let sourceFingerprint = stub.sourceFingerprint,
                     let existingRow = existingRows[stub.uid],
                     existingRow.searchSourceFingerprint == sourceFingerprint,
-                    existingRow.featureSourceFingerprint == sourceFingerprint
+                    existingRow.featureSourceFingerprint == sourceFingerprint,
+                    try Self.ingredientRowsComplete(uid: stub.uid, db: db)
                 else {
                     changedStubs.append(stub)
                     continue
@@ -2036,6 +2089,20 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 deletedRecipeUIDs: Set(existingRows.keys).subtracting(activeRecipeUIDs)
             )
         }
+    }
+
+    private static func ingredientRowsComplete(uid: String, db: Database) throws -> Bool {
+        let expected = try Int.fetchOne(db, sql: "SELECT COALESCE(ingredient_line_count,0) FROM recipe_features WHERE uid=?", arguments: [uid]) ?? -1
+        let actual = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recipe_ingredient_lines WHERE recipe_uid=?", arguments: [uid]) ?? 0
+        guard expected == actual else { return false }
+        let lines = try Row.fetchAll(db, sql: "SELECT line_number, normalized_text FROM recipe_ingredient_lines WHERE recipe_uid=?", arguments: [uid])
+        for line in lines {
+            let normalized: String? = line["normalized_text"]
+            let number: Int = line["line_number"]
+            let tokens = try String.fetchAll(db, sql: "SELECT token FROM recipe_ingredient_tokens WHERE recipe_uid=? AND line_number=? ORDER BY token_position", arguments: [uid, number])
+            if tokens != (normalized?.split(separator: " ").map(String.init) ?? []) { return false }
+        }
+        return true
     }
 
     private static func fetchExistingRoutineRecipeIndexRows(
@@ -2682,7 +2749,7 @@ public struct PantrySidecarStore: @unchecked Sendable {
                 inputOrder: offset,
                 scheduledAt: scheduledAt,
                 scheduledDate: scheduledDate,
-                recipeUID: meal.recipeUID?
+                recipeUID: (meal.isIngredient == true ? nil : meal.recipeUID)?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty
             )

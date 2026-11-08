@@ -19,7 +19,9 @@ public struct PantrySidecarDatabase {
         configuration.foreignKeysEnabled = true
 
         let queue = try DatabaseQueue(path: path.path, configuration: configuration)
-        try Self.migrator().migrate(queue)
+        let migrator = Self.migrator()
+        guard try queue.read({ try !migrator.hasBeenSuperseded($0) }) else { throw IndexCompatibilityError.futureSidecar }
+        try migrator.migrate(queue)
         return queue
     }
 
@@ -272,6 +274,20 @@ public struct PantrySidecarDatabase {
                 SET first_cooked_at = first_meal_at
                 """
             )
+        }
+
+        migrator.registerMigration("index-provenance-v1") { db in
+            try db.create(table: "index_provenance") { table in
+                table.column("family", .text).primaryKey()
+                table.column("contract", .text).notNull()
+                table.column("generation", .text).notNull()
+                table.column("built_at", .text).notNull()
+                table.column("dependency_signature", .text)
+            }
+            try db.alter(table: "index_runs") { table in
+                table.add(column: "source_contract", .text)
+                table.add(column: "generation", .text)
+            }
         }
 
         return migrator

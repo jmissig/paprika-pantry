@@ -1,6 +1,8 @@
 import Foundation
 
 public struct MealSummary: Codable, Equatable, Sendable {
+    public let scale: String?
+    public let isIngredient: Bool?
     public let uid: String
     public let name: String
     public let target: PaprikaMealTarget
@@ -15,8 +17,12 @@ public struct MealSummary: Codable, Equatable, Sendable {
         scheduledAt: String?,
         mealType: String?,
         recipeUID: String?,
-        recipeName: String?
+        recipeName: String?,
+        scale: String? = nil,
+        isIngredient: Bool? = nil
     ) {
+        self.scale = scale
+        self.isIngredient = isIngredient
         self.uid = uid
         self.name = name
         self.target = PaprikaMealTarget(
@@ -66,7 +72,8 @@ public struct MealReadService: Sendable {
                     scheduledAt: $0.scheduledAt,
                     mealType: $0.mealType,
                     recipeUID: $0.recipeUID,
-                    recipeName: $0.recipeName
+                    recipeName: $0.recipeName,
+                    scale: $0.scale, isIngredient: $0.isIngredient
                 )
             }
             .sorted { lhs, rhs in

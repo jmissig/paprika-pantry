@@ -72,6 +72,7 @@ public struct SourceRecipePhoto: Codable, Equatable, Sendable {
 }
 
 public struct SourceRecipe: Codable, Equatable, Sendable {
+    public let collection: RecipeCollectionContext?
     public let uid: String
     public let name: String
     public let categoryReferences: [String]
@@ -119,8 +120,10 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         createdAt: String?,
         updatedAt: String?,
         sourceFingerprint: String?,
-        rawJSON: String
+        rawJSON: String,
+        collection: RecipeCollectionContext? = nil
     ) {
+        self.collection = collection
         self.uid = uid
         self.name = name
         self.categoryReferences = categoryReferences
@@ -212,6 +215,8 @@ public struct SourceRecipeFieldCoverage: Codable, Equatable, Sendable {
 }
 
 public struct SourceMeal: Codable, Equatable, Sendable {
+    public let scale: String?
+    public let isIngredient: Bool?
     public let uid: String
     public let name: String
     public let scheduledAt: String?
@@ -227,8 +232,12 @@ public struct SourceMeal: Codable, Equatable, Sendable {
         mealType: String?,
         recipeUID: String?,
         recipeName: String?,
-        isDeleted: Bool = false
+        isDeleted: Bool = false,
+        scale: String? = nil,
+        isIngredient: Bool? = nil
     ) {
+        self.scale = scale
+        self.isIngredient = isIngredient
         self.uid = uid
         self.name = name
         self.scheduledAt = scheduledAt
@@ -277,6 +286,9 @@ public struct SourceGroceryItem: Codable, Equatable, Sendable {
 }
 
 public struct SourcePantryItem: Codable, Equatable, Sendable {
+    public let locationUID: String?
+    public let locationName: String?
+    public let notes: String?
     public let uid: String
     public let name: String
     public let quantity: String?
@@ -298,8 +310,14 @@ public struct SourcePantryItem: Codable, Equatable, Sendable {
         expirationDate: String?,
         hasExpiration: Bool,
         isInStock: Bool,
-        isDeleted: Bool = false
+        isDeleted: Bool = false,
+        locationUID: String? = nil,
+        locationName: String? = nil,
+        notes: String? = nil
     ) {
+        self.locationUID = locationUID
+        self.locationName = locationName
+        self.notes = notes
         self.uid = uid
         self.name = name
         self.quantity = quantity

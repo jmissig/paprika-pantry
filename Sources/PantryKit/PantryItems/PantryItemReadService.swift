@@ -1,6 +1,9 @@
 import Foundation
 
 public struct PantryItemSummary: Codable, Equatable, Sendable {
+    public let locationUID: String?
+    public let locationName: String?
+    public let notes: String?
     public let uid: String
     public let name: String
     public let quantity: String?
@@ -20,8 +23,14 @@ public struct PantryItemSummary: Codable, Equatable, Sendable {
         purchaseDate: String?,
         expirationDate: String?,
         hasExpiration: Bool,
-        isInStock: Bool
+        isInStock: Bool,
+        locationUID: String? = nil,
+        locationName: String? = nil,
+        notes: String? = nil
     ) {
+        self.locationUID = locationUID
+        self.locationName = locationName
+        self.notes = notes
         self.uid = uid
         self.name = name
         self.quantity = quantity
@@ -71,7 +80,8 @@ public struct PantryItemReadService: Sendable {
                     purchaseDate: $0.purchaseDate,
                     expirationDate: $0.expirationDate,
                     hasExpiration: $0.hasExpiration,
-                    isInStock: $0.isInStock
+                    isInStock: $0.isInStock,
+                    locationUID: $0.locationUID, locationName: $0.locationName, notes: $0.notes
                 )
             }
             .sorted { lhs, rhs in

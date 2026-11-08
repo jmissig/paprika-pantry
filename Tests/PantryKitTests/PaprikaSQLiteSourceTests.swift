@@ -472,6 +472,230 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(try store.indexStats().sourceState?.paprikaSync?.signalSource, "group-container-preferences")
     }
 
+    private func upgradeFixtureToV4(_ url: URL) throws {
+        let queue = try DatabaseQueue(path: url.path)
+        try queue.write { db in
+            try db.execute(sql: """
+                ALTER TABLE Z_12CATEGORIES RENAME TO Z_15CATEGORIES;
+                ALTER TABLE Z_15CATEGORIES RENAME COLUMN Z_12RECIPES TO Z_15RECIPES;
+                ALTER TABLE Z_15CATEGORIES RENAME COLUMN Z_13CATEGORIES TO Z_16CATEGORIES;
+                CREATE TABLE ZCOOKBOOK (Z_PK INTEGER PRIMARY KEY, ZUID TEXT, ZNAME TEXT, ZISDEFAULT INTEGER, ZSTATUS TEXT);
+                INSERT INTO ZCOOKBOOK VALUES (1, 'collection-default', 'Everyday', 1, 'normal');
+                INSERT INTO ZCOOKBOOK VALUES (2, 'collection-other', 'Baking', 0, 'normal');
+                ALTER TABLE ZRECIPE ADD COLUMN ZCOOKBOOK INTEGER;
+                UPDATE ZRECIPE SET ZCOOKBOOK=2 WHERE ZUID='AAA';
+                ALTER TABLE ZRECIPECATEGORY ADD COLUMN ZCOOKBOOK INTEGER;
+                ALTER TABLE ZMEAL ADD COLUMN ZSCALE TEXT;
+                ALTER TABLE ZMEAL ADD COLUMN ZISINGREDIENT INTEGER;
+                UPDATE ZMEAL SET ZSCALE='2', ZISINGREDIENT=1;
+                CREATE TABLE ZPANTRYLOCATION (Z_PK INTEGER PRIMARY KEY, ZUID TEXT, ZNAME TEXT, ZSTATUS TEXT);
+                INSERT INTO ZPANTRYLOCATION VALUES (1, 'freezer', 'Freezer', 'normal');
+                ALTER TABLE ZPANTRYITEM ADD COLUMN ZLOCATION INTEGER;
+                ALTER TABLE ZPANTRYITEM ADD COLUMN ZNOTES TEXT;
+                UPDATE ZPANTRYITEM SET ZLOCATION=1, ZNOTES='Use soon';
+                """)
+        }
+    }
+
+    private func memorySidecar() throws -> PantrySidecarStore {
+        let queue = try DatabaseQueue()
+        try PantrySidecarDatabase.migrator().migrate(queue)
+        return PantrySidecarStore(dbQueue: queue)
+    }
+
+    func testV4ReadsCollectionsMealsAndPantryWithoutInventingDefaultMembership() async throws {
+        let url = try makePaprikaSourceDatabase()
+        try upgradeFixtureToV4(url)
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        XCTAssertEqual(source.inspection.schemaFlavor, "paprika-4-core-data")
+        XCTAssertTrue(source.inspection.capabilities.contains("collections"))
+        XCTAssertEqual(try source.listCollections().count, 2)
+        let recipe = try await source.fetchRecipe(uid: "AAA")
+        XCTAssertEqual(recipe.collection?.uid, "collection-other")
+        XCTAssertEqual(recipe.collection?.name, "Baking")
+        XCTAssertFalse(recipe.categoryReferences.isEmpty)
+        let unassigned = try await source.fetchRecipe(uid: "CCC")
+        XCTAssertEqual(unassigned.collection?.resolution, "null-reference")
+        XCTAssertNil(unassigned.collection?.uid)
+        let meals = try await MealReadService(source: source).listMeals()
+        XCTAssertEqual(meals.first?.scale, "2")
+        XCTAssertEqual(meals.first?.isIngredient, true)
+        let pantry = try await PantryItemReadService(source: source).listPantryItems()
+        XCTAssertEqual(pantry.first?.locationName, "Freezer")
+        XCTAssertEqual(pantry.first?.notes, "Use soon")
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        XCTAssertEqual(try store.fetchRecipeUsageStats(uid: "AAA")?.mealCount ?? 0, 0)
+        let detail = try await RecipeReadService(source: source).resolveRecipe(selector: "AAA")
+        XCTAssertEqual(detail.collection, recipe.collection)
+    }
+
+    func testAmbiguousOrMalformedCategoryLayoutsFailClosed() throws {
+        let url = try makePaprikaSourceDatabase()
+        let queue = try DatabaseQueue(path: url.path)
+        try queue.write { try $0.execute(sql: "CREATE TABLE Z_15CATEGORIES (Z_15RECIPES INTEGER, Z_16CATEGORIES INTEGER)") }
+        XCTAssertThrowsError(try PaprikaSQLiteSource(databaseURL: url)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("exactly one"))
+        }
+        try queue.write { db in
+            try db.execute(sql: "DROP TABLE Z_12CATEGORIES; ALTER TABLE Z_15CATEGORIES RENAME COLUMN Z_16CATEGORIES TO unexpected")
+        }
+        XCTAssertThrowsError(try PaprikaSQLiteSource(databaseURL: url)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Z_16CATEGORIES"))
+        }
+    }
+
+    func testSnapshotStaysConsistentWhileOriginalChangesAndAdditiveColumnsDoNotInvalidate() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        let frozen = try source.snapshot()
+        let before = try await frozen.fetchRecipe(uid: "AAA")
+        let queue = try DatabaseQueue(path: url.path)
+        try await queue.write { try $0.execute(sql: "UPDATE ZRECIPE SET ZNAME='Changed after snapshot' WHERE ZUID='AAA'; ALTER TABLE ZRECIPE ADD COLUMN ZFUTURE_UNUSED TEXT") }
+        let after = try await frozen.fetchRecipe(uid: "AAA")
+        XCTAssertEqual(after.name, before.name)
+        let reopened = try PaprikaSQLiteSource(databaseURL: url)
+        let live = try await reopened.fetchRecipe(uid: "AAA")
+        XCTAssertEqual(live.name, "Changed after snapshot")
+        XCTAssertEqual(source.indexContract, reopened.indexContract)
+        XCTAssertNotEqual(source.inspection.structuralDigest, reopened.inspection.structuralDigest)
+        XCTAssertTrue(frozen.inspection.queryOnly)
+    }
+
+    func testTransitionRequiresRebuildDespiteUnchangedRecipeHashes() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let v3 = try PaprikaSQLiteSource(databaseURL: url)
+        let store = try memorySidecar()
+        do {
+            _ = try await store.rebuildRecipeIndexes(from: v3, refreshIngredientPairEvidence: false)
+            XCTFail("Legacy/missing provenance must require a rebuild")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("rebuild")) }
+        _ = try await store.rebuildRecipeIndexes(from: v3)
+        let originalProvenance = try store.indexProvenance()
+        try store.requireCompatible(v3.indexContract)
+        try upgradeFixtureToV4(url)
+        let v4 = try PaprikaSQLiteSource(databaseURL: url)
+        XCTAssertThrowsError(try store.requireCompatible(v4.indexContract))
+        do {
+            _ = try await store.rebuildRecipeIndexes(from: v4, refreshIngredientPairEvidence: false)
+            XCTFail("Transition must not skip unchanged recipes")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("rebuild")) }
+        XCTAssertEqual(try store.indexProvenance(), originalProvenance)
+        let bound = PantrySidecarStore(dbQueue: store.dbQueue, expectedContract: v4.indexContract)
+        XCTAssertThrowsError(try bound.searchRecipes(query: "soup"))
+        XCTAssertThrowsError(try bound.fetchRecipeFeatures(uid: "AAA"))
+        XCTAssertThrowsError(try bound.fetchRecipeUsageStats(uid: "AAA"))
+        XCTAssertThrowsError(try bound.fetchAllRecipeFeatures())
+        XCTAssertThrowsError(try bound.fetchAllRecipeUsageStats())
+        XCTAssertThrowsError(try bound.fetchRecipeIngredientIndex(uid: "AAA"))
+        XCTAssertThrowsError(try bound.matchingRecipeUIDs(for: RecipeIngredientFilter(rawTerms: ["lemon"])))
+        XCTAssertThrowsError(try bound.listCookbookAggregates())
+        XCTAssertThrowsError(try bound.listIngredientPairEvidence())
+        XCTAssertFalse(try bound.indexStats().recipeSearchReady)
+        XCTAssertNotNil(try bound.indexStats().compatibilityIssue)
+        _ = try await store.rebuildRecipeIndexes(from: v4)
+        try store.requireCompatible(v4.indexContract)
+        XCTAssertThrowsError(try store.requireCompatible(v3.indexContract))
+        var future = v4.indexContract
+        future.derivationVersion += 1
+        XCTAssertThrowsError(try store.requireCompatible(future))
+    }
+
+    func testCategoryDependencyRefreshAndPairingProvenanceRemainSeparate() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let pairBefore = try store.indexProvenance().first { $0.family == "ingredient-pairs" }
+        let queue = try DatabaseQueue(path: url.path)
+        try await queue.write { try $0.execute(sql: "UPDATE ZRECIPECATEGORY SET ZNAME='RenamedCategory' WHERE ZUID IS NOT NULL") }
+        let summary = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: false)
+        XCTAssertGreaterThan(summary.changedRecipeCount, 0)
+        XCTAssertFalse(try store.searchRecipes(query: "RenamedCategory").isEmpty)
+        XCTAssertEqual(try store.indexProvenance().first { $0.family == "ingredient-pairs" }, pairBefore)
+        let routine = try store.indexProvenance().first { $0.family == "recipe-search" }
+        XCTAssertNotEqual(routine?.generation, pairBefore?.generation)
+        // Missing lines must be repaired even when a Paprika recipe hash has not changed.
+        try await store.dbQueue.write { try $0.execute(sql: "DELETE FROM recipe_ingredient_lines WHERE recipe_uid='AAA'") }
+        _ = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: false)
+        XCTAssertFalse(try XCTUnwrap(store.fetchRecipeIngredientIndex(uid: "AAA")).lines.isEmpty)
+        try await store.dbQueue.write { try $0.execute(sql: "DELETE FROM recipe_ingredient_tokens WHERE recipe_uid='AAA'") }
+        _ = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: false)
+        XCTAssertFalse(try XCTUnwrap(store.fetchRecipeIngredientIndex(uid: "AAA")).lines.flatMap(\.normalizedTokens).isEmpty)
+        // A dependency-triggered full routine refresh must also evict removed recipes.
+        try await queue.write { try $0.execute(sql: "UPDATE ZRECIPE SET ZINTRASH=1 WHERE ZUID='AAA'; DELETE FROM Z_12CATEGORIES WHERE Z_12RECIPES IN (SELECT Z_PK FROM ZRECIPE WHERE ZUID='AAA')") }
+        _ = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: false)
+        XCTAssertNil(try store.fetchRecipeFeatures(uid: "AAA"))
+        XCTAssertFalse(try store.searchRecipes(query: "soup").contains { $0.uid == "AAA" })
+
+    }
+
+    func testFailedRebuildRollsBackRowsAndProvenance() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexProvenance()
+        let count = try store.indexStats().recipeSearchDocumentCount
+        try await store.dbQueue.write { db in
+            try db.execute(sql: "CREATE TRIGGER fail_rebuild BEFORE INSERT ON recipe_features BEGIN SELECT RAISE(ABORT, 'injected failure'); END")
+        }
+        do {
+            _ = try await store.rebuildRecipeIndexes(from: source)
+            XCTFail("Expected injected write failure")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("injected failure")) }
+        XCTAssertEqual(try store.indexProvenance(), before)
+        XCTAssertEqual(try store.indexStats().recipeSearchDocumentCount, count)
+        XCTAssertEqual(try store.indexStats().lastRecipeSearchRun?.status, .failed)
+    }
+
+    func testConcurrentPartialUpdateDoesNotOverwriteAnotherGeneration() async throws {
+        let url = try makePaprikaSourceDatabase()
+        let source = try PaprikaSQLiteSource(databaseURL: url)
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let count = try store.indexStats().recipeSearchDocumentCount
+        try await store.dbQueue.write { db in
+            // Deterministically simulate another writer publishing after we captured the base.
+            try db.execute(sql: "CREATE TRIGGER competing_writer AFTER INSERT ON index_runs BEGIN UPDATE index_provenance SET generation='other-writer' WHERE family='recipe-search'; END")
+        }
+        do {
+            _ = try await store.rebuildRecipeIndexes(from: source, refreshIngredientPairEvidence: false)
+            XCTFail("Concurrent generation must abort the partial write")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("changed while")) }
+        XCTAssertEqual(try store.indexStats().recipeSearchDocumentCount, count)
+        XCTAssertEqual(try store.indexProvenance().first { $0.family == "recipe-search" }?.generation, "other-writer")
+    }
+
+    func testStoreIdentitySurvivesMoveButNotReplacement() throws {
+        let url = try makePaprikaSourceDatabase()
+        let queue = try DatabaseQueue(path: url.path)
+        try queue.write { try $0.execute(sql: "INSERT INTO Z_METADATA (Z_VERSION, Z_UUID) VALUES (1, 'synthetic-store-one')") }
+        let original = try PaprikaSQLiteSource(databaseURL: url)
+        let movedURL = url.deletingLastPathComponent().appendingPathComponent("moved.sqlite")
+        let movedQueue = try DatabaseQueue(path: movedURL.path)
+        try queue.backup(to: movedQueue)
+        // Make the destination a self-contained fixture (not a WAL header without companions).
+        try movedQueue.writeWithoutTransaction { try $0.execute(sql: "PRAGMA journal_mode = DELETE") }
+        try movedQueue.close()
+        let moved = try PaprikaSQLiteSource(databaseURL: movedURL)
+        XCTAssertEqual(original.indexContract, moved.indexContract)
+        let replacementQueue = try DatabaseQueue(path: movedURL.path)
+        try replacementQueue.write { try $0.execute(sql: "UPDATE Z_METADATA SET Z_UUID='synthetic-store-two'") }
+        XCTAssertNotEqual(original.indexContract, try PaprikaSQLiteSource(databaseURL: movedURL).indexContract)
+    }
+
+    func testFutureSidecarMigrationIsRejectedWithoutMutation() throws {
+        let root = try makeTemporaryDirectory()
+        let database = PantrySidecarDatabase(path: root.appendingPathComponent("future.sqlite"))
+        let queue = try database.openQueue()
+        try queue.write { try $0.execute(sql: "INSERT INTO grdb_migrations VALUES ('future-version')") }
+        let before = try queue.read { try String.fetchAll($0, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier") }
+        XCTAssertThrowsError(try database.openQueue())
+        let after = try queue.read { try String.fetchAll($0, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier") }
+        XCTAssertEqual(before, after)
+    }
+
     private func makeStore() throws -> PantrySidecarStore {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("pantry.sqlite")

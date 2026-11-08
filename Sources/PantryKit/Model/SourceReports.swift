@@ -8,6 +8,8 @@ public struct SourceStatusReport: ConsoleRenderable, Equatable, Sendable {
     public let displayName: String?
     public let implementation: String?
     public let sourceLocation: String?
+    public let capabilities: [String]?
+    public let structuralDigest: String?
     public let schemaFlavor: String?
     public let accessMode: String?
     public let queryOnly: Bool?
@@ -26,6 +28,8 @@ public struct SourceStatusReport: ConsoleRenderable, Equatable, Sendable {
         self.displayName = snapshot.displayName
         self.implementation = snapshot.implementation
         self.sourceLocation = snapshot.sourceLocation
+        self.capabilities = snapshot.capabilities
+        self.structuralDigest = snapshot.structuralDigest
         self.schemaFlavor = snapshot.schemaFlavor
         self.accessMode = snapshot.accessMode
         self.queryOnly = snapshot.queryOnly
@@ -64,6 +68,9 @@ public struct SourceStatusReport: ConsoleRenderable, Equatable, Sendable {
         if let schemaFlavor, !schemaFlavor.isEmpty {
             lines.append("schema: \(schemaFlavor)")
         }
+
+        if let capabilities { lines.append("capabilities: \(capabilities.joined(separator: ", "))") }
+        if let structuralDigest { lines.append("structural_digest: \(structuralDigest)") }
 
         if let accessMode, !accessMode.isEmpty {
             lines.append("access_mode: \(accessMode)")
@@ -215,6 +222,11 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             status = "blocked"
             message = sourceSnapshot.message
             nextAction = "Make the local Paprika SQLite source readable, then rebuild indexes as needed."
+        } else if let issue = indexStats.compatibilityIssue {
+            indexStatus = "incompatible"
+            status = "needs-rebuild"
+            message = issue
+            nextAction = "Run `paprika-pantry index rebuild` with the selected source."
         } else if let lastRun = indexStats.lastRecipeSearchRun, lastRun.status == .failed,
                   indexStats.lastSuccessfulRecipeSearchRun == nil {
             indexStatus = "failed"

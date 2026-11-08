@@ -75,7 +75,8 @@ final class OutputFormatTests: XCTestCase {
                         daysSpannedByMeals: 6,
                         medianMealGapDays: 6.0,
                         mealShare: 0.25
-                    )
+                    ),
+                    collection: RecipeCollectionContext(uid: "C1", name: "Everyday", resolution: "explicit")
                 ),
             ]
         )
@@ -83,8 +84,8 @@ final class OutputFormatTests: XCTestCase {
         XCTAssertEqual(
             report.csvDescription,
             """
-            uid,name,categories,source_name,star_rating,is_favorite,updated_at,derived_total_time_minutes,derived_ingredient_line_count,meal_count,last_meal_at,days_spanned_by_meals,median_meal_gap_days,meal_share,first_cooked_at
-            AAA,Soup,Dinner | Weeknight,Serious Eats,5,true,2026-04-02 10:00:00,30,5,2,2026-04-07 18:00:00,6,6.0,0.250,2026-04-01 18:00:00
+            uid,name,categories,source_name,star_rating,is_favorite,updated_at,derived_total_time_minutes,derived_ingredient_line_count,meal_count,last_meal_at,days_spanned_by_meals,median_meal_gap_days,meal_share,first_cooked_at,collection_uid,collection_name,collection_resolution
+            AAA,Soup,Dinner | Weeknight,Serious Eats,5,true,2026-04-02 10:00:00,30,5,2,2026-04-07 18:00:00,6,6.0,0.250,2026-04-01 18:00:00,C1,Everyday,explicit
 
             """
         )

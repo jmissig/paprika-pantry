@@ -13,6 +13,7 @@ public struct RecipesCommand: ParsableCommand {
             RecipesIngredientsCommand.self,
             RecipesPairingsCommand.self,
             RecipesCookbooksCommand.self,
+            RecipesCollectionsCommand.self,
         ]
     )
 
@@ -131,7 +132,7 @@ public struct RecipesListCommand: PantryLeafCommand {
         )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
         let requiresUsageStats = sort.requiresUsageStats || !usageConstraints.isDefault
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         let indexStats = try store.indexStats()
         let now = Date()
         let matchingRecipeUIDs: Set<String>?
@@ -151,11 +152,13 @@ public struct RecipesListCommand: PantryLeafCommand {
             derivedReadPath = nil
         }
 
+        if requiresUsageStats { try store.requireBoundCompatibility(["recipe-usage"]) }
         if requiresUsageStats && !indexStats.recipeUsageStatsReady {
             throw ValidationError("Recipe usage index is required for usage constraints or sort. Run `paprika-pantry index rebuild` first.")
         }
 
-        if indexStats.recipeUsageStatsReady {
+        let compatibleUsage = (try? store.requireBoundCompatibility(["recipe-usage"])) != nil
+        if indexStats.recipeUsageStatsReady && compatibleUsage {
             usageStatsByUID = try store.fetchAllRecipeUsageStats()
         } else {
             usageStatsByUID = [:]
@@ -195,13 +198,13 @@ public struct RecipesListCommand: PantryLeafCommand {
                 sort: sort,
                 derivedReadPath: derivedReadPath,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
-                usageReadPath: requiresUsageStats || indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
+                usageReadPath: requiresUsageStats || (indexStats.recipeUsageStatsReady && compatibleUsage) ? "sidecar-derived" : nil,
                 derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
                 ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
                 ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now),
                 usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
-                usageFreshnessSeconds: indexStats.recipeUsageStatsReady ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
+                usageFreshnessSeconds: indexStats.recipeUsageStatsReady && compatibleUsage ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
             )
         )
     }
@@ -224,9 +227,11 @@ public struct RecipesShowCommand: PantryLeafCommand {
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
-        let store = try context.makeSidecarStore()
-        let derivedFeatures = try store.fetchRecipeFeatures(uid: recipe.uid)
-        let usageStats = try store.fetchRecipeUsageStats(uid: recipe.uid)
+        let store = try context.makeSidecarStore(bindToSource: true)
+        let featuresCompatible = (try? store.requireBoundCompatibility(["recipe-features"])) != nil
+        let usageCompatible = (try? store.requireBoundCompatibility(["recipe-usage"])) != nil
+        let derivedFeatures = featuresCompatible ? try store.fetchRecipeFeatures(uid: recipe.uid) : nil
+        let usageStats = usageCompatible ? try store.fetchRecipeUsageStats(uid: recipe.uid) : nil
         let indexStats = try store.indexStats()
         let now = Date()
         try context.write(
@@ -341,7 +346,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         guard try store.indexStats().recipeSearchReady else {
             throw ValidationError("Recipe search index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -436,7 +441,7 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         guard try store.indexStats().recipeFeaturesReady else {
             throw ValidationError("Recipe feature index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -477,7 +482,7 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         guard try store.indexStats().recipeIngredientIndexReady else {
             throw ValidationError("Recipe ingredient index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -556,7 +561,7 @@ public struct RecipesPairingsCommand: PantryLeafCommand {
 
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         let indexStats = try store.indexStats()
         guard indexStats.ingredientPairEvidenceReady else {
             throw ValidationError("Ingredient pair evidence index is not ready. No ingredient pairings have been built yet; run `paprika-pantry index rebuild` to build pairings.")
@@ -775,7 +780,7 @@ public struct RecipesCookbooksCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeSidecarStore()
+        let store = try context.makeSidecarStore(bindToSource: true)
         let indexStats = try store.indexStats()
 
         guard indexStats.recipeSearchReady else {

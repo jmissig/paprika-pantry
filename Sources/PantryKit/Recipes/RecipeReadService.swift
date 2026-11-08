@@ -1,6 +1,7 @@
 import Foundation
 
 public struct RecipeSummary: Codable, Equatable, Sendable {
+    public let collection: RecipeCollectionContext?
     public let uid: String
     public let name: String
     public let target: PaprikaRecipeTarget
@@ -22,8 +23,10 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
         updatedAt: String?,
         hasNotes: Bool? = nil,
         derivedFeatures: RecipeDerivedFeatures? = nil,
-        usageStats: RecipeUsageStats? = nil
+        usageStats: RecipeUsageStats? = nil,
+        collection: RecipeCollectionContext? = nil
     ) {
+        self.collection = collection
         self.uid = uid
         self.name = name
         self.target = PaprikaRecipeTarget(uid: uid, name: name, sourceName: sourceName, hasNotes: hasNotes)
@@ -38,6 +41,7 @@ public struct RecipeSummary: Codable, Equatable, Sendable {
 }
 
 public struct RecipeDetail: Codable, Equatable, Sendable {
+    public let collection: RecipeCollectionContext?
     public let uid: String
     public let name: String
     public let target: PaprikaRecipeTarget
@@ -86,8 +90,10 @@ public struct RecipeDetail: Codable, Equatable, Sendable {
         createdAt: String?,
         updatedAt: String?,
         sourceFingerprint: String?,
-        rawJSON: String
+        rawJSON: String,
+        collection: RecipeCollectionContext? = nil
     ) {
+        self.collection = collection
         self.uid = uid
         self.name = name
         self.target = PaprikaRecipeTarget(uid: uid, name: name, sourceName: sourceName, hasNotes: hasNonEmptyNotes(notes))
@@ -168,7 +174,8 @@ public struct RecipeReadService: Sendable {
                     updatedAt: recipe.updatedAt,
                     hasNotes: hasNonEmptyNotes(recipe.notes),
                     derivedFeatures: derivedFeaturesByUID[recipe.uid],
-                    usageStats: usageStatsByUID[recipe.uid]
+                    usageStats: usageStatsByUID[recipe.uid],
+                    collection: recipe.collection
                 )
             )
         }
@@ -239,7 +246,8 @@ public struct RecipeReadService: Sendable {
             createdAt: recipe.createdAt,
             updatedAt: recipe.updatedAt,
             sourceFingerprint: recipe.sourceFingerprint,
-            rawJSON: recipe.rawJSON
+            rawJSON: recipe.rawJSON,
+            collection: recipe.collection
         )
     }
 
