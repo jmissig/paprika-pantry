@@ -12,6 +12,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
     public let ingredientFreshnessSeconds: Int?
     public let usageLastSuccessAt: Date?
     public let usageFreshnessSeconds: Int?
+    public let enrichmentIssue: String?
     public let recipeCount: Int
     public let canonicalFilters: RecipeQueryFilters
     public let ingredientFilter: RecipeIngredientFilter
@@ -36,7 +37,8 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
         ingredientLastSuccessAt: Date? = nil,
         ingredientFreshnessSeconds: Int? = nil,
         usageLastSuccessAt: Date? = nil,
-        usageFreshnessSeconds: Int? = nil
+        usageFreshnessSeconds: Int? = nil,
+        enrichmentIssue: String? = nil
     ) {
         self.command = "recipes list"
         self.readPath = readPath
@@ -49,6 +51,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
         self.ingredientFreshnessSeconds = ingredientFreshnessSeconds
         self.usageLastSuccessAt = usageLastSuccessAt
         self.usageFreshnessSeconds = usageFreshnessSeconds
+        self.enrichmentIssue = enrichmentIssue
         self.recipeCount = recipes.count
         self.canonicalFilters = canonicalFilters
         self.ingredientFilter = ingredientFilter
@@ -60,6 +63,7 @@ public struct RecipesListReport: ConsoleRenderable, CSVRenderable, Equatable, Se
 
     public var humanDescription: String {
         var lines = ["\(command): \(recipeCount) recipes", "read_path: \(readPath)"]
+        if let enrichmentIssue { lines.append("enrichment_unavailable: \(enrichmentIssue)") }
         if let derivedReadPath {
             lines.append("derived_read_path: \(derivedReadPath)")
             lines.append(contentsOf: renderedIndexFreshnessLines(
@@ -145,6 +149,7 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
     public let derivedFreshnessSeconds: Int?
     public let usageLastSuccessAt: Date?
     public let usageFreshnessSeconds: Int?
+    public let enrichmentIssue: String?
 
     public init(
         recipe: RecipeDetail,
@@ -154,7 +159,8 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         derivedLastSuccessAt: Date? = nil,
         derivedFreshnessSeconds: Int? = nil,
         usageLastSuccessAt: Date? = nil,
-        usageFreshnessSeconds: Int? = nil
+        usageFreshnessSeconds: Int? = nil,
+        enrichmentIssue: String? = nil
     ) {
         self.command = "recipes show"
         self.readPath = readPath
@@ -165,6 +171,7 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
         self.derivedFreshnessSeconds = derivedFreshnessSeconds
         self.usageLastSuccessAt = usageLastSuccessAt
         self.usageFreshnessSeconds = usageFreshnessSeconds
+        self.enrichmentIssue = enrichmentIssue
     }
 
     public var humanDescription: String {
@@ -175,6 +182,7 @@ public struct RecipeShowReport: ConsoleRenderable, Equatable, Sendable {
             "target: \(renderedTargetHandle(recipe.target))",
         ]
 
+        if let enrichmentIssue { lines.append("enrichment_unavailable: \(enrichmentIssue)") }
         if !recipe.categories.isEmpty {
             lines.append("categories: \(recipe.categories.joined(separator: ", "))")
         }

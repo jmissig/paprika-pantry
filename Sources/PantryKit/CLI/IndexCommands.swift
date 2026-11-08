@@ -25,8 +25,8 @@ public struct IndexStatsCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: context.makeSourceProvider().diagnose().status == .ready)
-        try context.write(IndexStatsReport(stats: try store.indexStats(), paths: context.paths, now: Date()))
+        let source = try? context.makeSource()
+        try context.write(IndexStatsReport(stats: context.diagnosticStats(source: source), paths: context.paths, now: Date()))
     }
 }
 

@@ -226,7 +226,7 @@ public struct DoctorReport: ConsoleRenderable, Equatable, Sendable {
             indexStatus = "incompatible"
             status = "needs-rebuild"
             message = issue
-            nextAction = "Run `paprika-pantry index rebuild` with the selected source."
+            nextAction = "Resolve the reported sidecar issue. A newer-version sidecar requires its compatible binary or a separate --home; otherwise rebuild with the selected source."
         } else if let lastRun = indexStats.lastRecipeSearchRun, lastRun.status == .failed,
                   indexStats.lastSuccessfulRecipeSearchRun == nil {
             indexStatus = "failed"

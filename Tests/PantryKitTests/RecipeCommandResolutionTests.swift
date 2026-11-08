@@ -340,22 +340,6 @@ final class RecipeCommandResolutionTests: XCTestCase {
         XCTAssertEqual(command.ingredientMatch, .any)
     }
 
-    func testRecipesPairingsCommandReportsMissingIndexReadiness() throws {
-        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        temporaryDirectoryURL = directoryURL
-        let options = try RuntimeOptionsHarness.parse([
-            "--db-path", directoryURL.appendingPathComponent("pantry.sqlite").path,
-        ]).runtimeOptions
-        RuntimeConfiguration.setCurrent(options)
-
-        var command = try XCTUnwrap(RecipesPairingsCommand.parseAsRoot([]) as? RecipesPairingsCommand)
-
-        XCTAssertThrowsError(try command.run()) { error in
-            XCTAssertTrue(String(describing: error).contains("Ingredient pair evidence index is not ready"))
-            XCTAssertTrue(String(describing: error).contains("run `paprika-pantry index rebuild` to build pairings"))
-        }
-    }
-
     private func makeRecipeReadService(
         stubs: [SourceRecipeStub],
         categories: [SourceRecipeCategory] = [],

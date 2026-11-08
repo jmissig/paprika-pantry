@@ -20,6 +20,16 @@ public struct CommandContext: Sendable {
         PantrySidecarDatabase(path: paths.databaseFile)
     }
 
+    public func makeReadStore(source: (any PantrySource)? = nil) throws -> PantrySidecarStore {
+        PantrySidecarStore(dbQueue: try makeSidecarDatabase().openReadOnlyQueue(),
+                          expectedContract: (source as? PaprikaSQLiteSource)?.indexContract)
+    }
+
+    public func diagnosticStats(source: (any PantrySource)? = nil) -> PantryIndexStats {
+        do { return try makeReadStore(source: source).indexStats() }
+        catch { return .unavailable(error.localizedDescription) }
+    }
+
     public func makeSidecarStore(bindToSource: Bool = false) throws -> PantrySidecarStore {
         let source = bindToSource ? try makeSource() as? PaprikaSQLiteSource : nil
         return PantrySidecarStore(dbQueue: try makeSidecarDatabase().openQueue(), expectedContract: source?.indexContract)

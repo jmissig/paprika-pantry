@@ -103,7 +103,8 @@ public struct RecipesListCommand: PantryLeafCommand {
 
     public mutating func run() throws {
         let context = try makeContext()
-        let recipeReadService = try context.makeRecipeReadService()
+        let source = try context.makeSource()
+        let recipeReadService = RecipeReadService(source: source)
         let sort = self.sort
         let canonicalFilters = RecipeQueryFilters(
             favoritesOnly: favorite,
@@ -132,49 +133,41 @@ public struct RecipesListCommand: PantryLeafCommand {
         )
         let requiresDerivedFeatures = sort.requiresDerivedFeatures || !derivedConstraints.isDefault
         let requiresUsageStats = sort.requiresUsageStats || !usageConstraints.isDefault
-        let store = try context.makeSidecarStore(bindToSource: true)
-        let indexStats = try store.indexStats()
         let now = Date()
-        let matchingRecipeUIDs: Set<String>?
-        let derivedFeaturesByUID: [String: RecipeDerivedFeatures]
-        let usageStatsByUID: [String: RecipeUsageStats]
-        let derivedReadPath: String?
-
-        if requiresDerivedFeatures {
-            guard indexStats.recipeFeaturesReady else {
-                throw ValidationError("Recipe feature index is required for derived constraints or sort. Run `paprika-pantry index rebuild` first.")
+        let requiresIndex = requiresDerivedFeatures || requiresUsageStats || !ingredientFilter.isDefault
+        var indexStats = PantryIndexStats.unavailable("Optional enrichment is unavailable")
+        var enrichmentIssue: String?
+        var matchingRecipeUIDs: Set<String>?
+        var derivedFeaturesByUID: [String: RecipeDerivedFeatures] = [:]
+        var usageStatsByUID: [String: RecipeUsageStats] = [:]
+        var derivedReadPath: String?
+        var compatibleUsage = false
+        do {
+            let store = try context.makeReadStore(source: source)
+            indexStats = try store.indexStats()
+            if requiresDerivedFeatures {
+                try store.requireBoundCompatibility(["recipe-features"])
+                derivedFeaturesByUID = try store.fetchAllRecipeFeatures()
+                derivedReadPath = "sidecar-derived"
             }
-
-            derivedFeaturesByUID = try store.fetchAllRecipeFeatures()
-            derivedReadPath = "sidecar-derived"
-        } else {
-            derivedFeaturesByUID = [:]
-            derivedReadPath = nil
-        }
-
-        if requiresUsageStats { try store.requireBoundCompatibility(["recipe-usage"]) }
-        if requiresUsageStats && !indexStats.recipeUsageStatsReady {
-            throw ValidationError("Recipe usage index is required for usage constraints or sort. Run `paprika-pantry index rebuild` first.")
-        }
-
-        let compatibleUsage = (try? store.requireBoundCompatibility(["recipe-usage"])) != nil
-        if indexStats.recipeUsageStatsReady && compatibleUsage {
-            usageStatsByUID = try store.fetchAllRecipeUsageStats()
-        } else {
+            if requiresUsageStats || indexStats.recipeUsageStatsReady {
+                try store.requireBoundCompatibility(["recipe-usage"])
+                usageStatsByUID = try store.fetchAllRecipeUsageStats()
+                compatibleUsage = true
+            } else { enrichmentIssue = indexStats.compatibilityIssue }
+            if !ingredientFilter.isDefault {
+                try store.requireBoundCompatibility(["recipe-ingredients"])
+                matchingRecipeUIDs = try store.matchingRecipeUIDs(for: ingredientFilter)
+            }
+        } catch {
+            if requiresIndex { throw error }
+            enrichmentIssue = error.localizedDescription
+            indexStats = .unavailable(error.localizedDescription)
             usageStatsByUID = [:]
+            compatibleUsage = false
         }
 
-        if ingredientFilter.isDefault {
-            matchingRecipeUIDs = nil
-        } else {
-            guard indexStats.recipeIngredientIndexReady else {
-                throw ValidationError("Recipe ingredient index is required for ingredient filters. Run `paprika-pantry index rebuild` first.")
-            }
-
-            matchingRecipeUIDs = try store.matchingRecipeUIDs(for: ingredientFilter)
-        }
-
-        let recipes = try BlockingAsync.run {
+        let recipes = try BlockingAsync.run { [derivedFeaturesByUID, usageStatsByUID] in
             try await recipeReadService.listRecipes(
                 filters: canonicalFilters,
                 derivedConstraints: derivedConstraints,
@@ -199,12 +192,13 @@ public struct RecipesListCommand: PantryLeafCommand {
                 derivedReadPath: derivedReadPath,
                 ingredientReadPath: ingredientFilter.isDefault ? nil : "sidecar-ingredient-index",
                 usageReadPath: requiresUsageStats || (indexStats.recipeUsageStatsReady && compatibleUsage) ? "sidecar-derived" : nil,
-                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedLastSuccessAt: requiresDerivedFeatures ? indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt } : nil,
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
-                ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientLastSuccessAt: ingredientFilter.isDefault ? nil : indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
                 ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now),
-                usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
-                usageFreshnessSeconds: indexStats.recipeUsageStatsReady && compatibleUsage ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
+                usageLastSuccessAt: compatibleUsage ? indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt } : nil,
+                usageFreshnessSeconds: compatibleUsage ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil,
+                enrichmentIssue: enrichmentIssue
             )
         )
     }
@@ -222,27 +216,39 @@ public struct RecipesShowCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let recipeReadService = try context.makeRecipeReadService()
+        let source = try context.makeSource()
+        let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
         }
-        let store = try context.makeSidecarStore(bindToSource: true)
-        let featuresCompatible = (try? store.requireBoundCompatibility(["recipe-features"])) != nil
-        let usageCompatible = (try? store.requireBoundCompatibility(["recipe-usage"])) != nil
-        let derivedFeatures = featuresCompatible ? try store.fetchRecipeFeatures(uid: recipe.uid) : nil
-        let usageStats = usageCompatible ? try store.fetchRecipeUsageStats(uid: recipe.uid) : nil
-        let indexStats = try store.indexStats()
+        var derivedFeatures: RecipeDerivedFeatures?
+        var usageStats: RecipeUsageStats?
+        var enrichmentIssue: String?
+        var indexStats = PantryIndexStats.unavailable("Optional enrichment is unavailable")
+        do {
+            let store = try context.makeReadStore(source: source)
+            indexStats = try store.indexStats()
+            if indexStats.recipeFeaturesReady { derivedFeatures = try store.fetchRecipeFeatures(uid: recipe.uid) }
+            if indexStats.recipeUsageStatsReady { usageStats = try store.fetchRecipeUsageStats(uid: recipe.uid) }
+            enrichmentIssue = indexStats.compatibilityIssue
+        } catch {
+            enrichmentIssue = error.localizedDescription
+            derivedFeatures = nil
+            usageStats = nil
+            indexStats = .unavailable(error.localizedDescription)
+        }
         let now = Date()
         try context.write(
             RecipeShowReport(
                 recipe: recipe,
                 derivedFeatures: derivedFeatures,
                 usageStats: usageStats,
-                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedLastSuccessAt: derivedFeatures == nil ? nil : indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
                 derivedFreshnessSeconds: derivedFeatures == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now),
-                usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
-                usageFreshnessSeconds: usageStats == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now)
+                usageLastSuccessAt: usageStats == nil ? nil : indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
+                usageFreshnessSeconds: usageStats == nil ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now),
+                enrichmentIssue: enrichmentIssue
             )
         )
     }
@@ -346,7 +352,7 @@ public struct RecipesSearchCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: true)
+        let store = try context.makeReadStore(source: context.makeSource())
         guard try store.indexStats().recipeSearchReady else {
             throw ValidationError("Recipe search index is not ready. Run `paprika-pantry index rebuild` first.")
         }
@@ -418,9 +424,9 @@ public struct RecipesSearchCommand: PantryLeafCommand {
                 usageReadPath: requiresUsageStats || indexStats.recipeUsageStatsReady ? "sidecar-derived" : nil,
                 searchLastSuccessAt: indexStats.lastSuccessfulRecipeSearchRun.map { $0.finishedAt ?? $0.startedAt },
                 searchFreshnessSeconds: renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeSearchRun, now: now),
-                derivedLastSuccessAt: indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt },
+                derivedLastSuccessAt: requiresDerivedFeatures ? indexStats.lastSuccessfulRecipeFeatureRun.map { $0.finishedAt ?? $0.startedAt } : nil,
                 derivedFreshnessSeconds: requiresDerivedFeatures ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeFeatureRun, now: now) : nil,
-                ingredientLastSuccessAt: indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
+                ingredientLastSuccessAt: ingredientFilter.isDefault ? nil : indexStats.lastSuccessfulRecipeIngredientRun.map { $0.finishedAt ?? $0.startedAt },
                 ingredientFreshnessSeconds: ingredientFilter.isDefault ? nil : renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeIngredientRun, now: now),
                 usageLastSuccessAt: indexStats.lastSuccessfulRecipeUsageRun.map { $0.finishedAt ?? $0.startedAt },
                 usageFreshnessSeconds: indexStats.recipeUsageStatsReady ? renderedFreshnessSeconds(since: indexStats.lastSuccessfulRecipeUsageRun, now: now) : nil
@@ -441,12 +447,13 @@ public struct RecipesFeaturesCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: true)
+        let source = try context.makeSource()
+        let store = try context.makeReadStore(source: source)
         guard try store.indexStats().recipeFeaturesReady else {
             throw ValidationError("Recipe feature index is not ready. Run `paprika-pantry index rebuild` first.")
         }
 
-        let recipeReadService = try context.makeRecipeReadService()
+        let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
@@ -482,12 +489,13 @@ public struct RecipesIngredientsCommand: PantryLeafCommand {
     public init() {}
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: true)
+        let source = try context.makeSource()
+        let store = try context.makeReadStore(source: source)
         guard try store.indexStats().recipeIngredientIndexReady else {
             throw ValidationError("Recipe ingredient index is not ready. Run `paprika-pantry index rebuild` first.")
         }
 
-        let recipeReadService = try context.makeRecipeReadService()
+        let recipeReadService = RecipeReadService(source: source)
         let selector = self.selector
         let recipe = try BlockingAsync.run {
             try await recipeReadService.resolveRecipe(selector: selector)
@@ -561,7 +569,7 @@ public struct RecipesPairingsCommand: PantryLeafCommand {
 
     public mutating func run() throws {
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: true)
+        let store = try context.makeReadStore(source: context.makeSource())
         let indexStats = try store.indexStats()
         guard indexStats.ingredientPairEvidenceReady else {
             throw ValidationError("Ingredient pair evidence index is not ready. No ingredient pairings have been built yet; run `paprika-pantry index rebuild` to build pairings.")
@@ -780,7 +788,7 @@ public struct RecipesCookbooksCommand: PantryLeafCommand {
         }
 
         let context = try makeContext()
-        let store = try context.makeSidecarStore(bindToSource: true)
+        let store = try context.makeReadStore(source: context.makeSource())
         let indexStats = try store.indexStats()
 
         guard indexStats.recipeSearchReady else {

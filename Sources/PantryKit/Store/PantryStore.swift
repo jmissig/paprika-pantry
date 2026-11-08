@@ -123,6 +123,14 @@ public struct PantryIndexStats: Codable, Equatable, Sendable {
         self.sourceState = sourceState
     }
 
+    public static func unavailable(_ reason: String) -> Self {
+        Self(recipeSearchDocumentCount: 0, recipeFeatureCount: 0,
+             recipeFeaturesWithTotalTimeCount: 0, recipeFeaturesWithIngredientLineCountCount: 0,
+             lastRecipeSearchRun: nil, lastSuccessfulRecipeSearchRun: nil,
+             lastRecipeFeatureRun: nil, lastSuccessfulRecipeFeatureRun: nil,
+             compatibilityIssue: reason, incompatibleFamilies: PantrySidecarStore.allFamilies)
+    }
+
     public var recipeSearchReady: Bool {
         !incompatibleFamilies.contains("recipe-search") && recipeSearchDocumentCount > 0 && lastSuccessfulRecipeSearchRun != nil
     }

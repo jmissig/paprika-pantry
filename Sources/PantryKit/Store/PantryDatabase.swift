@@ -25,6 +25,24 @@ public struct PantrySidecarDatabase {
         return queue
     }
 
+    /// Existing evidence only: never creates directories, databases, or migrations.
+    public func openReadOnlyQueue() throws -> DatabaseQueue {
+        guard FileManager.default.fileExists(atPath: path.path) else {
+            throw IndexCompatibilityError.rebuildRequired("sidecar is missing")
+        }
+        var configuration = Configuration()
+        configuration.readonly = true
+        let queue = try DatabaseQueue(path: path.path, configuration: configuration)
+        let migrator = Self.migrator()
+        try queue.read { db in
+            guard try !migrator.hasBeenSuperseded(db) else { throw IndexCompatibilityError.futureSidecar }
+            guard try migrator.hasCompletedMigrations(db) else {
+                throw IndexCompatibilityError.rebuildRequired("sidecar schema needs migration")
+            }
+        }
+        return queue
+    }
+
     public static func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
