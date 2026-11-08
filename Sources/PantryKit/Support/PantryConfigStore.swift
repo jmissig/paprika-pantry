@@ -1,5 +1,8 @@
 import Foundation
 
+// FileManager is not Sendable in this SDK. Stored state is immutable; only
+// thread-safe, delegate-free file operations are used. Injected managers must
+// preserve that contract (tests use immutable home-directory overrides).
 public struct PantryConfigStore: @unchecked Sendable {
     public let paths: PantryPaths
 

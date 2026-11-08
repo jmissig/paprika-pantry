@@ -74,6 +74,9 @@ public struct PaprikaSQLiteSourceInspection: Equatable, Sendable {
     }
 }
 
+// FileManager is not Sendable in this SDK. Stored state is immutable; only
+// thread-safe, delegate-free file operations are used. Injected managers must
+// preserve that contract (tests use immutable home-directory overrides).
 public final class PaprikaSQLiteSource: MealsReadablePantrySource, GroceriesReadablePantrySource, PantryItemsReadablePantrySource, @unchecked Sendable {
     public let databaseURL: URL
     public let inspection: PaprikaSQLiteSourceInspection

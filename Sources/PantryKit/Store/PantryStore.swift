@@ -575,7 +575,7 @@ public struct RecipeUsageStats: Codable, Equatable, Sendable {
     }
 }
 
-public struct PantrySidecarStore: @unchecked Sendable {
+public struct PantrySidecarStore: Sendable {
     public let dbQueue: DatabaseQueue
 
     let expectedContract: IndexSourceContract?

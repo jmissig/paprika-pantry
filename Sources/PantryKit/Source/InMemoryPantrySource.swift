@@ -11,6 +11,7 @@ public enum InMemoryPantrySourceError: Error, LocalizedError, Equatable, Sendabl
     }
 }
 
+// Immutable fixture data; fetch recording is protected for both reads and writes by lock.
 public final class InMemoryPantrySource: MealsReadablePantrySource, GroceriesReadablePantrySource, PantryItemsReadablePantrySource, @unchecked Sendable {
     private let stubs: [SourceRecipeStub]
     private let categories: [SourceRecipeCategory]
@@ -21,7 +22,8 @@ public final class InMemoryPantrySource: MealsReadablePantrySource, GroceriesRea
     private let fetchErrorsByUID: [String: any Error]
 
     private let lock = NSLock()
-    public private(set) var fetchedRecipeUIDs = [String]()
+    private var recordedRecipeUIDs = [String]()
+    public var fetchedRecipeUIDs: [String] { lock.withLock { recordedRecipeUIDs } }
 
     public init(
         stubs: [SourceRecipeStub],
@@ -51,7 +53,7 @@ public final class InMemoryPantrySource: MealsReadablePantrySource, GroceriesRea
 
     public func fetchRecipe(uid: String) async throws -> SourceRecipe {
         lock.withLock {
-            fetchedRecipeUIDs.append(uid)
+            recordedRecipeUIDs.append(uid)
         }
 
         if let error = fetchErrorsByUID[uid] {

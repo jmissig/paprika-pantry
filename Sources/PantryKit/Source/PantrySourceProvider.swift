@@ -155,6 +155,9 @@ public protocol PantrySourceProvider: Sendable {
     func diagnose() throws -> PantrySourceDoctorSnapshot
 }
 
+// FileManager is not Sendable in this SDK. Stored state is immutable; only
+// thread-safe, delegate-free file operations are used. Injected managers must
+// preserve that contract (tests use immutable home-directory overrides).
 public struct ConfiguredPaprikaSourceProvider: PantrySourceProvider, @unchecked Sendable {
     public static let defaultPaprikaSQLiteEnvironmentVariable = "PAPRIKA_PANTRY_SOURCE_PAPRIKA_DB"
 

@@ -790,6 +790,25 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertNotNil(after.compatibilityIssue)
     }
 
+    func testCancelledGRDBWritePreservesPublishedGeneration() async throws {
+        let source = try PaprikaSQLiteSource(databaseURL: makePaprikaSourceDatabase())
+        let store = try memorySidecar()
+        _ = try await store.rebuildRecipeIndexes(from: source)
+        let before = try store.indexProvenance()
+        let count = try store.indexStats().recipeSearchDocumentCount
+        let task = Task {
+            try await store.buildRecipeIndexes(from: source, hooks: IndexBuildHooks(beforePublication: {
+                withUnsafeCurrentTask { $0?.cancel() }
+            }))
+        }
+        do { _ = try await task.value; XCTFail("Cancelled async write must not publish") }
+        catch { XCTAssertTrue(error is CancellationError, "\(error)") }
+        XCTAssertEqual(try store.indexProvenance(), before)
+        XCTAssertEqual(try store.indexStats().recipeSearchDocumentCount, count)
+        let failed = try await store.dbQueue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM index_runs WHERE status='failed'") }
+        XCTAssertEqual(failed, 5)
+    }
+
     private func makeStore() throws -> PantrySidecarStore {
         let root = try makeTemporaryDirectory()
         let databaseURL = root.appendingPathComponent("pantry.sqlite")
