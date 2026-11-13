@@ -136,8 +136,9 @@ paprika-pantry index update
 ```
 
 This relies on Paprika syncing after launch; it doesn't directly control cloud
-sync. The launch-and-wait helper hasn't yet been verified with Paprika 4. For now,
-open Paprika 4 yourself and let it sync before updating the index.
+sync. App discovery selects Paprika Recipe Manager 3 or 4 to match the detected
+database layout; it does not fall back to the other version. End-to-end sync-on-launch
+remains unverified with Paprika 4; if the marker does not advance, check sync in Paprika.
 
 ## Upgrading to 2.0 or Paprika 4
 

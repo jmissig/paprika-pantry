@@ -462,6 +462,33 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
         XCTAssertEqual(try store.indexStats().sourceState?.paprikaSync?.signalSource, "group-container-preferences")
     }
 
+    func testAppDiscoveryFollowsSourceCompatibility() throws {
+        let url = try makePaprikaSourceDatabase()
+        let files = AppDiscoveryFileManager()
+        let v3 = "/Applications/Paprika Recipe Manager 3.app"
+        let v4 = "/Applications/Paprika Recipe Manager 4.app"
+        let userV4 = files.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications/Paprika Recipe Manager 4.app").path
+        files.installedApps = [v3, v4, userV4]
+        XCTAssertEqual(try PaprikaSQLiteSource(databaseURL: url, fileManager: files)
+            .inspection.appInstallation?.appBundlePath, v3)
+
+        files.installedApps = [v4]
+        XCTAssertNil(try PaprikaSQLiteSource(databaseURL: url, fileManager: files)
+            .inspection.appInstallation)
+
+        try upgradeFixtureToV4(url)
+        files.installedApps = [v3, v4, userV4]
+        XCTAssertEqual(try PaprikaSQLiteSource(databaseURL: url, fileManager: files)
+            .inspection.appInstallation?.appBundlePath, v4)
+        files.installedApps = [v3, userV4]
+        XCTAssertEqual(try PaprikaSQLiteSource(databaseURL: url, fileManager: files)
+            .inspection.appInstallation?.appBundlePath, userV4)
+        files.installedApps = [v3]
+        XCTAssertNil(try PaprikaSQLiteSource(databaseURL: url, fileManager: files)
+            .inspection.appInstallation)
+    }
+
     private func upgradeFixtureToV4(_ url: URL) throws {
         let queue = try DatabaseQueue(path: url.path)
         try queue.write { db in
@@ -1173,4 +1200,17 @@ final class PaprikaSQLiteSourceTests: XCTestCase {
 private actor ProvenanceRecorder {
     var value: [IndexBuildProvenance] = []
     func save(_ value: [IndexBuildProvenance]) { self.value = value }
+}
+
+private final class AppDiscoveryFileManager: FileManager, @unchecked Sendable {
+    var installedApps: Set<String> = []
+
+    override var homeDirectoryForCurrentUser: URL {
+        URL(fileURLWithPath: "/fixture-home")
+    }
+
+    override func fileExists(atPath path: String) -> Bool {
+        if path.hasSuffix(".app") { return installedApps.contains(path) }
+        return super.fileExists(atPath: path)
+    }
 }

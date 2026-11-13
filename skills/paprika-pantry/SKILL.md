@@ -9,7 +9,7 @@ Use Paprika as read-only context: recipes, descriptions, notes, meals, ratings, 
 
 ## Start from the person's question
 
-- **Update, sync, or export.** No export is normally needed. After Paprika finishes syncing, run `index update`. Use `source launch-app --wait-for-sync` only where app/preference discovery has been verified; it remains unverified for Paprika 4, so have the operator open/sync v4 manually. Request an export only after direct access is diagnosed as unavailable.
+- **Update, sync, or export.** No export is normally needed. After Paprika finishes syncing, run `index update`. `source launch-app --wait-for-sync` selects the app matching the detected v3/v4 source layout. End-to-end sync-on-launch remains unverified for v4; if no sync advance is observed, check sync in Paprika instead of claiming cloud sync is broken. Request an export only after direct access is diagnosed as unavailable.
 - **Today's menu.** Read `meals list`, select the scheduled meals, then fetch linked recipes needed to answer. Future meals are plans, not cooking history.
 - **Find something to make.** Apply the stated constraints and inspect the best few. Use description, notes, difficulty, or nutrition only to distinguish choices.
 - **Use this ingredient.** Search exact and related uses, then inspect recipe detail. Distinguish mechanical conversion, such as canned beans to dried, from substitution.
@@ -59,7 +59,7 @@ Use concise culinary language grounded in the retrieved recipe. Do not invent in
 
 ## Command map
 
-- Refresh: after Paprika syncs, `index update`; the optional `source launch-app --wait-for-sync` helper is not yet verified for v4
+- Refresh: after Paprika syncs, `index update`; `source launch-app --wait-for-sync` matches the source version; v4 sync-on-launch is not yet verified
 - Find/read: `recipes list`, `recipes search`, `recipes show <uid>`
 - Meals/inventory: `meals list`, `groceries list`, `pantry list`
 - Patterns: `recipes cookbooks`, `recipes pairings`

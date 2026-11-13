@@ -50,8 +50,11 @@ results. Original text fields remain the basis until the new semantics are verif
 - `index stats --format json` exposes per-family build provenance and build times.
 - `source last-sync-time` is an observed preference marker, not a cloud-sync API.
 - `source launch-app --wait-for-sync` waits for that marker to advance after launch.
-  v4 app bundle/preference discovery still needs validation. Do not infer it from
-  successful reads of a copied database or reuse ambient preferences for that copy.
+  App discovery matches the detected source layout to the v3/v4 app name in
+  `/Applications` or `~/Applications`, without cross-version fallback. Paprika 4
+  retains the `.mac.v3` bundle ID and group preferences on Saga. End-to-end
+  sync-on-launch remains unverified; a readable timestamp alone does not prove it.
+  Never reuse ambient preferences as freshness evidence for a copied database.
 
 Only explicit index-writing operations open/create/migrate the sidecar for writing.
 Read/query/diagnostic operations inspect an existing sidecar read-only. Schema

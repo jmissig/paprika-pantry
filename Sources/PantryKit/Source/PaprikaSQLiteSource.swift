@@ -1002,7 +1002,7 @@ private struct PaprikaSQLiteSchema: Sendable {
                 .path
         ) || fileManager.fileExists(atPath: databaseURL.path + "-wal")
         let paprikaSync = Self.inspectPaprikaSync(databaseURL: databaseURL, fileManager: fileManager)
-        let appInstallation = Self.inspectPaprikaAppInstallation(fileManager: fileManager)
+        let appInstallation = inspectPaprikaAppInstallation(fileManager: fileManager)
 
         return PaprikaSQLiteSourceInspection(
             capabilities: capabilities,
@@ -1046,7 +1046,7 @@ private struct PaprikaSQLiteSchema: Sendable {
         return nil
     }
 
-    private static func inspectPaprikaAppInstallation(
+    private func inspectPaprikaAppInstallation(
         fileManager: FileManager
     ) -> PaprikaAppInstallation? {
         for appURL in candidateAppBundleURLs(fileManager: fileManager) {
@@ -1055,7 +1055,7 @@ private struct PaprikaSQLiteSchema: Sendable {
             }
 
             let infoPlistURL = appURL.appendingPathComponent("Contents/Info.plist")
-            let infoPlist = readPropertyList(at: infoPlistURL) ?? [:]
+            let infoPlist = Self.readPropertyList(at: infoPlistURL) ?? [:]
             let bundleIdentifier = infoPlist["CFBundleIdentifier"] as? String
             let executableName = infoPlist["CFBundleExecutable"] as? String
             let executableURL = executableName.map {
@@ -1070,7 +1070,7 @@ private struct PaprikaSQLiteSchema: Sendable {
                 bundleIdentifier: bundleIdentifier,
                 executablePath: executableURL?.path,
                 executablePresent: executablePresent,
-                customURLSchemes: decodeCustomURLSchemes(from: infoPlist)
+                customURLSchemes: Self.decodeCustomURLSchemes(from: infoPlist)
             )
         }
 
@@ -1136,11 +1136,15 @@ private struct PaprikaSQLiteSchema: Sendable {
         return dataDirectory.deletingLastPathComponent()
     }
 
-    private static func candidateAppBundleURLs(fileManager: FileManager) -> [URL] {
+    private func candidateAppBundleURLs(fileManager: FileManager) -> [URL] {
         let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        // The bundle identifier remains .v3 in Paprika 4; select by source layout,
+        // not bundle ID, and never fall back to an incompatible app generation.
+        let version = schemaFlavor == "paprika-3-core-data" ? 3 : 4
+        let appName = "Paprika Recipe Manager \(version).app"
         return [
-            URL(fileURLWithPath: "/Applications/Paprika Recipe Manager 3.app"),
-            homeDirectory.appendingPathComponent("Applications/Paprika Recipe Manager 3.app"),
+            URL(fileURLWithPath: "/Applications").appendingPathComponent(appName),
+            homeDirectory.appendingPathComponent("Applications").appendingPathComponent(appName),
         ]
     }
 

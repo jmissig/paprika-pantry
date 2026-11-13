@@ -215,5 +215,7 @@ or generic future-schema guessing is part of this plan.
   semantics can be demonstrated. No recipes are discarded on that account.
 - Version 2 introduces a future-migration refusal; this cannot retrofit guards
   into already-released 1.x binaries. Do not reuse a v2 sidecar with a v1 binary.
-- No new v4 app paths were invented. Source reading is validated independently
-  of app launch/preferences, pending inspection of an installed v4 bundle.
+- Installed v4 bundle inspected on Saga (12 November 2026):
+  `/Applications/Paprika Recipe Manager 4.app`, version 4.0.22, still using the
+  `.mac.v3` bundle ID and group preferences. Discovery now selects the app name
+  matching source compatibility. End-to-end sync-on-launch remains unverified.
